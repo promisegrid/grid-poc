@@ -43,8 +43,16 @@ func show(msg []byte, fn string) {
 	fmt.Printf("%d\n", msg[0]>>5)
 	// Output: 3
 
-	// show diagnostic notation
-	fmt.Println(cbor.Diagnose(msg))
+	// show diagnostic notation for all CBOR data items in msg (might
+	// be a sequence of data items)
+	tmpMsg := msg[:]
+	for i := 0; len(tmpMsg) > 0; i++ {
+		var notation string
+		var err error
+		notation, tmpMsg, err = cbor.DiagnoseFirst(tmpMsg)
+		Ck(err)
+		fmt.Printf("%d: %s\n", i, notation)
+	}
 
 	// write the message to a file
 	path := fmt.Sprintf("/tmp/%s.cbor", fn)
@@ -52,6 +60,7 @@ func show(msg []byte, fn string) {
 	Ck(err)
 
 	Pf("saved to %s\n", path)
+	Pl()
 }
 
 func wrap() []byte {
@@ -96,14 +105,23 @@ func label() []byte {
 
 	payload := "hello world"
 
-	// send the sequence label
+	// Create an encoding mode with custom tag support
+	opts := cbor.EncOptions{}
+	em, err := opts.EncMode()
+	Ck(err)
+
 	buf := bytes.Buffer{}
-	enc := cbor.NewEncoder(&buf)
-	err := enc.Encode(cborTag)
+
+	// send the sequence label
+	msg, err := em.Marshal(cborTag)
+	Ck(err)
+	_, err = buf.Write(msg)
 	Ck(err)
 
 	// send the payload
-	err = enc.Encode(payload)
+	msg, err = em.Marshal(payload)
+	Ck(err)
+	_, err = buf.Write(msg)
 	Ck(err)
 
 	return buf.Bytes()
