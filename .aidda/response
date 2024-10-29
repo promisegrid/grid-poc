@@ -1,10 +1,10 @@
-
 File: /home/stevegt/lab/grid-poc/x/git-performance/main.go
 ```go
 package main
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -16,6 +16,12 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 	. "github.com/stevegt/goadapt"
 )
+
+// File represents a file in a git repository
+type File struct {
+	Name    string
+	Content string
+}
 
 func main() {
 
@@ -58,16 +64,24 @@ func main() {
 
 	case "repeatability":
 		// create a commit
-		orig := createCommit(repo, dir, nil)
+		orig := createCommit(repo, dir, nil, nil)
+		now := time.Now()
 		// create a new commit
-		hash1 := createCommit(repo, dir, nil)
+		commitOptions := &git.CommitOptions{
+			Author: &object.Signature{
+				Name:  "John Doe",
+				Email: "john@example.com",
+				When:  now,
+			},
+		}
+		hash1 := createCommit(repo, dir, nil, commitOptions)
 		// remove it with a hard reset
 		w, err := repo.Worktree()
 		Ck(err)
 		err = w.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: hash1})
 		Ck(err)
 		// create the same commit
-		hash2 := createCommit(repo, dir, nil)
+		hash2 := createCommit(repo, dir, nil, commitOptions)
 		Assert(hash1 == hash2, "hashes do not match: %v %v", hash1, hash2)
 
 	default:
@@ -116,11 +130,7 @@ func createCommitWithParents(repo *git.Repository, dir string, N int64) {
 	// commit the file to the git repository
 	msg := Spf("commit with %v parents", N)
 	_, err = w.Commit(msg, &git.CommitOptions{
-		Author: &object.Signature{
-			Name:  "John Doe",
-			Email: "john@example.com",
-			When:  time.Now(),
-		},
+		Author:  &object.Signature{Name: "John Doe", Email: "john@example.com", When: time.Now()},
 		Parents: parents,
 	})
 	Ck(err)
@@ -205,7 +215,7 @@ func createUnreferencedObject(repo *git.Repository, dir string, i int64) {
 func createCommits(repo *git.Repository, dir string, N int64) {
 	start := time.Now()
 	for i := 0; i < int(N); i++ {
-		createCommit(repo, dir, nil)
+		createCommit(repo, dir, nil, nil)
 	}
 	stop := time.Now()
 	opsPerSec := float64(N) / stop.Sub(start).Seconds()
@@ -292,17 +302,23 @@ func createBranch(repo *git.Repository, dir string, i int) {
 }
 
 // createCommit creates a commit in the git repository
-func createCommit(repo *git.Repository, dir string, commitOptions *git.CommitOptions) plumbing.Hash {
+func createCommit(repo *git.Repository, dir string, file *File, commitOptions *git.CommitOptions) plumbing.Hash {
+
+	if file == nil {
+		file = &File{
+			Name:    "example.txt",
+			Content: Spf("time: %v", time.Now()),
+		}
+	}
 
 	// write to a file in the temp directory
-	txt := Spf("time: %v", time.Now())
-	err := ioutil.WriteFile(filepath.Join(dir, "example.txt"), []byte(txt), 0644)
+	err := ioutil.WriteFile(filepath.Join(dir, file.Name), []byte(file.Content), 0644)
 	Ck(err)
 
 	// add the file to the git repository
 	w, err := repo.Worktree()
 	Ck(err)
-	_, err = w.Add("example.txt")
+	_, err = w.Add(file.Name)
 	Ck(err)
 
 	// set default options if commitOptions is nil
@@ -317,7 +333,7 @@ func createCommit(repo *git.Repository, dir string, commitOptions *git.CommitOpt
 	}
 
 	// commit the file to the git repository
-	hash, err := w.Commit("example.txt", commitOptions)
+	hash, err := w.Commit(file.Name, commitOptions)
 	Ck(err)
 
 	return hash

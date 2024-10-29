@@ -14,9 +14,17 @@ import (
 	. "github.com/stevegt/goadapt"
 )
 
+// File represents a file in a git repository
+type File struct {
+	Name    string
+	Content string
+}
+
 func main() {
 
-	nStr := os.Args[1]
+	mode := os.Args[1]
+
+	nStr := os.Args[2]
 	N, err := strconv.ParseInt(nStr, 10, 64)
 	Ck(err)
 
@@ -30,7 +38,6 @@ func main() {
 	repo, err := git.PlainInit(dir, false)
 	Ck(err)
 
-	mode := "commits"
 	switch mode {
 	case "commits":
 		// create N commits
@@ -54,31 +61,44 @@ func main() {
 		createCommitWithParents(repo, dir, N)
 
 	case "repeatability":
-		// create a commit
-		orig := createCommit(repo, dir, nil)
-		now := time.Now()
-		// create a new commit
-		commitOptions = &git.CommitOptions{
-			Author: &object.Signature{
-				Name:  "John Doe",
-				Email: "john@example.com",
-				When:  now,
-			},
-		}
-		hash1 := createCommit(repo, dir, nil)
-		// remove it with a hard reset
-		w, err := repo.Worktree()
-		Ck(err)
-		err = w.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: hash1})
-		Ck(err)
-		// create the same commit
-		hash2 := createCommit(repo, dir, nil)
-		Assert(hash1 == hash2, "hashes do not match: %v %v", hash1, hash2)
+		checkRepeateability(repo, dir)
 
 	default:
 		Assert(false, "invalid mode %v", mode)
 	}
 
+}
+
+// checkRepeateability checks the repeatability of creating a commit
+func checkRepeateability(repo *git.Repository, dir string) {
+	Pf("Checking repeatability\n%v\n", dir)
+	// create a commit
+	orig := createCommit(repo, dir, nil, nil)
+	now := time.Now()
+	// create a new commit
+	file := &File{
+		Name:    "example.txt",
+		Content: Spf("time: %v", now),
+	}
+	commitOptions := &git.CommitOptions{
+		Author: &object.Signature{
+			Name:  "John Doe",
+			Email: "john@example.com",
+			When:  now,
+		},
+	}
+	hash1 := createCommit(repo, dir, file, commitOptions)
+	// time.Sleep(10 * time.Second)
+	// remove it with a hard reset
+	w, err := repo.Worktree()
+	Ck(err)
+	err = w.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: orig})
+	Ck(err)
+	// time.Sleep(10 * time.Second)
+	// create the same commit
+	hash2 := createCommit(repo, dir, file, commitOptions)
+	Assert(hash1 == hash2, "hashes do not match: %v %v", hash1, hash2)
+	Pf("hashes match: %v %v\n", hash1, hash2)
 }
 
 // createCommitWithParents creates a commit with N parents in the git repository
@@ -210,7 +230,7 @@ func createUnreferencedObject(repo *git.Repository, dir string, i int64) {
 func createCommits(repo *git.Repository, dir string, N int64) {
 	start := time.Now()
 	for i := 0; i < int(N); i++ {
-		createCommit(repo, dir, nil)
+		createCommit(repo, dir, nil, nil)
 	}
 	stop := time.Now()
 	opsPerSec := float64(N) / stop.Sub(start).Seconds()
@@ -297,17 +317,23 @@ func createBranch(repo *git.Repository, dir string, i int) {
 }
 
 // createCommit creates a commit in the git repository
-func createCommit(repo *git.Repository, dir string, commitOptions *git.CommitOptions) plumbing.Hash {
+func createCommit(repo *git.Repository, dir string, file *File, commitOptions *git.CommitOptions) plumbing.Hash {
+
+	if file == nil {
+		file = &File{
+			Name:    "example.txt",
+			Content: Spf("time: %v", time.Now()),
+		}
+	}
 
 	// write to a file in the temp directory
-	txt := Spf("time: %v", time.Now())
-	err := ioutil.WriteFile(filepath.Join(dir, "example.txt"), []byte(txt), 0644)
+	err := ioutil.WriteFile(filepath.Join(dir, file.Name), []byte(file.Content), 0644)
 	Ck(err)
 
 	// add the file to the git repository
 	w, err := repo.Worktree()
 	Ck(err)
-	_, err = w.Add("example.txt")
+	_, err = w.Add(file.Name)
 	Ck(err)
 
 	// set default options if commitOptions is nil
@@ -322,7 +348,7 @@ func createCommit(repo *git.Repository, dir string, commitOptions *git.CommitOpt
 	}
 
 	// commit the file to the git repository
-	hash, err := w.Commit("example.txt", commitOptions)
+	hash, err := w.Commit(file.Name, commitOptions)
 	Ck(err)
 
 	return hash

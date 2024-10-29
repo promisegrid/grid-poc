@@ -1,16 +1,12 @@
 Mime-Version: 1.0
 Content-Transfer-Encoding: quoted-printable
-In: 
- x/git-performance/main.go
+Inx: 
+ x/git-cbor/main.go
 Out: 
- x/git-performance/main.go
+ x/git-cbor/main.go
 Sysmsg: You are an expert Go programmer. Please make the requested changes
  to the given code or documentation.
 
-pass an optional *File pointer to createCommit()
-
-- add a File struct that represents a file in a git repository; fields are
-  Name and Content
-- if the File pointer is nil, createCommit() should create an default file
-- revise callers to pass either nil or a pointer 
-
+Given a git ref on the command line, emit the corresponding CBOR-encoded
+object to stdout.  If no ref is given, emit the CBOR-encoded object for
+HEAD.
