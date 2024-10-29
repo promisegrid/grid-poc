@@ -419,21 +419,8 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 	obj := repo.Storer.NewEncodedObject()
 	obj.SetType(plumbing.TreeObject)
 
-	// Get the writer for the encoded object
-	w, err := obj.Writer()
-	if err != nil {
-		return fmt.Errorf("failed to get writer for tree object: %w", err)
-	}
-
-	// Encode the tree into the writer
-	if err := tree.Encode(w); err != nil {
-		w.Close()
+	if err := tree.Encode(obj); err != nil {
 		return fmt.Errorf("failed to encode tree object: %w", err)
-	}
-
-	// Close the writer to finalize the object
-	if err := w.Close(); err != nil {
-		return fmt.Errorf("failed to close writer for tree object: %w", err)
 	}
 
 	// Store the tree in the repository
@@ -514,7 +501,7 @@ func cbor2diag() {
 	}
 
 	// Convert CBOR to diagnostic format
-	diag, err := cbor.Diag(cborData)
+	diag, err := cbor.Diagnose(cborData)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating CBOR diagnostic: %v\n", err)
 		os.Exit(1)
@@ -566,21 +553,9 @@ func writeCommitToRepo(repo *git.Repository, commit *object.Commit) error {
 	obj := repo.Storer.NewEncodedObject()
 	obj.SetType(plumbing.CommitObject)
 
-	// Get the writer for the encoded object
-	w, err := obj.Writer()
-	if err != nil {
-		return fmt.Errorf("failed to get writer for commit object: %w", err)
-	}
-
 	// Encode the commit into the writer
-	if err := commit.Encode(w); err != nil {
-		w.Close()
+	if err := commit.Encode(obj); err != nil {
 		return fmt.Errorf("failed to encode commit object: %w", err)
-	}
-
-	// Close the writer to finalize the object
-	if err := w.Close(); err != nil {
-		return fmt.Errorf("failed to close writer for commit object: %w", err)
 	}
 
 	// Store the commit in the repository

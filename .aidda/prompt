@@ -12,6 +12,11 @@ representation, and then use 'cbor2git' to convert the CBOR representation
 back to a git object in another repository such that the commit hash is the
 same.
 
-- include new and changed tree objects in the cbor message
+- add a cbor2json subcommand that converts a CBOR representation to an
+  indented, pretty-printed JSON representation
+- add a cbor2dot subcommand that converts a CBOR representation to a
+  graphviz dot file.  the dot file show the structure of the CBOR
+  representation in a directed graph, with the parent objects as
+  tails, the child objects as heads, and the commit message as a large
+  oval-shaped node in the center
 
-vet: ./main.go:429:24: cannot use w (variable of type io.WriteCloser) as plumbing.EncodedObject value in argument to tree.Encode: io.WriteCloser does not implement plumbing.EncodedObject (missing method Hash)
