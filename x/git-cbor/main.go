@@ -515,7 +515,6 @@ func cbor2diag() {
 		os.Exit(1)
 	}
 
-	// Print the diagnostic representation
 	fmt.Println(diag)
 }
 
@@ -573,37 +572,56 @@ func cbor2dot() {
 	fmt.Println("  graph [rankdir=LR];")
 	fmt.Println("  node [fontname=\"Helvetica\"];")
 
-	// Central node for commit message
-	commitMsgNode := "commit_message"
-	escapedMsg := escapeDotString(commitData.Message)
+	// Short hash helper
+	shortHash := func(fullHash string) string {
+		if len(fullHash) >= 8 {
+			return fullHash[:8]
+		}
+		return fullHash
+	}
+
+	// Extract the first line of the commit message
+	firstLine := commitData.Message
+	if idx := strings.Index(firstLine, "\n"); idx != -1 {
+		firstLine = firstLine[:idx]
+	}
+	escapedMsg := escapeDotString(firstLine)
+
+	// Central node for commit
+	commitShortHash := shortHash(commitData.Hash)
+	commitMsgNode := fmt.Sprintf("commit_%s", commitShortHash)
 	fmt.Printf("  %s [label=\"%s\", shape=oval, style=filled, color=lightblue];\n", commitMsgNode, escapedMsg)
 
 	// Node for commit hash
-	commitHashNode := "commit_hash"
-	fmt.Printf("  %s [label=\"%s\", shape=rectangle, style=filled, color=lightgray];\n", commitHashNode, commitData.Hash)
+	commitHashNode := fmt.Sprintf("hash_%s", commitShortHash)
+	fmt.Printf("  %s [label=\"%s\", shape=rectangle, style=filled, color=lightgray];\n", commitHashNode, shortHash(commitData.Hash))
 	fmt.Printf("  %s -> %s;\n", commitHashNode, commitMsgNode)
 
 	// Parent commits
 	for _, parentHash := range commitData.Parents {
-		parentNodeID := fmt.Sprintf("parent_%s", parentHash)
-		fmt.Printf("  %s [label=\"%s\", shape=rectangle, style=filled, color=lightgray];\n", parentNodeID, parentHash)
+		parentShortHash := shortHash(parentHash)
+		parentNodeID := fmt.Sprintf("parent_%s", parentShortHash)
+		fmt.Printf("  %s [label=\"%s\", shape=rectangle, style=filled, color=lightgray];\n", parentNodeID, parentShortHash)
 		fmt.Printf("  %s -> %s;\n", parentNodeID, commitHashNode)
 	}
 
 	// Trees
 	for _, tree := range commitData.Trees {
-		treeNodeID := fmt.Sprintf("tree_%s", tree.Hash)
-		fmt.Printf("  %s [label=\"Tree: %s\", shape=folder, style=filled, color=lightgreen];\n", treeNodeID, tree.Hash)
+		treeShortHash := shortHash(tree.Hash)
+		treeNodeID := fmt.Sprintf("tree_%s", treeShortHash)
+		fmt.Printf("  %s [label=\"Tree: %s\", shape=folder, style=filled, color=lightgreen];\n", treeNodeID, treeShortHash)
 		fmt.Printf("  %s -> %s;\n", treeNodeID, commitHashNode)
 
 		for _, entry := range tree.Entries {
 			if entry.Mode == "040000" { // Directory
-				subTreeNodeID := fmt.Sprintf("tree_%s", entry.Hash)
-				fmt.Printf("  %s [label=\"Tree: %s\", shape=folder, style=filled, color=lightgreen];\n", subTreeNodeID, entry.Name)
+				subTreeShortHash := shortHash(entry.Hash)
+				subTreeNodeID := fmt.Sprintf("tree_%s", subTreeShortHash)
+				fmt.Printf("  %s [label=\"Tree: %s\", shape=folder, style=filled, color=lightgreen];\n", subTreeNodeID, subTreeShortHash)
 				fmt.Printf("  %s -> %s;\n", subTreeNodeID, treeNodeID)
 			} else { // Blob or file
-				blobNodeID := fmt.Sprintf("blob_%s", entry.Hash)
-				fmt.Printf("  %s [label=\"Blob: %s\", shape=note, style=filled, color=yellow];\n", blobNodeID, entry.Name)
+				blobShortHash := shortHash(entry.Hash)
+				blobNodeID := fmt.Sprintf("blob_%s", blobShortHash)
+				fmt.Printf("  %s [label=\"Blob: %s\", shape=note, style=filled, color=yellow];\n", blobNodeID, escapeDotString(entry.Name))
 				fmt.Printf("  %s -> %s;\n", blobNodeID, treeNodeID)
 			}
 		}
@@ -611,9 +629,11 @@ func cbor2dot() {
 
 	// Blobs
 	for _, blob := range commitData.Blobs {
-		blobNodeID := fmt.Sprintf("blob_content_%s", blob.Hash)
-		fmt.Printf("  %s [label=\"Blob Content: %s\", shape=note, style=filled, color=yellow];\n", blobNodeID, blob.Hash)
-		fmt.Printf("  %s -> %s;\n", blobNodeID, commitHashNode)
+		blobShortHash := shortHash(blob.Hash)
+		blobNodeID := fmt.Sprintf("blob_%s", blobShortHash)
+		blobContentNodeID := fmt.Sprintf("blob_content_%s", blobShortHash)
+		fmt.Printf("  %s [label=\"Blob Content: %s\", shape=note, style=filled, color=yellow];\n", blobContentNodeID, blobShortHash)
+		fmt.Printf("  %s -> %s;\n", blobContentNodeID, blobNodeID)
 	}
 
 	fmt.Println("}")
