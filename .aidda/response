@@ -1,3 +1,6 @@
+
+File: /home/stevegt/lab/grid-poc/x/git-performance/main.go
+```go
 package main
 
 import (
@@ -56,15 +59,7 @@ func main() {
 	case "repeatability":
 		// create a commit
 		orig := createCommit(repo, dir, nil)
-		now := time.Now()
 		// create a new commit
-		commitOptions = &git.CommitOptions{
-			Author: &object.Signature{
-				Name:  "John Doe",
-				Email: "john@example.com",
-				When:  now,
-			},
-		}
 		hash1 := createCommit(repo, dir, nil)
 		// remove it with a hard reset
 		w, err := repo.Worktree()
@@ -327,3 +322,5 @@ func createCommit(repo *git.Repository, dir string, commitOptions *git.CommitOpt
 
 	return hash
 }
+```
+EOF_/home/stevegt/lab/grid-poc/x/git-performance/main.go
