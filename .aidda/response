@@ -3,7 +3,6 @@ File: /home/stevegt/lab/grid-poc/x/git-cbor/main.go
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -13,23 +12,23 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 type CommitData struct {
-	Hash           string      `cbor:"hash"`
-	Tree           string      `cbor:"tree"`
-	Parents        []string    `cbor:"parents"`
-	AuthorName     string      `cbor:"author_name"`
-	AuthorEmail    string      `cbor:"author_email"`
-	AuthorDate     time.Time   `cbor:"author_date"`
-	CommitterName  string      `cbor:"committer_name"`
-	CommitterEmail string      `cbor:"committer_email"`
-	CommitterDate  time.Time   `cbor:"committer_date"`
-	Message        string      `cbor:"message"`
-	Trees          []TreeData  `cbor:"trees"`
-	Blobs          []BlobData  `cbor:"blobs"`
+	Hash           string     `cbor:"hash"`
+	Tree           string     `cbor:"tree"`
+	Parents        []string   `cbor:"parents"`
+	AuthorName     string     `cbor:"author_name"`
+	AuthorEmail    string     `cbor:"author_email"`
+	AuthorDate     time.Time  `cbor:"author_date"`
+	CommitterName  string     `cbor:"committer_name"`
+	CommitterEmail string     `cbor:"committer_email"`
+	CommitterDate  time.Time  `cbor:"committer_date"`
+	Message        string     `cbor:"message"`
+	Trees          []TreeData `cbor:"trees"`
+	Blobs          []BlobData `cbor:"blobs"`
 }
 
 type TreeData struct {
@@ -317,7 +316,6 @@ func cbor2git() {
 
 	// Create the commit object
 	commit := &object.Commit{
-		Hash:         plumbing.NewHash(commitData.Hash),
 		Author:       *author,
 		Committer:    *committer,
 		Message:      commitData.Message,
@@ -382,8 +380,8 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 // writeBlobToRepo writes a blob object to the repository.
 func writeBlobToRepo(repo *git.Repository, blobData BlobData) error {
 	blob := &object.Blob{
-		Hash:  plumbing.NewHash(blobData.Hash),
-		Size:  int64(len(blobData.Content)),
+		Hash:        plumbing.NewHash(blobData.Hash),
+		Size:        int64(len(blobData.Content)),
 		BlobContent: blobData.Content,
 	}
 	// Encode the blob
@@ -406,8 +404,8 @@ func writeBlobToRepo(repo *git.Repository, blobData BlobData) error {
 	return nil
 }
 
-// getFileMode converts string mode to plumbing.FileMode
-func getFileMode(modeStr string) (plumbing.FileMode, error) {
+// getFileMode converts string mode to filemode.FileMode
+func getFileMode(modeStr string) (filemode.FileMode, error) {
 	switch modeStr {
 	case "100644":
 		return filemode.Regular, nil

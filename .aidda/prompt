@@ -13,6 +13,5 @@ back to a git object in another repository such that the commit hash is the
 same.
 
 - include new and changed tree objects in the cbor message
-- include new and changed blob objects in the cbor message
 
-vet: ./main.go:407:44: undefined: plumbing.FileMode
+vet: ./main.go:309:2: tree declared and not used

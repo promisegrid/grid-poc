@@ -37,7 +37,6 @@ type TreeData struct {
 type TreeEntry struct {
 	Mode string `cbor:"mode"`
 	Name string `cbor:"name"`
-	Type string `cbor:"type"`
 	Hash string `cbor:"hash"`
 }
 
@@ -175,7 +174,6 @@ func collectTrees(repo *git.Repository, treeHash plumbing.Hash, trees *[]TreeDat
 		treeEntry := TreeEntry{
 			Mode: entry.Mode.String(),
 			Name: entry.Name,
-			Type: entry.Mode.Type().String(),
 			Hash: entry.Hash.String(),
 		}
 		treeData.Entries = append(treeData.Entries, treeEntry)
@@ -212,7 +210,7 @@ func collectBlobs(repo *git.Repository, treeHash plumbing.Hash, blobs *[]BlobDat
 			}
 			blobData := BlobData{
 				Hash:    blob.Hash.String(),
-				Content: blob.Contents,
+				Content: getBlobContent(blob),
 			}
 			// Avoid duplicate blobs
 			if !blobExists(*blobs, blobData.Hash) {
@@ -221,6 +219,20 @@ func collectBlobs(repo *git.Repository, treeHash plumbing.Hash, blobs *[]BlobDat
 		}
 	}
 	return nil
+}
+
+// getBlobContent returns the content of a blob object.
+func getBlobContent(blob *object.Blob) (content []byte) {
+	reader, err := blob.Reader()
+	if err != nil {
+		return nil
+	}
+	defer reader.Close()
+	content, err = io.ReadAll(reader)
+	if err != nil {
+		return nil
+	}
+	return content
 }
 
 // blobExists checks if a blob with the given hash already exists in the blobs slice.
@@ -314,7 +326,6 @@ func cbor2git() {
 
 	// Create the commit object
 	commit := &object.Commit{
-		Hash:         plumbing.NewHash(commitData.Hash),
 		Author:       *author,
 		Committer:    *committer,
 		Message:      commitData.Message,
@@ -403,8 +414,8 @@ func writeBlobToRepo(repo *git.Repository, blobData BlobData) error {
 	return nil
 }
 
-// getFileMode converts string mode to plumbing.FileMode
-func getFileMode(modeStr string) (plumbing.FileMode, error) {
+// getFileMode converts string mode to filemode.FileMode
+func getFileMode(modeStr string) (filemode.FileMode, error) {
 	switch modeStr {
 	case "100644":
 		return filemode.Regular, nil
