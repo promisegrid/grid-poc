@@ -1,10 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
@@ -56,6 +58,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  git2cbor <ref>\n")
 		fmt.Fprintf(os.Stderr, "  cbor2git\n")
 		fmt.Fprintf(os.Stderr, "  cbor2diag\n")
+		fmt.Fprintf(os.Stderr, "  cbor2json\n")
+		fmt.Fprintf(os.Stderr, "  cbor2dot\n")
 		os.Exit(1)
 	}
 
@@ -72,6 +76,10 @@ func main() {
 		cbor2git()
 	case "cbor2diag":
 		cbor2diag()
+	case "cbor2json":
+		cbor2json()
+	case "cbor2dot":
+		cbor2dot()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n", subcommand)
 		os.Exit(1)
@@ -509,6 +517,113 @@ func cbor2diag() {
 
 	// Print the diagnostic representation
 	fmt.Println(diag)
+}
+
+// cbor2json converts CBOR data to an indented, pretty-printed JSON representation.
+func cbor2json() {
+	// Read CBOR data from stdin
+	cborData, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading CBOR data: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Decode CBOR data into CommitData
+	var commitData CommitData
+	err = cbor.Unmarshal(cborData, &commitData)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error decoding CBOR data: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Marshal CommitData to indented JSON
+	jsonData, err := json.MarshalIndent(commitData, "", "  ")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error encoding JSON: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Write JSON to stdout
+	_, err = os.Stdout.Write(jsonData)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error writing JSON to stdout: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// cbor2dot converts CBOR data to a Graphviz DOT file representing the structure of the CBOR object.
+func cbor2dot() {
+	// Read CBOR data from stdin
+	cborData, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading CBOR data: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Decode CBOR data into CommitData
+	var commitData CommitData
+	err = cbor.Unmarshal(cborData, &commitData)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error decoding CBOR data: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Start building the DOT graph
+	fmt.Println("digraph CBOR {")
+	fmt.Println("  graph [rankdir=LR];")
+	fmt.Println("  node [fontname=\"Helvetica\"];")
+
+	// Central node for commit message
+	commitMsgNode := "commit_message"
+	escapedMsg := escapeDotString(commitData.Message)
+	fmt.Printf("  %s [label=\"%s\", shape=oval, style=filled, color=lightblue];\n", commitMsgNode, escapedMsg)
+
+	// Node for commit hash
+	commitHashNode := "commit_hash"
+	fmt.Printf("  %s [label=\"%s\", shape=rectangle, style=filled, color=lightgray];\n", commitHashNode, commitData.Hash)
+	fmt.Printf("  %s -> %s;\n", commitHashNode, commitMsgNode)
+
+	// Parent commits
+	for _, parentHash := range commitData.Parents {
+		parentNodeID := fmt.Sprintf("parent_%s", parentHash)
+		fmt.Printf("  %s [label=\"%s\", shape=rectangle, style=filled, color=lightgray];\n", parentNodeID, parentHash)
+		fmt.Printf("  %s -> %s;\n", parentNodeID, commitHashNode)
+	}
+
+	// Trees
+	for _, tree := range commitData.Trees {
+		treeNodeID := fmt.Sprintf("tree_%s", tree.Hash)
+		fmt.Printf("  %s [label=\"Tree: %s\", shape=folder, style=filled, color=lightgreen];\n", treeNodeID, tree.Hash)
+		fmt.Printf("  %s -> %s;\n", treeNodeID, commitHashNode)
+
+		for _, entry := range tree.Entries {
+			if entry.Mode == "040000" { // Directory
+				subTreeNodeID := fmt.Sprintf("tree_%s", entry.Hash)
+				fmt.Printf("  %s [label=\"Tree: %s\", shape=folder, style=filled, color=lightgreen];\n", subTreeNodeID, entry.Name)
+				fmt.Printf("  %s -> %s;\n", subTreeNodeID, treeNodeID)
+			} else { // Blob or file
+				blobNodeID := fmt.Sprintf("blob_%s", entry.Hash)
+				fmt.Printf("  %s [label=\"Blob: %s\", shape=note, style=filled, color=yellow];\n", blobNodeID, entry.Name)
+				fmt.Printf("  %s -> %s;\n", blobNodeID, treeNodeID)
+			}
+		}
+	}
+
+	// Blobs
+	for _, blob := range commitData.Blobs {
+		blobNodeID := fmt.Sprintf("blob_content_%s", blob.Hash)
+		fmt.Printf("  %s [label=\"Blob Content: %s\", shape=note, style=filled, color=yellow];\n", blobNodeID, blob.Hash)
+		fmt.Printf("  %s -> %s;\n", blobNodeID, commitHashNode)
+	}
+
+	fmt.Println("}")
+}
+
+// escapeDotString escapes special characters in strings for DOT format.
+func escapeDotString(s string) string {
+	s = strings.ReplaceAll(s, "\"", "\\\"")
+	s = strings.ReplaceAll(s, "\n", "\\n")
+	return s
 }
 
 // findGitRepo walks up the directory tree from the current directory to find a directory containing a .git folder.

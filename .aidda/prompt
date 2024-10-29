@@ -10,13 +10,12 @@ Sysmsg: You are an expert Go programmer. Please make the requested changes
 The goal is to be able to use 'git2cbor' to convert a git object to a CBOR
 representation, and then use 'cbor2git' to convert the CBOR representation
 back to a git object in another repository such that the commit hash is the
-same.
+same.  There should also be a few utility subcommands to help visualize the
+CBOR representation.
 
-- add a cbor2json subcommand that converts a CBOR representation to an
-  indented, pretty-printed JSON representation
-- add a cbor2dot subcommand that converts a CBOR representation to a
-  graphviz dot file.  the dot file show the structure of the CBOR
-  representation in a directed graph, with the parent objects as
-  tails, the child objects as heads, and the commit message as a large
-  oval-shaped node in the center
+in cbor2dot:
+- use only the first 8 characters of the commit hash as the node name
+- use only the first line of the commit message as the node label
+- the edges from "blob content" nodes should point at their respective
+  "blob" nodes, not at the "commit" node
 
