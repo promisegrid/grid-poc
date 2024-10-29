@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -29,20 +30,47 @@ func main() {
 	repo, err := git.PlainInit(dir, false)
 	Ck(err)
 
-	// create N commits
-	// createCommits(repo, dir, N)
+	mode := "commits"
+	switch mode {
+	case "commits":
+		// create N commits
+		createCommits(repo, dir, N)
+		iterateVersions(repo)
 
-	// create N branches
-	// createBranches(repo, dir, N)
+	case "branches":
+		// create N branches
+		createBranches(repo, dir, N)
 
-	// create N unreferenced objects
-	// createUnreferencedObjects(repo, dir, N)
+	case "objects":
+		// create N unreferenced objects
+		createUnreferencedObjects(repo, dir, N)
 
-	// create N referenced objects
-	// createReferencedObjects(repo, dir, N)
+	case "referenced":
+		// create N referenced objects
+		createReferencedObjects(repo, dir, N)
 
-	// create a commit with N parents
-	createCommitWithParents(repo, dir, N)
+	case "commitWithParents":
+		// create a commit with N parents
+		createCommitWithParents(repo, dir, N)
+
+	case "repeatability":
+		// create a commit
+		orig := createCommit(repo, dir)
+		// create a new commit
+		hash1 := createCommit(repo, dir)
+		// remove it with a hard reset
+		w, err := repo.Worktree()
+		Ck(err)
+		err = w.Reset(&git.ResetOptions{Mode: git.HardReset, Commit: hash1})
+		Ck(err)
+		// create the same commit
+		hash2 := createCommit(repo, dir)
+		Assert(hash1 == hash2, "hashes do not match: %v %v", hash1, hash2)
+
+	default:
+		Assert(false, "invalid mode %v", mode)
+	}
+
 }
 
 // createCommitWithParents creates a commit with N parents in the git repository
@@ -171,9 +199,9 @@ func createUnreferencedObject(repo *git.Repository, dir string, i int64) {
 }
 
 // createCommits creates N commits in the git repository
-func createCommits(repo *git.Repository, dir string, N int) {
+func createCommits(repo *git.Repository, dir string, N int64) {
 	start := time.Now()
-	for i := 0; i < N; i++ {
+	for i := 0; i < int(N); i++ {
 		createCommit(repo, dir)
 	}
 	stop := time.Now()
@@ -185,10 +213,55 @@ func createCommits(repo *git.Repository, dir string, N int) {
 	Pf("Time per op: %v\n", stop.Sub(start)/time.Duration(N))
 }
 
+// iterateVersions iterates over all of the versions of example.txt in
+// the git repository, retrieving the content of each version
+func iterateVersions(repo *git.Repository) {
+	// get the HEAD reference
+	headRef, err := repo.Head()
+	Ck(err)
+
+	// iterate over all of the commits going back to the initial commit
+	refHash := headRef.Hash()
+	for i := 0; ; i-- {
+		// get the commit object
+		commit, err := repo.CommitObject(refHash)
+		if err != nil {
+			break
+		}
+		// get the file system tree of the commit
+		tree, err := commit.Tree()
+		Ck(err)
+		// get the file system tree entry for example.txt
+		file, err := tree.File("example.txt")
+		if err != nil {
+			// file does not exist in this commit; we're done
+			break
+		}
+		// get the blob of the file system tree entry
+		blobReader, err := file.Blob.Reader()
+		Ck(err)
+		// get the content of the blob
+		var content bytes.Buffer
+		_, err = content.ReadFrom(blobReader)
+		Ck(err)
+		Pf("Commit %v: %v\n", i, string(content.Bytes()))
+
+		// get the parent commit
+		parentHashes := commit.ParentHashes
+		if len(parentHashes) == 0 {
+			break
+		}
+		Assert(len(parentHashes) == 1, "expected 1 parent")
+		parentHash := parentHashes[0]
+		refHash = parentHash
+	}
+
+}
+
 // createBranches creates N branches in the git repository
-func createBranches(repo *git.Repository, dir string, N int) {
+func createBranches(repo *git.Repository, dir string, N int64) {
 	start := time.Now()
-	for i := 0; i < N; i++ {
+	for i := 0; i < int(N); i++ {
 		createBranch(repo, dir, i)
 	}
 	stop := time.Now()
