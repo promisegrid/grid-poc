@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/git-cbor/main.go
-```go
 package main
 
 import (
@@ -66,5 +64,3 @@ func stringTrimNewline(s string) string {
 	}
 	return s
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/git-cbor/main.go
