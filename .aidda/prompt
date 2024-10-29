@@ -1,6 +1,6 @@
 Mime-Version: 1.0
 Content-Transfer-Encoding: quoted-printable
-Inx: 
+In: 
  x/git-cbor/main.go
 Out: 
  x/git-cbor/main.go
@@ -11,9 +11,6 @@ Given a git ref on the command line, emit the corresponding CBOR-encoded
 object to stdout.  If no ref is given, emit the CBOR-encoded object for
 HEAD.
 
-Instead of using the git CLI, use the go-git library to access the git
-repository, e.g.:
-
-	"github.com/go-git/go-git/v5"
-	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/go-git/go-git/v5/plumbing/object"
+Find the .git directory by walking up the directory tree from the current
+directory.  If no .git directory is found, emit an error message to stderr
+and exit with a non-zero status.
