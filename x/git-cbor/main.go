@@ -153,12 +153,8 @@ func cbor2git() {
 	// Prepare parent commits
 	var parentCommits []*object.Commit
 	for _, ph := range commitData.Parents {
-		pHash, err := plumbing.NewHash(ph)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Invalid parent hash '%s': %v\n", ph, err)
-			os.Exit(1)
-		}
-		parentCommit, err := repo.CommitObject(*pHash)
+		pHash := plumbing.NewHash(ph)
+		parentCommit, err := repo.CommitObject(pHash)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error retrieving parent commit '%s': %v\n", ph, err)
 			os.Exit(1)
@@ -167,12 +163,12 @@ func cbor2git() {
 	}
 
 	// Prepare the tree
-	treeHash, err := plumbing.NewHash(commitData.Tree)
+	treeHash := plumbing.NewHash(commitData.Tree)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid tree hash '%s': %v\n", commitData.Tree, err)
 		os.Exit(1)
 	}
-	tree, err := repo.TreeObject(*treeHash)
+	tree, err := repo.TreeObject(treeHash)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error retrieving tree object: %v\n", err)
 		os.Exit(1)
@@ -195,20 +191,21 @@ func cbor2git() {
 		Author:       *author,
 		Committer:    *committer,
 		Message:      commitData.Message,
-		TreeHash:     *treeHash,
+		TreeHash:     treeHash,
 		ParentHashes: parentCommitsHashes(parentCommits),
 	}
 
 	// Serialize the commit to get the correct hash
-	commitHash, err := commit.Hash()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error computing commit hash: %v\n", err)
+	var buf bytes.Buffer
+	if err := commit.Encode(&buf); err != nil {
+		fmt.Fprintf(os.Stderr, "Error encoding commit: %v\n", err)
 		os.Exit(1)
 	}
+	computedHash := plumbing.ComputeHash(plumbing.CommitObject, buf.Bytes())
 
 	// Verify that the computed hash matches the provided hash
-	if commitHash.String() != commitData.Hash {
-		fmt.Fprintf(os.Stderr, "Computed hash '%s' does not match provided hash '%s'\n", commitHash.String(), commitData.Hash)
+	if computedHash.String() != commitData.Hash {
+		fmt.Fprintf(os.Stderr, "Computed hash '%s' does not match provided hash '%s'\n", computedHash.String(), commitData.Hash)
 		os.Exit(1)
 	}
 
@@ -219,7 +216,7 @@ func cbor2git() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Successfully stored commit %s\n", commitHash.String())
+	fmt.Printf("Successfully stored commit %s\n", computedHash.String())
 }
 
 // cbor2diag emits a human-readable CBOR diagnostic representation of the CBOR object.
