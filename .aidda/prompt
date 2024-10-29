@@ -12,4 +12,4 @@ representation, and then use 'cbor2git' to convert the CBOR representation
 back to a git object in another repository such that the commit hash is the
 same.
 
-vet: ./main.go:200:26: cannot use &buf (value of type *bytes.Buffer) as plumbing.EncodedObject value in argument to commit.Encode: *bytes.Buffer does not implement plumbing.EncodedObject (missing method Hash)
+vet: ./main.go:196:18: undefined: plumbing.NewMemoryObject
