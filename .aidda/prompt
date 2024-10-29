@@ -14,12 +14,6 @@ same.  There should also be a few utility subcommands to help visualize the
 CBOR representation.
 
 in cbor2dot:
-- use only the first 8 characters of the commit hash as the node name
-- use only the first line of the commit message as the node label
-- the edges from "blob content" nodes should point at their respective
-  "blob" nodes, not at the "commit" node
-- the new commit hash node should be at the head of an edge from the
-  commit message node
-- the parents and tree nodes should be at the tail of edges to the 
-  commit message node
+- make the edges from the tree nodes point at the commit message node,
+  not the new commit hash node
 
