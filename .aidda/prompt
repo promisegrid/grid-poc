@@ -14,3 +14,5 @@ same.
 
 - include new and changed tree objects in the cbor message
 - include new and changed blob objects in the cbor message
+
+vet: ./main.go:407:44: undefined: plumbing.FileMode

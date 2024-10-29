@@ -14,6 +14,7 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"github.com/go-git/go-git/v5/plumbing/filemode"
 )
 
 type CommitData struct {
@@ -28,6 +29,7 @@ type CommitData struct {
 	CommitterDate  time.Time   `cbor:"committer_date"`
 	Message        string      `cbor:"message"`
 	Trees          []TreeData  `cbor:"trees"`
+	Blobs          []BlobData  `cbor:"blobs"`
 }
 
 type TreeData struct {
@@ -40,6 +42,11 @@ type TreeEntry struct {
 	Name string `cbor:"name"`
 	Type string `cbor:"type"`
 	Hash string `cbor:"hash"`
+}
+
+type BlobData struct {
+	Hash    string `cbor:"hash"`
+	Content []byte `cbor:"content"`
 }
 
 func main() {
@@ -71,7 +78,7 @@ func main() {
 	}
 }
 
-// git2cbor converts a git commit object to CBOR format, including tree objects.
+// git2cbor converts a git commit object to CBOR format, including tree and blob objects.
 func git2cbor(ref string) {
 	// Find the Git repository directory by walking up the directory tree
 	repoPath, err := findGitRepo()
@@ -114,6 +121,7 @@ func git2cbor(ref string) {
 		CommitterDate:  commit.Committer.When,
 		Message:        commit.Message,
 		Trees:          []TreeData{},
+		Blobs:          []BlobData{},
 	}
 
 	for i, parentHash := range commit.ParentHashes {
@@ -123,6 +131,12 @@ func git2cbor(ref string) {
 	// Collect tree objects starting from the commit's tree
 	if err := collectTrees(repo, commit.TreeHash, &commitData.Trees); err != nil {
 		fmt.Fprintf(os.Stderr, "Error collecting tree objects: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Collect blob objects from the trees
+	if err := collectBlobs(repo, commit.TreeHash, &commitData.Blobs); err != nil {
+		fmt.Fprintf(os.Stderr, "Error collecting blob objects: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -181,7 +195,48 @@ func collectTrees(repo *git.Repository, treeHash plumbing.Hash, trees *[]TreeDat
 	return nil
 }
 
-// cbor2git converts CBOR data to a git commit object, including tree objects.
+// collectBlobs recursively collects blob objects and appends them to blobs slice.
+func collectBlobs(repo *git.Repository, treeHash plumbing.Hash, blobs *[]BlobData) error {
+	tree, err := repo.TreeObject(treeHash)
+	if err != nil {
+		return fmt.Errorf("error retrieving tree object '%s': %w", treeHash.String(), err)
+	}
+
+	for _, entry := range tree.Entries {
+		if entry.Mode == filemode.Dir {
+			// Recursively collect blobs from subtrees
+			if err := collectBlobs(repo, entry.Hash, blobs); err != nil {
+				return err
+			}
+		} else if entry.Mode.IsFile() || entry.Mode == filemode.Symlink {
+			blob, err := repo.BlobObject(entry.Hash)
+			if err != nil {
+				return fmt.Errorf("error retrieving blob object '%s': %w", entry.Hash.String(), err)
+			}
+			blobData := BlobData{
+				Hash:    blob.Hash.String(),
+				Content: blob.Contents,
+			}
+			// Avoid duplicate blobs
+			if !blobExists(*blobs, blobData.Hash) {
+				*blobs = append(*blobs, blobData)
+			}
+		}
+	}
+	return nil
+}
+
+// blobExists checks if a blob with the given hash already exists in the blobs slice.
+func blobExists(blobs []BlobData, hash string) bool {
+	for _, b := range blobs {
+		if b.Hash == hash {
+			return true
+		}
+	}
+	return false
+}
+
+// cbor2git converts CBOR data to a git commit object, including tree and blob objects.
 func cbor2git() {
 	// Read CBOR data from stdin
 	cborData, err := io.ReadAll(os.Stdin)
@@ -210,6 +265,14 @@ func cbor2git() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening repository: %v\n", err)
 		os.Exit(1)
+	}
+
+	// Write blob objects to the repository
+	for _, blobData := range commitData.Blobs {
+		if err := writeBlobToRepo(repo, blobData); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing blob '%s' to repository: %v\n", blobData.Hash, err)
+			os.Exit(1)
+		}
 	}
 
 	// Write tree objects to the repository
@@ -254,13 +317,15 @@ func cbor2git() {
 
 	// Create the commit object
 	commit := &object.Commit{
+		Hash:         plumbing.NewHash(commitData.Hash),
 		Author:       *author,
 		Committer:    *committer,
 		Message:      commitData.Message,
 		TreeHash:     treeHash,
-		ParentHashes: parentCommitsHashes(parentCommits),
+		ParentHashes: parentCommitHashes(parentCommits),
 	}
 
+	// Compute the commit hash to verify
 	computedHash := commit.ID()
 
 	// Verify that the computed hash matches the provided hash
@@ -281,7 +346,7 @@ func cbor2git() {
 
 // writeTreeToRepo writes a tree object to the repository.
 func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
-	var treeBuilder object.TreeBuilder
+	treeBuilder := object.NewTreeBuilder(repo.Storer)
 
 	for _, entry := range treeData.Entries {
 		mode, err := getFileMode(entry.Mode)
@@ -289,30 +354,20 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 			return fmt.Errorf("invalid mode '%s' for entry '%s': %w", entry.Mode, entry.Name, err)
 		}
 		hash := plumbing.NewHash(entry.Hash)
-		_, err = treeBuilder.Insert(entry.Name, hash, mode)
+		err = treeBuilder.Insert(entry.Name, hash, mode)
 		if err != nil {
 			return fmt.Errorf("error inserting entry '%s' into tree builder: %w", entry.Name, err)
 		}
 	}
 
-	tree, err := treeBuilder.ToTree()
+	tree, err := treeBuilder.Commit()
 	if err != nil {
-		return fmt.Errorf("error building tree object: %w", err)
+		return fmt.Errorf("error committing tree builder: %w", err)
 	}
 
 	// Ensure the tree hash matches
-	if tree.Hash.String() != treeData.Hash {
-		// Create a buffer to encode the tree
-		var buf bytes.Buffer
-		if err := tree.Encode(&buf); err != nil {
-			return fmt.Errorf("error encoding tree object: %w", err)
-		}
-
-		// Calculate the hash
-		calculatedHash := plumbing.ComputeHash(plumbing.TreeObject, buf.Bytes())
-		if calculatedHash.String() != treeData.Hash {
-			return fmt.Errorf("calculated tree hash '%s' does not match expected hash '%s'", calculatedHash.String(), treeData.Hash)
-		}
+	if tree.String() != treeData.Hash {
+		return fmt.Errorf("computed tree hash '%s' does not match expected hash '%s'", tree.String(), treeData.Hash)
 	}
 
 	// Store the tree in the repository
@@ -324,17 +379,44 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 	return nil
 }
 
+// writeBlobToRepo writes a blob object to the repository.
+func writeBlobToRepo(repo *git.Repository, blobData BlobData) error {
+	blob := &object.Blob{
+		Hash:  plumbing.NewHash(blobData.Hash),
+		Size:  int64(len(blobData.Content)),
+		BlobContent: blobData.Content,
+	}
+	// Encode the blob
+	objWriter := repo.Storer.NewEncodedObject()
+	if err := blob.Encode(objWriter); err != nil {
+		return fmt.Errorf("failed to encode blob object: %w", err)
+	}
+
+	// Store the blob in the repository
+	storedHash, err := repo.Storer.SetEncodedObject(objWriter)
+	if err != nil {
+		return fmt.Errorf("failed to store blob object: %w", err)
+	}
+
+	// Verify that the stored hash matches
+	if storedHash.String() != blobData.Hash {
+		return fmt.Errorf("stored blob hash '%s' does not match expected hash '%s'", storedHash.String(), blobData.Hash)
+	}
+
+	return nil
+}
+
 // getFileMode converts string mode to plumbing.FileMode
 func getFileMode(modeStr string) (plumbing.FileMode, error) {
 	switch modeStr {
 	case "100644":
-		return plumbing.FileMode(0644), nil
+		return filemode.Regular, nil
 	case "100755":
-		return plumbing.FileMode(0755), nil
+		return filemode.Executable, nil
 	case "040000":
-		return plumbing.FileModeDirectory, nil
+		return filemode.Dir, nil
 	case "160000":
-		return plumbing.FileMode(0160000), nil
+		return filemode.Submodule, nil
 	default:
 		return 0, fmt.Errorf("unsupported file mode: %s", modeStr)
 	}
@@ -387,8 +469,8 @@ func findGitRepo() (string, error) {
 	return "", fmt.Errorf(".git directory not found in any parent directories")
 }
 
-// parentCommitsHashes extracts the hashes from parent commit objects.
-func parentCommitsHashes(parents []*object.Commit) []plumbing.Hash {
+// parentCommitHashes extracts the hashes from parent commit objects.
+func parentCommitHashes(parents []*object.Commit) []plumbing.Hash {
 	hashes := make([]plumbing.Hash, len(parents))
 	for i, parent := range parents {
 		hashes[i] = parent.Hash
