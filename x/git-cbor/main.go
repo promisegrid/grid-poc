@@ -1,10 +1,9 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
-	"compress/zlib"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
 type CommitData struct {
@@ -122,7 +122,7 @@ func git2cbor(ref string) {
 // cbor2git converts CBOR data to a git commit object.
 func cbor2git() {
 	// Read CBOR data from stdin
-	cborData, err := readAll(os.Stdin)
+	cborData, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading CBOR data: %v\n", err)
 		os.Exit(1)
@@ -150,75 +150,82 @@ func cbor2git() {
 		os.Exit(1)
 	}
 
-	// Prepare parent hashes
-	var parentPlumbingHashes []plumbing.Hash
+	// Prepare parent commits
+	var parentCommits []*object.Commit
 	for _, ph := range commitData.Parents {
-		h, err := plumbing.NewHash(ph)
+		pHash, err := plumbing.NewHash(ph)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Invalid parent hash '%s': %v\n", ph, err)
 			os.Exit(1)
 		}
-		parentPlumbingHashes = append(parentPlumbingHashes, h)
+		parentCommit, err := repo.CommitObject(*pHash)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error retrieving parent commit '%s': %v\n", ph, err)
+			os.Exit(1)
+		}
+		parentCommits = append(parentCommits, parentCommit)
 	}
 
-	// Prepare tree hash
+	// Prepare the tree
 	treeHash, err := plumbing.NewHash(commitData.Tree)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Invalid tree hash '%s': %v\n", commitData.Tree, err)
 		os.Exit(1)
 	}
+	tree, err := repo.TreeObject(*treeHash)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error retrieving tree object: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create author and committer signatures
+	author := &object.Signature{
+		Name:  commitData.AuthorName,
+		Email: commitData.AuthorEmail,
+		When:  commitData.AuthorDate,
+	}
+	committer := &object.Signature{
+		Name:  commitData.CommitterName,
+		Email: commitData.CommitterEmail,
+		When:  commitData.CommitterDate,
+	}
 
 	// Create the commit object
-	commit := &objectCommit{
-		Hash: plumbing.NewHash(commitData.Hash),
-		Author: objectSignature{
-			Name:  commitData.AuthorName,
-			Email: commitData.AuthorEmail,
-			When:  commitData.AuthorDate,
-		},
-		Committer: objectSignature{
-			Name:  commitData.CommitterName,
-			Email: commitData.CommitterEmail,
-			When:  commitData.CommitterDate,
-		},
+	commit := &object.Commit{
+		Author:       *author,
+		Committer:    *committer,
 		Message:      commitData.Message,
-		TreeHash:     treeHash,
-		ParentHashes: parentPlumbingHashes,
+		TreeHash:     *treeHash,
+		ParentHashes: parentCommitsHashes(parentCommits),
 	}
 
-	// XXX should we be using some sort of commit object from the
-	// go-git library instead of serializing it ourselves?
-
-	// Serialize the commit object to the correct format
-	commitContent, err := serializeCommit(commit)
+	// Serialize the commit to get the correct hash
+	commitHash, err := commit.Hash()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error serializing commit: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error computing commit hash: %v\n", err)
 		os.Exit(1)
 	}
-
-	// Compute the object hash
-	objHash := plumbing.ComputeHash(plumbing.CommitObject, commitContent)
 
 	// Verify that the computed hash matches the provided hash
-	if objHash.String() != commitData.Hash {
-		fmt.Fprintf(os.Stderr, "Computed hash '%s' does not match provided hash '%s'\n", objHash.String(), commitData.Hash)
+	if commitHash.String() != commitData.Hash {
+		fmt.Fprintf(os.Stderr, "Computed hash '%s' does not match provided hash '%s'\n", commitHash.String(), commitData.Hash)
 		os.Exit(1)
 	}
 
-	// Store the commit object in the repository
-	err = storeObject(repo, objHash, commitContent)
+	// Write the commit object to the repository
+	err = writeCommitToRepo(repo, commit)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error storing commit object: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error writing commit to repository: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Successfully stored commit %s\n", objHash.String())
+	fmt.Printf("Successfully stored commit %s\n", commitHash.String())
 }
 
 // cbor2diag emits a human-readable CBOR diagnostic representation of the CBOR object.
 func cbor2diag() {
 	// Read CBOR data from stdin
-	cborData, err := readAll(os.Stdin)
+	cborData, err := io.ReadAll(os.Stdin)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error reading CBOR data: %v\n", err)
 		os.Exit(1)
@@ -262,105 +269,37 @@ func findGitRepo() (string, error) {
 	return "", fmt.Errorf(".git directory not found in any parent directories")
 }
 
-// readAll reads all data from the given file.
-func readAll(file *os.File) ([]byte, error) {
-	var buffer bytes.Buffer
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		buffer.Write(scanner.Bytes())
+// parentCommitsHashes extracts the hashes from parent commit objects.
+func parentCommitsHashes(parents []*object.Commit) []plumbing.Hash {
+	hashes := make([]plumbing.Hash, len(parents))
+	for i, parent := range parents {
+		hashes[i] = parent.Hash
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return buffer.Bytes(), nil
+	return hashes
 }
 
-// serializeCommit serializes the commit object into the Git commit format.
-// XXX is there a better way to do this with the go-git library?
-func serializeCommit(commit *objectCommit) ([]byte, error) {
-	var buffer bytes.Buffer
-	buffer.WriteString(fmt.Sprintf("tree %s\n", commit.TreeHash))
-	for _, parent := range commit.ParentHashes {
-		buffer.WriteString(fmt.Sprintf("parent %s\n", parent))
-	}
-	buffer.WriteString(fmt.Sprintf("author %s <%s> %d %s\n",
-		commit.Author.Name,
-		commit.Author.Email,
-		commit.Author.When.Unix(),
-		formatTimeZone(commit.Author.When)),
-	)
-	buffer.WriteString(fmt.Sprintf("committer %s <%s> %d %s\n\n",
-		commit.Committer.Name,
-		commit.Committer.Email,
-		commit.Committer.When.Unix(),
-		formatTimeZone(commit.Committer.When)),
-	)
-	buffer.WriteString(commit.Message)
-
-	return buffer.Bytes(), nil
-}
-
-// formatTimeZone formats the timezone offset.
-func formatTimeZone(t time.Time) string {
-	_, offset := t.Zone()
-	sign := "+"
-	if offset < 0 {
-		sign = "-"
-		offset = -offset
-	}
-	hours := offset / 3600
-	minutes := (offset % 3600) / 60
-	return fmt.Sprintf("%s%02d%02d", sign, hours, minutes)
-}
-
-// storeObject writes the object to the Git repository's object store.
-// XXX is there a better way to do this with the go-git library?
-func storeObject(repo *git.Repository, hash plumbing.Hash, content []byte) error {
-	objectDir := filepath.Join(repo.Storer.(*git.MemoryObjectStorer).Root(), "objects", hash.String()[:2])
-	objectPath := filepath.Join(objectDir, hash.String()[2:])
-
-	// Create the object directory if it doesn't exist
-	err := os.MkdirAll(objectDir, 0755)
+// writeCommitToRepo writes the commit object to the repository's object store.
+func writeCommitToRepo(repo *git.Repository, commit *object.Commit) error {
+	objWriter, err := repo.Storer.NewEncodedObject()
 	if err != nil {
-		return fmt.Errorf("failed to create object directory: %w", err)
+		return fmt.Errorf("failed to create new encoded object: %w", err)
 	}
 
-	// Write the object if it doesn't already exist
-	if _, err := os.Stat(objectPath); os.IsNotExist(err) {
-		// Compress the content using zlib
-		var buf bytes.Buffer
-		writer := zlib.NewWriter(&buf)
-		_, err := writer.Write(content)
-		if err != nil {
-			return fmt.Errorf("failed to compress object: %w", err)
-		}
-		writer.Close()
+	if err := commit.Encode(objWriter); err != nil {
+		return fmt.Errorf("failed to encode commit object: %w", err)
+	}
 
-		// Write to file
-		err = os.WriteFile(objectPath, buf.Bytes(), 0644)
-		if err != nil {
-			return fmt.Errorf("failed to write object file: %w", err)
-		}
+	commitHash, err := repo.Storer.SetEncodedObject(objWriter)
+	if err != nil {
+		return fmt.Errorf("failed to store commit object: %w", err)
+	}
+
+	// Optionally, update references as needed here
+
+	// Verify that the stored hash matches
+	if commitHash.String() != commit.Hash.String() {
+		return fmt.Errorf("stored commit hash '%s' does not match expected hash '%s'", commitHash.String(), commit.Hash.String())
 	}
 
 	return nil
-}
-
-// objectCommit represents a simplified Git commit object.
-// XXX use the go-git library's struct
-type objectCommit struct {
-	Hash         plumbing.Hash
-	Author       objectSignature
-	Committer    objectSignature
-	Message      string
-	TreeHash     plumbing.Hash
-	ParentHashes []plumbing.Hash
-}
-
-// objectSignature represents the author or committer signature in a commit.
-// XXX use the go-git library's struct
-type objectSignature struct {
-	Name  string
-	Email string
-	When  time.Time
 }

@@ -12,4 +12,4 @@ representation, and then use 'cbor2git' to convert the CBOR representation
 back to a git object in another repository such that the commit hash is the
 same.
 
-use the go-git library's structs and methods for objects, signatures, and serialization
+vet: ./main.go:156:17: assignment mismatch: 2 variables but plumbing.NewHash returns 1 value
