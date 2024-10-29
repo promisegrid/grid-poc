@@ -3,7 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"compress/flate"
+	"compress/zlib"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -41,11 +41,15 @@ func main() {
 
 	switch subcommand {
 	case "git2cbor":
-		git2cbor(os.Args[2:])
+		if len(os.Args) < 3 {
+			fmt.Fprintf(os.Stderr, "Usage: %s git2cbor <ref>\n", os.Args[0])
+			os.Exit(1)
+		}
+		git2cbor(os.Args[2])
 	case "cbor2git":
-		cbor2git(os.Args[2:])
+		cbor2git()
 	case "cbor2diag":
-		cbor2diag(os.Args[2:])
+		cbor2diag()
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n", subcommand)
 		os.Exit(1)
@@ -53,13 +57,7 @@ func main() {
 }
 
 // git2cbor converts a git commit object to CBOR format.
-func git2cbor(args []string) {
-	// Determine the reference from command line arguments or default to HEAD
-	refName := "HEAD"
-	if len(args) > 0 {
-		refName = args[0]
-	}
-
+func git2cbor(ref string) {
 	// Find the Git repository directory by walking up the directory tree
 	repoPath, err := findGitRepo()
 	if err != nil {
@@ -75,9 +73,9 @@ func git2cbor(args []string) {
 	}
 
 	// Resolve the reference to a commit hash
-	hash, err := repo.ResolveRevision(plumbing.Revision(refName))
+	hash, err := repo.ResolveRevision(plumbing.Revision(ref))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error resolving ref '%s': %v\n", refName, err)
+		fmt.Fprintf(os.Stderr, "Error resolving ref '%s': %v\n", ref, err)
 		os.Exit(1)
 	}
 
@@ -122,7 +120,7 @@ func git2cbor(args []string) {
 }
 
 // cbor2git converts CBOR data to a git commit object.
-func cbor2git(args []string) {
+func cbor2git() {
 	// Read CBOR data from stdin
 	cborData, err := readAll(os.Stdin)
 	if err != nil {
@@ -171,14 +169,14 @@ func cbor2git(args []string) {
 	}
 
 	// Create the commit object
-	commit := &git.Commit{
+	commit := &objectCommit{
 		Hash: plumbing.NewHash(commitData.Hash),
-		Author: git.Signature{
+		Author: objectSignature{
 			Name:  commitData.AuthorName,
 			Email: commitData.AuthorEmail,
 			When:  commitData.AuthorDate,
 		},
-		Committer: git.Signature{
+		Committer: objectSignature{
 			Name:  commitData.CommitterName,
 			Email: commitData.CommitterEmail,
 			When:  commitData.CommitterDate,
@@ -218,7 +216,7 @@ func cbor2git(args []string) {
 }
 
 // cbor2diag emits a human-readable CBOR diagnostic representation of the CBOR object.
-func cbor2diag(args []string) {
+func cbor2diag() {
 	// Read CBOR data from stdin
 	cborData, err := readAll(os.Stdin)
 	if err != nil {
@@ -279,7 +277,7 @@ func readAll(file *os.File) ([]byte, error) {
 
 // serializeCommit serializes the commit object into the Git commit format.
 // XXX is there a better way to do this with the go-git library?
-func serializeCommit(commit *git.Commit) ([]byte, error) {
+func serializeCommit(commit *objectCommit) ([]byte, error) {
 	var buffer bytes.Buffer
 	buffer.WriteString(fmt.Sprintf("tree %s\n", commit.TreeHash))
 	for _, parent := range commit.ParentHashes {
@@ -331,7 +329,7 @@ func storeObject(repo *git.Repository, hash plumbing.Hash, content []byte) error
 	if _, err := os.Stat(objectPath); os.IsNotExist(err) {
 		// Compress the content using zlib
 		var buf bytes.Buffer
-		writer := flateWriter(&buf)
+		writer := zlib.NewWriter(&buf)
 		_, err := writer.Write(content)
 		if err != nil {
 			return fmt.Errorf("failed to compress object: %w", err)
@@ -348,9 +346,21 @@ func storeObject(repo *git.Repository, hash plumbing.Hash, content []byte) error
 	return nil
 }
 
-// flateWriter is a helper to create a flate (zlib) writer.
-// XXX is there a better way to do this with the go-git library?
-func flateWriter(buf *bytes.Buffer) *flate.Writer {
-	writer, _ := flate.NewWriter(buf, flate.DefaultCompression)
-	return writer
+// objectCommit represents a simplified Git commit object.
+// XXX use the go-git library's struct
+type objectCommit struct {
+	Hash         plumbing.Hash
+	Author       objectSignature
+	Committer    objectSignature
+	Message      string
+	TreeHash     plumbing.Hash
+	ParentHashes []plumbing.Hash
+}
+
+// objectSignature represents the author or committer signature in a commit.
+// XXX use the go-git library's struct
+type objectSignature struct {
+	Name  string
+	Email string
+	When  time.Time
 }

@@ -7,20 +7,9 @@ Out:
 Sysmsg: You are an expert Go programmer. Please make the requested changes
  to the given code or documentation.
 
-Implement subcommands for `git-cbor`.  
-
-Move the existing code into a subcommand called `git2cbor`.  
-
-Add a new subcommand called `cbor2git` that does the reverse.  
-
-Add a new subcommand called `cbor2diag` that takes a CBOR-encoded object
-and emits a human-readable CBOR diagnostic representation of the object.
-
 The goal is to be able to use 'git2cbor' to convert a git object to a CBOR
 representation, and then use 'cbor2git' to convert the CBOR representation
 back to a git object in another repository such that the commit hash is the
 same.
 
-# main
-# [main]
-vet: ./main.go:282:34: undefined: git.Commit
+use the go-git library's structs and methods for objects, signatures, and serialization
