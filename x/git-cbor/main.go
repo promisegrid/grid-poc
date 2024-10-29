@@ -587,22 +587,21 @@ func cbor2dot() {
 	}
 	escapedMsg := escapeDotString(firstLine)
 
-	// Central node for commit
-	commitShortHash := shortHash(commitData.Hash)
-	commitMsgNode := fmt.Sprintf("commit_%s", commitShortHash)
+	// Central node for commit message
+	commitMsgNode := fmt.Sprintf("commit_msg_%s", shortHash(commitData.Hash))
 	fmt.Printf("  %s [label=\"%s\", shape=oval, style=filled, color=lightblue];\n", commitMsgNode, escapedMsg)
 
 	// Node for commit hash
-	commitHashNode := fmt.Sprintf("hash_%s", commitShortHash)
+	commitHashNode := fmt.Sprintf("hash_%s", shortHash(commitData.Hash))
 	fmt.Printf("  %s [label=\"%s\", shape=rectangle, style=filled, color=lightgray];\n", commitHashNode, shortHash(commitData.Hash))
-	fmt.Printf("  %s -> %s;\n", commitHashNode, commitMsgNode)
+	fmt.Printf("  %s -> %s;\n", commitMsgNode, commitHashNode)
 
 	// Parent commits
 	for _, parentHash := range commitData.Parents {
 		parentShortHash := shortHash(parentHash)
 		parentNodeID := fmt.Sprintf("parent_%s", parentShortHash)
 		fmt.Printf("  %s [label=\"%s\", shape=rectangle, style=filled, color=lightgray];\n", parentNodeID, parentShortHash)
-		fmt.Printf("  %s -> %s;\n", parentNodeID, commitHashNode)
+		fmt.Printf("  %s -> %s;\n", parentNodeID, commitMsgNode)
 	}
 
 	// Trees
