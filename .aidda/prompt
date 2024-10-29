@@ -14,4 +14,4 @@ same.
 
 - include new and changed tree objects in the cbor message
 
-vet: ./main.go:405:24: undefined: object.NewTreeBuilder
+vet: ./main.go:452:16: obj.Write undefined (type plumbing.EncodedObject has no field or method Write)

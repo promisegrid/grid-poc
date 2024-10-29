@@ -402,36 +402,35 @@ func cbor2git() {
 
 // writeTreeToRepo writes a tree object to the repository.
 func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
-	// XXX use the correct go-git library methods to create a tree object
-	// XXX there is no object.NewTreeBuilder in go-git v5
-	treeBuilder := object.NewTreeBuilder(repo.Storer, nil)
-
+	var tree object.Tree
 	for _, entry := range treeData.Entries {
 		mode, err := getFileMode(entry.Mode)
 		if err != nil {
 			return fmt.Errorf("invalid mode '%s' for entry '%s': %w", entry.Mode, entry.Name, err)
 		}
-		hash := plumbing.NewHash(entry.Hash)
-		err = treeBuilder.Insert(entry.Name, hash, mode)
-		if err != nil {
-			return fmt.Errorf("error inserting entry '%s' into tree builder: %w", entry.Name, err)
-		}
+		tree.Entries = append(tree.Entries, object.TreeEntry{
+			Name: entry.Name,
+			Mode: mode,
+			Hash: plumbing.NewHash(entry.Hash),
+		})
 	}
 
-	tree, err := treeBuilder.Commit()
-	if err != nil {
-		return fmt.Errorf("error committing tree builder: %w", err)
+	// Encode the tree object
+	objWriter := repo.Storer.NewEncodedObject()
+	if err := tree.Encode(objWriter); err != nil {
+		return fmt.Errorf("failed to encode tree object: %w", err)
 	}
-
-	// Ensure the tree hash matches
-	if tree.Hash.String() != treeData.Hash {
-		return fmt.Errorf("computed tree hash '%s' does not match expected hash '%s'", tree.Hash.String(), treeData.Hash)
-	}
+	objWriter.SetType(plumbing.TreeObject)
 
 	// Store the tree in the repository
-	_, err = repo.Storer.SetEncodedObject(tree)
+	storedHash, err := repo.Storer.SetEncodedObject(objWriter)
 	if err != nil {
-		return fmt.Errorf("error storing tree object: %w", err)
+		return fmt.Errorf("failed to store tree object: %w", err)
+	}
+
+	// Verify that the stored hash matches the expected hash
+	if storedHash.String() != treeData.Hash {
+		return fmt.Errorf("stored tree hash '%s' does not match expected hash '%s'", storedHash.String(), treeData.Hash)
 	}
 
 	return nil
@@ -440,18 +439,23 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 // writeBlobToRepo writes a blob object to the repository.
 func writeBlobToRepo(repo *git.Repository, blobData BlobData) error {
 	blob := &object.Blob{
-		Hash:        plumbing.NewHash(blobData.Hash),
-		Size:        int64(len(blobData.Content)),
-		BlobContent: blobData.Content,
+		Hash: plumbing.NewHash(blobData.Hash),
+		Size: int64(len(blobData.Content)),
+		// BlobContent is deprecated; use the reader instead
 	}
-	// Encode the blob
-	objWriter := repo.Storer.NewEncodedObject()
-	if err := blob.Encode(objWriter); err != nil {
-		return fmt.Errorf("failed to encode blob object: %w", err)
+
+	// Create a new encoded object
+	obj := repo.Storer.NewEncodedObject()
+	obj.SetType(plumbing.BlobObject)
+
+	// Write blob content
+	_, err := obj.Write(blobData.Content)
+	if err != nil {
+		return fmt.Errorf("failed to write blob content: %w", err)
 	}
 
 	// Store the blob in the repository
-	storedHash, err := repo.Storer.SetEncodedObject(objWriter)
+	storedHash, err := repo.Storer.SetEncodedObject(obj)
 	if err != nil {
 		return fmt.Errorf("failed to store blob object: %w", err)
 	}
