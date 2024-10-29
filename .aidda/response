@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -26,8 +27,15 @@ func main() {
 		refName = os.Args[1]
 	}
 
-	// Open the Git repository in the current directory
-	repo, err := git.PlainOpen(".")
+	// Find the Git repository directory by walking up the directory tree
+	repoPath, err := findGitRepo()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error finding .git directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Open the Git repository
+	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error opening repository: %v\n", err)
 		os.Exit(1)
@@ -73,6 +81,33 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Error writing CBOR to stdout: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// findGitRepo walks up the directory tree from the current directory to find a directory containing a .git folder.
+// It returns the path to the repository root directory, or an error if not found.
+func findGitRepo() (string, error) {
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("unable to get current working directory: %w", err)
+	}
+
+	for {
+		gitPath := filepath.Join(currentDir, ".git")
+		info, err := os.Stat(gitPath)
+		if err == nil && info.IsDir() {
+			return currentDir, nil
+		}
+
+		// Move up to the parent directory
+		parentDir := filepath.Dir(currentDir)
+		if parentDir == currentDir {
+			// Reached the root directory
+			break
+		}
+		currentDir = parentDir
+	}
+
+	return "", fmt.Errorf(".git directory not found in any parent directories")
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/git-cbor/main.go

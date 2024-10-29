@@ -11,6 +11,7 @@ Given a git ref on the command line, emit the corresponding CBOR-encoded
 object to stdout.  If no ref is given, emit the CBOR-encoded object for
 HEAD.
 
-Find the .git directory by walking up the directory tree from the current
-directory.  If no .git directory is found, emit an error message to stderr
-and exit with a non-zero status.
+The goal is to be able to exactly reproduce the commit on a different
+machine such that the commit hash is the same. Add date and time to
+the output, as well as any other attributes that are necessary to
+ensure that the commit hash is the same.
