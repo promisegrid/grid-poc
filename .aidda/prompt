@@ -14,4 +14,4 @@ same.
 
 - include new and changed tree objects in the cbor message
 
-vet: ./main.go:452:16: obj.Write undefined (type plumbing.EncodedObject has no field or method Write)
+vet: ./main.go:429:24: cannot use w (variable of type io.WriteCloser) as plumbing.EncodedObject value in argument to tree.Encode: io.WriteCloser does not implement plumbing.EncodedObject (missing method Hash)

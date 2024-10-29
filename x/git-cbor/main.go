@@ -415,15 +415,29 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 		})
 	}
 
-	// Encode the tree object
-	objWriter := repo.Storer.NewEncodedObject()
-	if err := tree.Encode(objWriter); err != nil {
+	// Create a new encoded object for the tree
+	obj := repo.Storer.NewEncodedObject()
+	obj.SetType(plumbing.TreeObject)
+
+	// Get the writer for the encoded object
+	w, err := obj.Writer()
+	if err != nil {
+		return fmt.Errorf("failed to get writer for tree object: %w", err)
+	}
+
+	// Encode the tree into the writer
+	if err := tree.Encode(w); err != nil {
+		w.Close()
 		return fmt.Errorf("failed to encode tree object: %w", err)
 	}
-	objWriter.SetType(plumbing.TreeObject)
+
+	// Close the writer to finalize the object
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("failed to close writer for tree object: %w", err)
+	}
 
 	// Store the tree in the repository
-	storedHash, err := repo.Storer.SetEncodedObject(objWriter)
+	storedHash, err := repo.Storer.SetEncodedObject(obj)
 	if err != nil {
 		return fmt.Errorf("failed to store tree object: %w", err)
 	}
@@ -438,20 +452,26 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 
 // writeBlobToRepo writes a blob object to the repository.
 func writeBlobToRepo(repo *git.Repository, blobData BlobData) error {
-	blob := &object.Blob{
-		Hash: plumbing.NewHash(blobData.Hash),
-		Size: int64(len(blobData.Content)),
-		// BlobContent is deprecated; use the reader instead
-	}
-
-	// Create a new encoded object
+	// Create a new encoded object for the blob
 	obj := repo.Storer.NewEncodedObject()
 	obj.SetType(plumbing.BlobObject)
 
-	// Write blob content
-	_, err := obj.Write(blobData.Content)
+	// Get the writer for the encoded object
+	w, err := obj.Writer()
 	if err != nil {
+		return fmt.Errorf("failed to get writer for blob object: %w", err)
+	}
+
+	// Write blob content to the writer
+	_, err = w.Write(blobData.Content)
+	if err != nil {
+		w.Close()
 		return fmt.Errorf("failed to write blob content: %w", err)
+	}
+
+	// Close the writer to finalize the object
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("failed to close writer for blob object: %w", err)
 	}
 
 	// Store the blob in the repository
@@ -542,13 +562,29 @@ func parentCommitHashes(parents []*object.Commit) []plumbing.Hash {
 
 // writeCommitToRepo writes the commit object to the repository's object store.
 func writeCommitToRepo(repo *git.Repository, commit *object.Commit) error {
-	objWriter := repo.Storer.NewEncodedObject()
+	// Create a new encoded object for the commit
+	obj := repo.Storer.NewEncodedObject()
+	obj.SetType(plumbing.CommitObject)
 
-	if err := commit.Encode(objWriter); err != nil {
+	// Get the writer for the encoded object
+	w, err := obj.Writer()
+	if err != nil {
+		return fmt.Errorf("failed to get writer for commit object: %w", err)
+	}
+
+	// Encode the commit into the writer
+	if err := commit.Encode(w); err != nil {
+		w.Close()
 		return fmt.Errorf("failed to encode commit object: %w", err)
 	}
 
-	commitHash, err := repo.Storer.SetEncodedObject(objWriter)
+	// Close the writer to finalize the object
+	if err := w.Close(); err != nil {
+		return fmt.Errorf("failed to close writer for commit object: %w", err)
+	}
+
+	// Store the commit in the repository
+	commitHash, err := repo.Storer.SetEncodedObject(obj)
 	if err != nil {
 		return fmt.Errorf("failed to store commit object: %w", err)
 	}
