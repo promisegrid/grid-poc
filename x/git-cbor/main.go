@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -11,11 +12,16 @@ import (
 )
 
 type CommitData struct {
-	Hash    string   `cbor:"hash"`
-	Author  string   `cbor:"author"`
-	Message string   `cbor:"message"`
-	Parents []string `cbor:"parents"`
-	Tree    string   `cbor:"tree"`
+	Hash           string    `cbor:"hash"`
+	Tree           string    `cbor:"tree"`
+	Parents        []string  `cbor:"parents"`
+	AuthorName     string    `cbor:"author_name"`
+	AuthorEmail    string    `cbor:"author_email"`
+	AuthorDate     time.Time `cbor:"author_date"`
+	CommitterName  string    `cbor:"committer_name"`
+	CommitterEmail string    `cbor:"committer_email"`
+	CommitterDate  time.Time `cbor:"committer_date"`
+	Message        string    `cbor:"message"`
 }
 
 func main() {
@@ -55,11 +61,16 @@ func main() {
 
 	// Populate the CommitData struct
 	commitData := CommitData{
-		Hash:    commit.Hash.String(),
-		Author:  commit.Author.String(),
-		Message: commit.Message,
-		Parents: make([]string, len(commit.ParentHashes)),
-		Tree:    commit.TreeHash.String(),
+		Hash:           commit.Hash.String(),
+		Tree:           commit.TreeHash.String(),
+		Parents:        make([]string, len(commit.ParentHashes)),
+		AuthorName:     commit.Author.Name,
+		AuthorEmail:    commit.Author.Email,
+		AuthorDate:     commit.Author.When,
+		CommitterName:  commit.Committer.Name,
+		CommitterEmail: commit.Committer.Email,
+		CommitterDate:  commit.Committer.When,
+		Message:        commit.Message,
 	}
 
 	for i, parentHash := range commit.ParentHashes {
