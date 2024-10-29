@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -14,16 +15,29 @@ import (
 )
 
 type CommitData struct {
-	Hash           string    `cbor:"hash"`
-	Tree           string    `cbor:"tree"`
-	Parents        []string  `cbor:"parents"`
-	AuthorName     string    `cbor:"author_name"`
-	AuthorEmail    string    `cbor:"author_email"`
-	AuthorDate     time.Time `cbor:"author_date"`
-	CommitterName  string    `cbor:"committer_name"`
-	CommitterEmail string    `cbor:"committer_email"`
-	CommitterDate  time.Time `cbor:"committer_date"`
-	Message        string    `cbor:"message"`
+	Hash           string      `cbor:"hash"`
+	Tree           string      `cbor:"tree"`
+	Parents        []string    `cbor:"parents"`
+	AuthorName     string      `cbor:"author_name"`
+	AuthorEmail    string      `cbor:"author_email"`
+	AuthorDate     time.Time   `cbor:"author_date"`
+	CommitterName  string      `cbor:"committer_name"`
+	CommitterEmail string      `cbor:"committer_email"`
+	CommitterDate  time.Time   `cbor:"committer_date"`
+	Message        string      `cbor:"message"`
+	Trees          []TreeData  `cbor:"trees"`
+}
+
+type TreeData struct {
+	Hash    string      `cbor:"hash"`
+	Entries []TreeEntry `cbor:"entries"`
+}
+
+type TreeEntry struct {
+	Mode string `cbor:"mode"`
+	Name string `cbor:"name"`
+	Type string `cbor:"type"`
+	Hash string `cbor:"hash"`
 }
 
 func main() {
@@ -55,7 +69,7 @@ func main() {
 	}
 }
 
-// git2cbor converts a git commit object to CBOR format.
+// git2cbor converts a git commit object to CBOR format, including tree objects.
 func git2cbor(ref string) {
 	// Find the Git repository directory by walking up the directory tree
 	repoPath, err := findGitRepo()
@@ -97,10 +111,17 @@ func git2cbor(ref string) {
 		CommitterEmail: commit.Committer.Email,
 		CommitterDate:  commit.Committer.When,
 		Message:        commit.Message,
+		Trees:          []TreeData{},
 	}
 
 	for i, parentHash := range commit.ParentHashes {
 		commitData.Parents[i] = parentHash.String()
+	}
+
+	// Collect tree objects starting from the commit's tree
+	if err := collectTrees(repo, commit.TreeHash, &commitData.Trees); err != nil {
+		fmt.Fprintf(os.Stderr, "Error collecting tree objects: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Encode the CommitData to CBOR
@@ -118,7 +139,47 @@ func git2cbor(ref string) {
 	}
 }
 
-// cbor2git converts CBOR data to a git commit object.
+// collectTrees recursively collects tree objects and appends them to trees slice.
+func collectTrees(repo *git.Repository, treeHash plumbing.Hash, trees *[]TreeData) error {
+	// Check if the tree is already collected
+	for _, t := range *trees {
+		if t.Hash == treeHash.String() {
+			return nil
+		}
+	}
+
+	tree, err := repo.TreeObject(treeHash)
+	if err != nil {
+		return fmt.Errorf("error retrieving tree object '%s': %w", treeHash.String(), err)
+	}
+
+	treeData := TreeData{
+		Hash:    tree.Hash.String(),
+		Entries: []TreeEntry{},
+	}
+
+	for _, entry := range tree.Entries {
+		treeEntry := TreeEntry{
+			Mode: entry.Mode.String(),
+			Name: entry.Name,
+			Type: entry.Mode.Type().String(),
+			Hash: entry.Hash.String(),
+		}
+		treeData.Entries = append(treeData.Entries, treeEntry)
+
+		if entry.Mode == filemode.Dir {
+			// Recursively collect subtrees
+			if err := collectTrees(repo, entry.Hash, trees); err != nil {
+				return err
+			}
+		}
+	}
+
+	*trees = append(*trees, treeData)
+	return nil
+}
+
+// cbor2git converts CBOR data to a git commit object, including tree objects.
 func cbor2git() {
 	// Read CBOR data from stdin
 	cborData, err := io.ReadAll(os.Stdin)
@@ -149,6 +210,14 @@ func cbor2git() {
 		os.Exit(1)
 	}
 
+	// Write tree objects to the repository
+	for _, treeData := range commitData.Trees {
+		if err := writeTreeToRepo(repo, treeData); err != nil {
+			fmt.Fprintf(os.Stderr, "Error writing tree '%s' to repository: %v\n", treeData.Hash, err)
+			os.Exit(1)
+		}
+	}
+
 	// Prepare parent commits
 	var parentCommits []*object.Commit
 	for _, ph := range commitData.Parents {
@@ -163,13 +232,11 @@ func cbor2git() {
 
 	// Prepare the tree
 	treeHash := plumbing.NewHash(commitData.Tree)
-	// Removed the erroneous error check here as treeHash assignment does not produce an error
 	tree, err := repo.TreeObject(treeHash)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error retrieving tree object: %v\n", err)
 		os.Exit(1)
 	}
-	_ = tree
 
 	// Create author and committer signatures
 	author := &object.Signature{
@@ -208,6 +275,67 @@ func cbor2git() {
 	}
 
 	fmt.Printf("Successfully stored commit %s\n", computedHash.String())
+}
+
+// writeTreeToRepo writes a tree object to the repository.
+func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
+	var treeBuilder object.TreeBuilder
+
+	for _, entry := range treeData.Entries {
+		mode, err := getFileMode(entry.Mode)
+		if err != nil {
+			return fmt.Errorf("invalid mode '%s' for entry '%s': %w", entry.Mode, entry.Name, err)
+		}
+		hash := plumbing.NewHash(entry.Hash)
+		_, err = treeBuilder.Insert(entry.Name, hash, mode)
+		if err != nil {
+			return fmt.Errorf("error inserting entry '%s' into tree builder: %w", entry.Name, err)
+		}
+	}
+
+	tree, err := treeBuilder.ToTree()
+	if err != nil {
+		return fmt.Errorf("error building tree object: %w", err)
+	}
+
+	// Ensure the tree hash matches
+	if tree.Hash.String() != treeData.Hash {
+		// Create a buffer to encode the tree
+		var buf bytes.Buffer
+		if err := tree.Encode(&buf); err != nil {
+			return fmt.Errorf("error encoding tree object: %w", err)
+		}
+
+		// Calculate the hash
+		calculatedHash := plumbing.ComputeHash(plumbing.TreeObject, buf.Bytes())
+		if calculatedHash.String() != treeData.Hash {
+			return fmt.Errorf("calculated tree hash '%s' does not match expected hash '%s'", calculatedHash.String(), treeData.Hash)
+		}
+	}
+
+	// Store the tree in the repository
+	_, err = repo.Storer.SetEncodedObject(tree)
+	if err != nil {
+		return fmt.Errorf("error storing tree object: %w", err)
+	}
+
+	return nil
+}
+
+// getFileMode converts string mode to plumbing.FileMode
+func getFileMode(modeStr string) (plumbing.FileMode, error) {
+	switch modeStr {
+	case "100644":
+		return plumbing.FileMode(0644), nil
+	case "100755":
+		return plumbing.FileMode(0755), nil
+	case "040000":
+		return plumbing.FileModeDirectory, nil
+	case "160000":
+		return plumbing.FileMode(0160000), nil
+	default:
+		return 0, fmt.Errorf("unsupported file mode: %s", modeStr)
+	}
 }
 
 // cbor2diag emits a human-readable CBOR diagnostic representation of the CBOR object.
@@ -278,8 +406,6 @@ func writeCommitToRepo(repo *git.Repository, commit *object.Commit) error {
 	if err != nil {
 		return fmt.Errorf("failed to store commit object: %w", err)
 	}
-
-	// Optionally, update references as needed here
 
 	// Verify that the stored hash matches
 	if commitHash.String() != commit.Hash.String() {

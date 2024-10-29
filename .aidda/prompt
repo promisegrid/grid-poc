@@ -12,4 +12,5 @@ representation, and then use 'cbor2git' to convert the CBOR representation
 back to a git object in another repository such that the commit hash is the
 same.
 
-include new and changed tree objects in the cbor message
+- include tree objects in the cbor message
+- include new and changed blob objects in the cbor message
