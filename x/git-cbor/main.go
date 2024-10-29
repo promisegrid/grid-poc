@@ -402,7 +402,9 @@ func cbor2git() {
 
 // writeTreeToRepo writes a tree object to the repository.
 func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
-	treeBuilder := object.NewTreeBuilder(repo.Storer)
+	// XXX use the correct go-git library methods to create a tree object
+	// XXX there is no object.NewTreeBuilder in go-git v5
+	treeBuilder := object.NewTreeBuilder(repo.Storer, nil)
 
 	for _, entry := range treeData.Entries {
 		mode, err := getFileMode(entry.Mode)
@@ -422,8 +424,8 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 	}
 
 	// Ensure the tree hash matches
-	if tree.String() != treeData.Hash {
-		return fmt.Errorf("computed tree hash '%s' does not match expected hash '%s'", tree.String(), treeData.Hash)
+	if tree.Hash.String() != treeData.Hash {
+		return fmt.Errorf("computed tree hash '%s' does not match expected hash '%s'", tree.Hash.String(), treeData.Hash)
 	}
 
 	// Store the tree in the repository

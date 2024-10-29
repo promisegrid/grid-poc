@@ -404,7 +404,7 @@ func cbor2git() {
 
 // writeTreeToRepo writes a tree object to the repository.
 func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
-	treeBuilder := object.NewTreeBuilder(repo.Storer)
+	treeBuilder := object.NewTreeBuilder(repo.Storer, nil)
 
 	for _, entry := range treeData.Entries {
 		mode, err := getFileMode(entry.Mode)
@@ -424,8 +424,8 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 	}
 
 	// Ensure the tree hash matches
-	if tree.String() != treeData.Hash {
-		return fmt.Errorf("computed tree hash '%s' does not match expected hash '%s'", tree.String(), treeData.Hash)
+	if tree.Hash.String() != treeData.Hash {
+		return fmt.Errorf("computed tree hash '%s' does not match expected hash '%s'", tree.Hash.String(), treeData.Hash)
 	}
 
 	// Store the tree in the repository
@@ -490,7 +490,7 @@ func cbor2diag() {
 	}
 
 	// Convert CBOR to diagnostic format
-	diag, err := cbor.Diagnose(cborData)
+	diag, err := cbor.Diag(cborData)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating CBOR diagnostic: %v\n", err)
 		os.Exit(1)
