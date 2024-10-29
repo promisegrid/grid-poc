@@ -14,6 +14,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
+// CommitData represents the structure of a commit in CBOR format.
 type CommitData struct {
 	Hash           string     `cbor:"hash"`
 	Tree           string     `cbor:"tree"`
@@ -29,17 +30,20 @@ type CommitData struct {
 	Blobs          []BlobData `cbor:"blobs"`
 }
 
+// TreeData represents the structure of a tree object in CBOR format.
 type TreeData struct {
 	Hash    string      `cbor:"hash"`
 	Entries []TreeEntry `cbor:"entries"`
 }
 
+// TreeEntry represents an entry within a tree object.
 type TreeEntry struct {
 	Mode string `cbor:"mode"`
 	Name string `cbor:"name"`
 	Hash string `cbor:"hash"`
 }
 
+// BlobData represents the structure of a blob object in CBOR format.
 type BlobData struct {
 	Hash    string `cbor:"hash"`
 	Content []byte `cbor:"content"`
@@ -74,7 +78,7 @@ func main() {
 	}
 }
 
-// git2cbor converts a git commit object to CBOR format, including tree and blob objects.
+// git2cbor converts a git commit object to CBOR format, including new and changed tree and blob objects.
 func git2cbor(ref string) {
 	// Find the Git repository directory by walking up the directory tree
 	repoPath, err := findGitRepo()
@@ -124,13 +128,20 @@ func git2cbor(ref string) {
 		commitData.Parents[i] = parentHash.String()
 	}
 
-	// Collect tree objects starting from the commit's tree
-	if err := collectTrees(repo, commit.TreeHash, &commitData.Trees); err != nil {
+	// Collect trees from parent commits
+	parentTrees, err := collectParentTrees(repo, commit)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error collecting parent trees: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Collect new and changed tree objects
+	if err := collectNewAndChangedTrees(repo, commit.TreeHash, &commitData.Trees, parentTrees); err != nil {
 		fmt.Fprintf(os.Stderr, "Error collecting tree objects: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Collect blob objects from the trees
+	// Collect blob objects from the new and changed trees
 	if err := collectBlobs(repo, commit.TreeHash, &commitData.Blobs); err != nil {
 		fmt.Fprintf(os.Stderr, "Error collecting blob objects: %v\n", err)
 		os.Exit(1)
@@ -151,18 +162,52 @@ func git2cbor(ref string) {
 	}
 }
 
-// collectTrees recursively collects tree objects and appends them to trees slice.
-func collectTrees(repo *git.Repository, treeHash plumbing.Hash, trees *[]TreeData) error {
-	// Check if the tree is already collected
-	for _, t := range *trees {
-		if t.Hash == treeHash.String() {
-			return nil
+// collectParentTrees collects all tree hashes from parent commits.
+func collectParentTrees(repo *git.Repository, commit *object.Commit) (map[string]struct{}, error) {
+	parentTrees := make(map[string]struct{})
+	for _, parentHash := range commit.ParentHashes {
+		parentCommit, err := repo.CommitObject(parentHash)
+		if err != nil {
+			return nil, fmt.Errorf("error retrieving parent commit '%s': %w", parentHash.String(), err)
+		}
+		if err := traverseTree(repo, parentCommit.TreeHash, parentTrees); err != nil {
+			return nil, fmt.Errorf("error traversing tree for parent commit '%s': %w", parentHash.String(), err)
 		}
 	}
+	return parentTrees, nil
+}
 
+// traverseTree recursively traverses a tree and records all tree hashes.
+func traverseTree(repo *git.Repository, treeHash plumbing.Hash, treeSet map[string]struct{}) error {
 	tree, err := repo.TreeObject(treeHash)
 	if err != nil {
 		return fmt.Errorf("error retrieving tree object '%s': %w", treeHash.String(), err)
+	}
+
+	treeSet[treeHash.String()] = struct{}{}
+
+	for _, entry := range tree.Entries {
+		if entry.Mode == filemode.Dir {
+			if err := traverseTree(repo, entry.Hash, treeSet); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// collectNewAndChangedTrees collects trees that are new or have changed compared to parent commits.
+func collectNewAndChangedTrees(repo *git.Repository, currentTreeHash plumbing.Hash, trees *[]TreeData, parentTrees map[string]struct{}) error {
+	// Check if the current tree is already present in parent trees
+	if _, exists := parentTrees[currentTreeHash.String()]; exists {
+		// No changes in this tree
+		return nil
+	}
+
+	// Retrieve the current tree object
+	tree, err := repo.TreeObject(currentTreeHash)
+	if err != nil {
+		return fmt.Errorf("error retrieving tree object '%s': %w", currentTreeHash.String(), err)
 	}
 
 	treeData := TreeData{
@@ -180,7 +225,7 @@ func collectTrees(repo *git.Repository, treeHash plumbing.Hash, trees *[]TreeDat
 
 		if entry.Mode == filemode.Dir {
 			// Recursively collect subtrees
-			if err := collectTrees(repo, entry.Hash, trees); err != nil {
+			if err := collectNewAndChangedTrees(repo, entry.Hash, trees, parentTrees); err != nil {
 				return err
 			}
 		}
@@ -306,7 +351,7 @@ func cbor2git() {
 
 	// Prepare the tree
 	treeHash := plumbing.NewHash(commitData.Tree)
-	tree, err := repo.TreeObject(treeHash)
+	_, err = repo.TreeObject(treeHash)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error retrieving tree object: %v\n", err)
 		os.Exit(1)
@@ -324,13 +369,16 @@ func cbor2git() {
 		When:  commitData.CommitterDate,
 	}
 
+	// Prepare parent hashes
+	parentHashes := parentCommitHashes(parentCommits)
+
 	// Create the commit object
 	commit := &object.Commit{
 		Author:       *author,
 		Committer:    *committer,
 		Message:      commitData.Message,
 		TreeHash:     treeHash,
-		ParentHashes: parentCommitHashes(parentCommits),
+		ParentHashes: parentHashes,
 	}
 
 	// Compute the commit hash to verify
@@ -440,7 +488,7 @@ func cbor2diag() {
 	}
 
 	// Convert CBOR to diagnostic format
-	diag, err := cbor.Diagnose(cborData)
+	diag, err := cbor.Diag(cborData)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating CBOR diagnostic: %v\n", err)
 		os.Exit(1)

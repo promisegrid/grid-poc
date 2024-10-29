@@ -14,4 +14,4 @@ same.
 
 - include new and changed tree objects in the cbor message
 
-vet: ./main.go:309:2: tree declared and not used
+vet: ./main.go:405:24: undefined: object.NewTreeBuilder
