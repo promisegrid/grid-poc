@@ -20,3 +20,7 @@ The goal is to be able to use 'git2cbor' to convert a git object to a CBOR
 representation, and then use 'cbor2git' to convert the CBOR representation
 back to a git object in another repository such that the commit hash is the
 same.
+
+# main
+# [main]
+vet: ./main.go:282:34: undefined: git.Commit

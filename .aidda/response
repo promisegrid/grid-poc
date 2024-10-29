@@ -3,14 +3,17 @@ File: /home/stevegt/lab/grid-poc/x/git-cbor/main.go
 package main
 
 import (
+	"bufio"
+	"bytes"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
-	"github.com/fxamacker/cbor/v2"
 )
 
 type CommitData struct {
@@ -27,10 +30,36 @@ type CommitData struct {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintf(os.Stderr, "Usage: %s <subcommand> [options]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Subcommands:\n")
+		fmt.Fprintf(os.Stderr, "  git2cbor <ref>\n")
+		fmt.Fprintf(os.Stderr, "  cbor2git\n")
+		fmt.Fprintf(os.Stderr, "  cbor2diag\n")
+		os.Exit(1)
+	}
+
+	subcommand := os.Args[1]
+
+	switch subcommand {
+	case "git2cbor":
+		git2cbor(os.Args[2:])
+	case "cbor2git":
+		cbor2git(os.Args[2:])
+	case "cbor2diag":
+		cbor2diag(os.Args[2:])
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown subcommand: %s\n", subcommand)
+		os.Exit(1)
+	}
+}
+
+// git2cbor converts a git commit object to CBOR format.
+func git2cbor(args []string) {
 	// Determine the reference from command line arguments or default to HEAD
 	refName := "HEAD"
-	if len(os.Args) > 1 {
-		refName = os.Args[1]
+	if len(args) > 0 {
+		refName = args[0]
 	}
 
 	// Find the Git repository directory by walking up the directory tree
@@ -94,6 +123,119 @@ func main() {
 	}
 }
 
+// cbor2git converts CBOR data to a git commit object.
+func cbor2git(args []string) {
+	// Read CBOR data from stdin
+	cborData, err := readAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading CBOR data: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Decode CBOR data into CommitData
+	var commitData CommitData
+	err = cbor.Unmarshal(cborData, &commitData)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error decoding CBOR data: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Find the Git repository directory by walking up the directory tree
+	repoPath, err := findGitRepo()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error finding .git directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Open the Git repository
+	repo, err := git.PlainOpen(repoPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error opening repository: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Prepare parent hashes
+	var parentPlumbingHashes []plumbing.Hash
+	for _, ph := range commitData.Parents {
+		h, err := plumbing.NewHash(ph)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Invalid parent hash '%s': %v\n", ph, err)
+			os.Exit(1)
+		}
+		parentPlumbingHashes = append(parentPlumbingHashes, h)
+	}
+
+	// Prepare tree hash
+	treeHash, err := plumbing.NewHash(commitData.Tree)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid tree hash '%s': %v\n", commitData.Tree, err)
+		os.Exit(1)
+	}
+
+	// Create the commit object
+	commit := &git.Commit{
+		Hash: plumbing.NewHash(commitData.Hash),
+		Author: git.Signature{
+			Name:  commitData.AuthorName,
+			Email: commitData.AuthorEmail,
+			When:  commitData.AuthorDate,
+		},
+		Committer: git.Signature{
+			Name:  commitData.CommitterName,
+			Email: commitData.CommitterEmail,
+			When:  commitData.CommitterDate,
+		},
+		Message:    commitData.Message,
+		TreeHash:   treeHash,
+		ParentHashes: parentPlumbingHashes,
+	}
+
+	// Serialize the commit object to the correct format
+	commitContent, err := serializeCommit(commit)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error serializing commit: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Compute the object hash
+	objHash := plumbing.ComputeHash(plumbing.CommitObject, commitContent)
+
+	// Verify that the computed hash matches the provided hash
+	if objHash.String() != commitData.Hash {
+		fmt.Fprintf(os.Stderr, "Computed hash '%s' does not match provided hash '%s'\n", objHash.String(), commitData.Hash)
+		os.Exit(1)
+	}
+
+	// Store the commit object in the repository
+	err = storeObject(repo, objHash, commitContent)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error storing commit object: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("Successfully stored commit %s\n", objHash.String())
+}
+
+// cbor2diag emits a human-readable CBOR diagnostic representation of the CBOR object.
+func cbor2diag(args []string) {
+	// Read CBOR data from stdin
+	cborData, err := readAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading CBOR data: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Convert CBOR to diagnostic format
+	diag, err := cbor.Diagnostic(cborData)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error generating CBOR diagnostic: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Print the diagnostic representation
+	fmt.Println(diag)
+}
+
 // findGitRepo walks up the directory tree from the current directory to find a directory containing a .git folder.
 // It returns the path to the repository root directory, or an error if not found.
 func findGitRepo() (string, error) {
@@ -119,6 +261,94 @@ func findGitRepo() (string, error) {
 	}
 
 	return "", fmt.Errorf(".git directory not found in any parent directories")
+}
+
+// readAll reads all data from the given file.
+func readAll(file *os.File) ([]byte, error) {
+	var buffer bytes.Buffer
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		buffer.Write(scanner.Bytes())
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return buffer.Bytes(), nil
+}
+
+// serializeCommit serializes the commit object into the Git commit format.
+func serializeCommit(commit *git.Commit) ([]byte, error) {
+	var buffer bytes.Buffer
+	buffer.WriteString(fmt.Sprintf("tree %s\n", commit.TreeHash))
+	for _, parent := range commit.ParentHashes {
+		buffer.WriteString(fmt.Sprintf("parent %s\n", parent))
+	}
+	buffer.WriteString(fmt.Sprintf("author %s <%s> %d %s\n",
+		commit.Author.Name,
+		commit.Author.Email,
+		commit.Author.When.Unix(),
+		formatTimeZone(commit.Author.When)),
+	)
+	buffer.WriteString(fmt.Sprintf("committer %s <%s> %d %s\n\n",
+		commit.Committer.Name,
+		commit.Committer.Email,
+		commit.Committer.When.Unix(),
+		formatTimeZone(commit.Committer.When)),
+	)
+	buffer.WriteString(commit.Message)
+
+	return buffer.Bytes(), nil
+}
+
+// formatTimeZone formats the timezone offset.
+func formatTimeZone(t time.Time) string {
+	_, offset := t.Zone()
+	sign := "+"
+	if offset < 0 {
+		sign = "-"
+		offset = -offset
+	}
+	hours := offset / 3600
+	minutes := (offset % 3600) / 60
+	return fmt.Sprintf("%s%02d%02d", sign, hours, minutes)
+}
+
+// storeObject writes the object to the Git repository's object store.
+func storeObject(repo *git.Repository, hash plumbing.Hash, content []byte) error {
+	objectDir := filepath.Join(repo.Storer.(*git.MemoryObjectStorer).Root(), "objects", hash.String()[:2])
+	objectPath := filepath.Join(objectDir, hash.String()[2:])
+
+	// Create the object directory if it doesn't exist
+	err := os.MkdirAll(objectDir, 0755)
+	if err != nil {
+		return fmt.Errorf("failed to create object directory: %w", err)
+	}
+
+	// Write the object if it doesn't already exist
+	if _, err := os.Stat(objectPath); os.IsNotExist(err) {
+		// Compress the content using zlib
+		var buf bytes.Buffer
+		writer := flateWriter(&buf)
+		_, err := writer.Write(content)
+		if err != nil {
+			return fmt.Errorf("failed to compress object: %w", err)
+		}
+		writer.Close()
+
+		// Write to file
+		err = os.WriteFile(objectPath, buf.Bytes(), 0644)
+		if err != nil {
+			return fmt.Errorf("failed to write object file: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// flateWriter is a helper to create a flate (zlib) writer.
+func flateWriter(buf *bytes.Buffer) *flate.Writer {
+	writer, _ := flate.NewWriter(buf, flate.DefaultCompression)
+	return writer
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/git-cbor/main.go
