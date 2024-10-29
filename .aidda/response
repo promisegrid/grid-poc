@@ -166,6 +166,7 @@ func cbor2git() {
 
 	// Prepare the tree
 	treeHash := plumbing.NewHash(commitData.Tree)
+	// Removed the erroneous error check here as treeHash assignment does not produce an error
 	tree, err := repo.TreeObject(treeHash)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error retrieving tree object: %v\n", err)
@@ -194,7 +195,11 @@ func cbor2git() {
 	}
 
 	// Serialize the commit to get the correct hash
-	obj := plumbing.NewMemoryObject()
+	obj, err := repo.Storer.NewEncodedObject()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error creating new encoded object: %v\n", err)
+		os.Exit(1)
+	}
 	if err := commit.Encode(obj); err != nil {
 		fmt.Fprintf(os.Stderr, "Error encoding commit: %v\n", err)
 		os.Exit(1)

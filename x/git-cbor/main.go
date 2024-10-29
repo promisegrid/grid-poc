@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -170,6 +169,7 @@ func cbor2git() {
 		fmt.Fprintf(os.Stderr, "Error retrieving tree object: %v\n", err)
 		os.Exit(1)
 	}
+	_ = tree
 
 	// Create author and committer signatures
 	author := &object.Signature{
@@ -192,13 +192,7 @@ func cbor2git() {
 		ParentHashes: parentCommitsHashes(parentCommits),
 	}
 
-	// Serialize the commit to get the correct hash
-	obj := plumbing.NewMemoryObject()
-	if err := commit.Encode(obj); err != nil {
-		fmt.Fprintf(os.Stderr, "Error encoding commit: %v\n", err)
-		os.Exit(1)
-	}
-	computedHash := obj.Hash()
+	computedHash := commit.ID()
 
 	// Verify that the computed hash matches the provided hash
 	if computedHash.String() != commitData.Hash {
@@ -226,7 +220,7 @@ func cbor2diag() {
 	}
 
 	// Convert CBOR to diagnostic format
-	diag, err := cbor.Diagnostic(cborData)
+	diag, err := cbor.Diagnose(cborData)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error generating CBOR diagnostic: %v\n", err)
 		os.Exit(1)
@@ -274,10 +268,7 @@ func parentCommitsHashes(parents []*object.Commit) []plumbing.Hash {
 
 // writeCommitToRepo writes the commit object to the repository's object store.
 func writeCommitToRepo(repo *git.Repository, commit *object.Commit) error {
-	objWriter, err := repo.Storer.NewEncodedObject()
-	if err != nil {
-		return fmt.Errorf("failed to create new encoded object: %w", err)
-	}
+	objWriter := repo.Storer.NewEncodedObject()
 
 	if err := commit.Encode(objWriter); err != nil {
 		return fmt.Errorf("failed to encode commit object: %w", err)
