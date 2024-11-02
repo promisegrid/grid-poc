@@ -611,7 +611,8 @@ func cbor2dot() {
 		treeShortHash := shortHash(tree.Hash)
 		treeNodeID := fmt.Sprintf("tree_%s", treeShortHash)
 		fmt.Printf("  %s [label=\"Tree: %s\", shape=folder, style=filled, color=lightgreen];\n", treeNodeID, treeShortHash)
-		fmt.Printf("  %s -> %s;\n", treeNodeID, commitHashNode)
+		// Change the edge to point to commitMsgNode instead of commitHashNode
+		fmt.Printf("  %s -> %s;\n", treeNodeID, commitMsgNode)
 
 		for _, entry := range tree.Entries {
 			if entry.Mode == "040000" { // Directory
