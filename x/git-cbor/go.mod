@@ -1,4 +1,4 @@
-module main
+module git-cbor
 
 go 1.22.1
 
