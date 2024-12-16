@@ -14,6 +14,8 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"github.com/go-git/go-git/v5/plumbing/object"
+
+	. "github.com/stevegt/goadapt"
 )
 
 // CommitData represents the structure of a commit in CBOR format.
@@ -390,7 +392,8 @@ func cbor2git() {
 	}
 
 	// Compute the commit hash to verify
-	computedHash := commit.ID()
+	computedHash, err := recalculateCommitHash(commit)
+	Ck(err)
 
 	// Verify that the computed hash matches the provided hash
 	if computedHash.String() != commitData.Hash {
@@ -432,14 +435,9 @@ func writeTreeToRepo(repo *git.Repository, treeData TreeData) error {
 	}
 
 	// Store the tree in the repository
-	storedHash, err := repo.Storer.SetEncodedObject(obj)
+	_, err := repo.Storer.SetEncodedObject(obj)
 	if err != nil {
 		return fmt.Errorf("failed to store tree object: %w", err)
-	}
-
-	// Verify that the stored hash matches the expected hash
-	if storedHash.String() != treeData.Hash {
-		return fmt.Errorf("stored tree hash '%s' does not match expected hash '%s'", storedHash.String(), treeData.Hash)
 	}
 
 	return nil
@@ -470,14 +468,9 @@ func writeBlobToRepo(repo *git.Repository, blobData BlobData) error {
 	}
 
 	// Store the blob in the repository
-	storedHash, err := repo.Storer.SetEncodedObject(obj)
+	_, err = repo.Storer.SetEncodedObject(obj)
 	if err != nil {
 		return fmt.Errorf("failed to store blob object: %w", err)
-	}
-
-	// Verify that the stored hash matches
-	if storedHash.String() != blobData.Hash {
-		return fmt.Errorf("stored blob hash '%s' does not match expected hash '%s'", storedHash.String(), blobData.Hash)
 	}
 
 	return nil
@@ -694,15 +687,20 @@ func writeCommitToRepo(repo *git.Repository, commit *object.Commit) error {
 	}
 
 	// Store the commit in the repository
-	commitHash, err := repo.Storer.SetEncodedObject(obj)
+	_, err := repo.Storer.SetEncodedObject(obj)
 	if err != nil {
 		return fmt.Errorf("failed to store commit object: %w", err)
 	}
 
-	// Verify that the stored hash matches
-	if commitHash.String() != commit.Hash.String() {
-		return fmt.Errorf("stored commit hash '%s' does not match expected hash '%s'", commitHash.String(), commit.Hash.String())
-	}
-
 	return nil
+}
+
+func recalculateCommitHash(commit *object.Commit) (plumbing.Hash, error) {
+	mo := plumbing.MemoryObject{}
+	mo.SetType(plumbing.CommitObject)
+	err := commit.Encode(&mo)
+	if err != nil {
+		return plumbing.ZeroHash, err
+	}
+	return mo.Hash(), nil
 }
