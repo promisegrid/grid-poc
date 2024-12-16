@@ -486,13 +486,13 @@ func writeBlobToRepo(repo *git.Repository, blobData BlobData) error {
 // getFileMode converts string mode to filemode.FileMode
 func getFileMode(modeStr string) (filemode.FileMode, error) {
 	switch modeStr {
-	case "100644":
+	case "0100644":
 		return filemode.Regular, nil
-	case "100755":
+	case "0100755":
 		return filemode.Executable, nil
-	case "040000":
+	case "0040000":
 		return filemode.Dir, nil
-	case "160000":
+	case "0160000":
 		return filemode.Submodule, nil
 	default:
 		return 0, fmt.Errorf("unsupported file mode: %s", modeStr)
