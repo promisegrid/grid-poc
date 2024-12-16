@@ -1,10 +1,6 @@
-cbor2dot: make the edges from the tree nodes point at the commit message node, not the new commit hash node
+cbor2dot: calculate commit hash when running git2cbor subcommand
 
-The goal is to be able to use 'git2cbor' to convert a git object to a CBOR
-representation, and then use 'cbor2git' to convert the CBOR representation
-back to a git object in another repository such that the commit hash is the
-same.  There should also be a few utility subcommands to help visualize the
-CBOR representation.
+
 
 In: 
  x/git-cbor/main.go

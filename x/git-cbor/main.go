@@ -118,7 +118,7 @@ func git2cbor(ref string) {
 
 	// Populate the CommitData struct
 	commitData := CommitData{
-		Hash:           commit.Hash.String(),
+		Hash:           hash.String(),
 		Tree:           commit.TreeHash.String(),
 		Parents:        make([]string, len(commit.ParentHashes)),
 		AuthorName:     commit.Author.Name,
