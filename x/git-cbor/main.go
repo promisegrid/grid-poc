@@ -20,18 +20,20 @@ import (
 
 // CommitData represents the structure of a commit in CBOR format.
 type CommitData struct {
-	Hash           string     `cbor:"hash"`
-	Tree           string     `cbor:"tree"`
-	Parents        []string   `cbor:"parents"`
-	AuthorName     string     `cbor:"author_name"`
-	AuthorEmail    string     `cbor:"author_email"`
-	AuthorDate     time.Time  `cbor:"author_date"`
-	CommitterName  string     `cbor:"committer_name"`
-	CommitterEmail string     `cbor:"committer_email"`
-	CommitterDate  time.Time  `cbor:"committer_date"`
-	Message        string     `cbor:"message"`
-	Trees          []TreeData `cbor:"trees"`
-	Blobs          []BlobData `cbor:"blobs"`
+	Hash           string            `cbor:"hash"`
+	Tree           string            `cbor:"tree"`
+	Parents        []string          `cbor:"parents"`
+	AuthorName     string            `cbor:"author_name"`
+	AuthorEmail    string            `cbor:"author_email"`
+	AuthorDate     time.Time         `cbor:"author_date"`
+	CommitterName  string            `cbor:"committer_name"`
+	CommitterEmail string            `cbor:"committer_email"`
+	CommitterDate  time.Time         `cbor:"committer_date"`
+	Message        string            `cbor:"message"`
+	Trees          []TreeData        `cbor:"trees"`
+	Blobs          []BlobData        `cbor:"blobs"`
+	Branches       map[string]string `cbor:"branches"`
+	Tags           map[string]string `cbor:"tags"`
 }
 
 // TreeData represents the structure of a tree object in CBOR format.
@@ -132,10 +134,19 @@ func git2cbor(ref string) {
 		Message:        commit.Message,
 		Trees:          []TreeData{},
 		Blobs:          []BlobData{},
+		Branches:       make(map[string]string),
+		Tags:           make(map[string]string),
 	}
 
 	for i, parentHash := range commit.ParentHashes {
 		commitData.Parents[i] = parentHash.String()
+	}
+
+	// Collect branches and tags
+	err = collectBranchesAndTags(repo, &commitData)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error collecting branches and tags: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Collect trees from parent commits
@@ -408,6 +419,13 @@ func cbor2git() {
 		os.Exit(1)
 	}
 
+	// Recreate branches and tags
+	err = recreateBranchesAndTags(repo, commitData.Branches, commitData.Tags)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error recreating branches and tags: %v\n", err)
+		os.Exit(1)
+	}
+
 	fmt.Printf("Successfully stored commit %s\n", computedHash.String())
 }
 
@@ -597,6 +615,22 @@ func cbor2dot() {
 		fmt.Printf("  %s -> %s;\n", parentNodeID, commitMsgNode)
 	}
 
+	// Branches
+	for branchName, branchHash := range commitData.Branches {
+		branchNodeID := fmt.Sprintf("branch_%s", escapeDotString(branchName))
+		branchLabel := fmt.Sprintf("Branch: %s\\n%s", escapeDotString(branchName), shortHash(string(branchHash)))
+		fmt.Printf("  %s [label=\"%s\", shape=ellipse, style=filled, color=lightcoral];\n", branchNodeID, branchLabel)
+		fmt.Printf("  %s -> %s;\n", branchNodeID, commitMsgNode)
+	}
+
+	// Tags
+	for tagName, tagHash := range commitData.Tags {
+		tagNodeID := fmt.Sprintf("tag_%s", escapeDotString(tagName))
+		tagLabel := fmt.Sprintf("Tag: %s\\n%s", escapeDotString(tagName), shortHash(string(tagHash)))
+		fmt.Printf("  %s [label=\"%s\", shape=diamond, style=filled, color=gold];\n", tagNodeID, tagLabel)
+		fmt.Printf("  %s -> %s;\n", tagNodeID, commitMsgNode)
+	}
+
 	// Trees
 	for _, tree := range commitData.Trees {
 		treeShortHash := shortHash(tree.Hash)
@@ -614,7 +648,7 @@ func cbor2dot() {
 			} else { // Blob or file
 				blobShortHash := shortHash(entry.Hash)
 				blobNodeID := fmt.Sprintf("blob_%s", blobShortHash)
-				fmt.Printf("  %s [label=\"Blob: %s\", shape=note, style=filled, color=yellow];\n", blobNodeID, escapeDotString(entry.Name))
+				fmt.Printf("  %s [label=\"Blob: %s (%s)\", shape=note, style=filled, color=yellow];\n", blobNodeID, escapeDotString(entry.Name), blobShortHash)
 				fmt.Printf("  %s -> %s;\n", blobNodeID, treeNodeID)
 			}
 		}
@@ -623,10 +657,14 @@ func cbor2dot() {
 	// Blobs
 	for _, blob := range commitData.Blobs {
 		blobShortHash := shortHash(blob.Hash)
-		blobNodeID := fmt.Sprintf("blob_%s", blobShortHash)
-		blobContentNodeID := fmt.Sprintf("blob_content_%s", blobShortHash)
-		fmt.Printf("  %s [label=\"Blob Content: %s\", shape=note, style=filled, color=yellow];\n", blobContentNodeID, blobShortHash)
-		fmt.Printf("  %s -> %s;\n", blobContentNodeID, blobNodeID)
+		blobNodeID := fmt.Sprintf("blob_content_%s", blobShortHash)
+		contentSnippet := string(blob.Content)
+		if len(contentSnippet) > 20 {
+			contentSnippet = contentSnippet[:20] + "..."
+		}
+		escapedContent := escapeDotString(contentSnippet)
+		fmt.Printf("  %s [label=\"Blob Content: %s\", shape=note, style=filled, color=yellow];\n", blobNodeID, escapedContent)
+		fmt.Printf("  %s -> blob_%s;\n", blobNodeID, blobShortHash)
 	}
 
 	fmt.Println("}")
@@ -695,6 +733,7 @@ func writeCommitToRepo(repo *git.Repository, commit *object.Commit) error {
 	return nil
 }
 
+// recalculateCommitHash recalculates the commit hash based on its content.
 func recalculateCommitHash(commit *object.Commit) (plumbing.Hash, error) {
 	mo := plumbing.MemoryObject{}
 	mo.SetType(plumbing.CommitObject)
@@ -703,4 +742,75 @@ func recalculateCommitHash(commit *object.Commit) (plumbing.Hash, error) {
 		return plumbing.ZeroHash, err
 	}
 	return mo.Hash(), nil
+}
+
+// collectBranchesAndTags collects all branches and tags in the repository and adds them to commitData.
+func collectBranchesAndTags(repo *git.Repository, commitData *CommitData) error {
+	branches, err := repo.Branches()
+	if err != nil {
+		return fmt.Errorf("error retrieving branches: %w", err)
+	}
+
+	err = branches.ForEach(func(b *plumbing.Reference) error {
+		branchName := b.Name().Short()
+		commitHash := b.Hash().String()
+		commitData.Branches[branchName] = commitHash
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("error iterating branches: %w", err)
+	}
+
+	tags, err := repo.Tags()
+	if err != nil {
+		return fmt.Errorf("error retrieving tags: %w", err)
+	}
+
+	err = tags.ForEach(func(t *plumbing.Reference) error {
+		tagName := t.Name().Short()
+		target, err := repo.Tag(tagName)
+		if err != nil {
+			// It might not be an annotated tag; try to resolve to commit
+			commit, err := repo.CommitObject(t.Hash())
+			if err != nil {
+				return fmt.Errorf("error resolving tag '%s': %w", tagName, err)
+			}
+			commitData.Tags[tagName] = commit.Hash.String()
+			return nil
+		}
+		commitData.Tags[tagName] = string(target.Target())
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("error iterating tags: %w", err)
+	}
+
+	return nil
+}
+
+// recreateBranchesAndTags recreates branches and tags in the repository from the provided maps.
+func recreateBranchesAndTags(repo *git.Repository, branches map[string]string, tags map[string]string) error {
+	// Recreate branches
+	for branchName, commitHash := range branches {
+		refName := plumbing.NewBranchReferenceName(branchName)
+		hash := plumbing.NewHash(commitHash)
+		ref := plumbing.NewHashReference(refName, hash)
+		err := repo.Storer.SetReference(ref)
+		if err != nil {
+			return fmt.Errorf("error recreating branch '%s': %w", branchName, err)
+		}
+	}
+
+	// Recreate tags
+	for tagName, targetHash := range tags {
+		refName := plumbing.NewTagReferenceName(tagName)
+		hash := plumbing.NewHash(targetHash)
+		ref := plumbing.NewHashReference(refName, hash)
+		err := repo.Storer.SetReference(ref)
+		if err != nil {
+			return fmt.Errorf("error recreating tag '%s': %w", tagName, err)
+		}
+	}
+
+	return nil
 }

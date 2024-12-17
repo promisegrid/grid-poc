@@ -1,6 +1,8 @@
-cbor2dot: calculate commit hash when running git2cbor subcommand
+git-cbor: record branches and tags in CBOR format when running git2cbor
 
-
+We need to record the branches and tags in the CBOR format when running
+git2cbor. This will allow us to recreate the branch and tag refs when
+running cbor2git.
 
 In: 
  x/git-cbor/main.go
