@@ -3,8 +3,8 @@ File: /home/stevegt/lab/grid-poc/x/git-bundle/main.go
 package main
 
 import (
+	"flag"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/go-git/go-git/v5"
@@ -13,7 +13,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
 
-func createBundle(repoPath, outputFile string) error {
+func createBundle(repoPath, outputFile string, refs []string) error {
 	// Open the repository
 	repo, err := git.PlainOpen(repoPath)
 	if err != nil {
@@ -33,24 +33,19 @@ func createBundle(repoPath, outputFile string) error {
 		return fmt.Errorf("failed to write bundle header: %w", err)
 	}
 
-	// Get all references
-	refs, err := repo.References()
-	if err != nil {
-		return fmt.Errorf("failed to get references: %w", err)
-	}
-
-	// Write references to bundle
-	err = refs.ForEach(func(ref *plumbing.Reference) error {
-		if ref.Type() == plumbing.HashReference {
-			_, err := fmt.Fprintf(f, "%s %s\n", ref.Hash(), ref.Name())
-			if err != nil {
-				return fmt.Errorf("failed to write reference: %w", err)
-			}
+	// Resolve and write specified references to bundle
+	for _, refName := range refs {
+		ref, err := repo.Reference(plumbing.ReferenceName(refName), true)
+		if err != nil {
+			return fmt.Errorf("failed to resolve reference '%s': %w", refName, err)
 		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to write references: %w", err)
+		if ref.Type() != plumbing.HashReference {
+			return fmt.Errorf("reference '%s' is not a hash reference", refName)
+		}
+		_, err = fmt.Fprintf(f, "%s %s\n", ref.Hash(), ref.Name())
+		if err != nil {
+			return fmt.Errorf("failed to write reference '%s': %w", refName, err)
+		}
 	}
 
 	// Write delimiter
@@ -62,22 +57,31 @@ func createBundle(repoPath, outputFile string) error {
 	// Create packfile encoder
 	pw := packfile.NewEncoder(f, repo.Storer, false)
 
-	// Get all object hashes
-	objectIter, err := repo.Objects()
-	if err != nil {
-		return fmt.Errorf("failed to get objects: %w", err)
-	}
-
+	// Collect object hashes reachable from the specified refs
 	var hashes []plumbing.Hash
-	err = objectIter.ForEach(func(obj object.Object) error {
-		hashes = append(hashes, obj.ID())
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to collect object hashes: %w", err)
+	seen := make(map[plumbing.Hash]bool)
+	for _, refName := range refs {
+		ref, err := repo.Reference(plumbing.ReferenceName(refName), true)
+		if err != nil {
+			return fmt.Errorf("failed to resolve reference '%s': %w", refName, err)
+		}
+		commit, err := repo.CommitObject(ref.Hash())
+		if err != nil {
+			return fmt.Errorf("failed to get commit for reference '%s': %w", refName, err)
+		}
+		err = commit.Visit(func(c *object.Commit) error {
+			if !seen[c.Hash] {
+				seen[c.Hash] = true
+				hashes = append(hashes, c.Hash)
+			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("failed to visit commits for reference '%s': %w", refName, err)
+		}
 	}
 
-	// Encode all objects into the packfile
+	// Encode all reachable objects into the packfile
 	_, err = pw.Encode(hashes, 10)
 	if err != nil {
 		return fmt.Errorf("failed to write packfile: %w", err)
@@ -87,16 +91,44 @@ func createBundle(repoPath, outputFile string) error {
 }
 
 func main() {
-	repoPath := "/path/to/your/repo"
-	outputFile := "repo.bundle"
+	repoPath := flag.String("repo", "", "Path to the Git repository")
+	outputFile := flag.String("out", "repo.bundle", "Output bundle file")
+	refs := flag.String("refs", "", "Comma-separated list of references (e.g., refs/heads/main,refs/tags/v1.0)")
 
-	err := createBundle(repoPath, outputFile)
+	flag.Parse()
+
+	if *repoPath == "" {
+		fmt.Println("Error: repository path is required")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	if *refs == "" {
+		fmt.Println("Error: at least one reference is required")
+		flag.Usage()
+		os.Exit(1)
+	}
+
+	refList := parseRefs(*refs)
+
+	err := createBundle(*repoPath, *outputFile, refList)
 	if err != nil {
 		fmt.Printf("Error creating bundle: %v\n", err)
 		return
 	}
 
 	fmt.Println("Bundle created successfully!")
+}
+
+func parseRefs(refs string) []string {
+	var refList []string
+	for _, ref := range strings.Split(refs, ",") {
+		trimmed := strings.TrimSpace(ref)
+		if trimmed != "" {
+			refList = append(refList, trimmed)
+		}
+	}
+	return refList
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/git-bundle/main.go

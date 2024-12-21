@@ -1,13 +1,12 @@
-WIP first draft of x/git-bundle/
+pass repoPath, outputFile, and ref names in as command line arguments
 
+Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
  x/git-bundle/main.go
  /home/stevegt/go/1.22.1/pkg/mod/github.com/go-git/go-git/v5@v5.12.0/plumbing/format/packfile/encoder.go
  /home/stevegt/go/1.22.1/pkg/mod/github.com/go-git/go-git/v5@v5.12.0/plumbing/object/object.go
 Out: 
  x/git-bundle/main.go
-Sysmsg: You are an expert Go programmer. Please make the requested changes
- to the given code or documentation.
 
 .stop
  x/git-cbor/main.go
