@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/git-bundle/main.go
-```go
 package main
 
 import (
@@ -90,5 +88,3 @@ func main() {
 
 	fmt.Println("Bundle created successfully!")
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/git-bundle/main.go

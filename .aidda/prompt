@@ -1,13 +1,13 @@
-git-cbor: record branches and tags in CBOR format when running git2cbor
+WIP first draft of x/git-bundle/
 
-We need to record the branches and tags in the CBOR format when running
-git2cbor. This will allow us to recreate the branch and tag refs when
-running cbor2git.
+vet: ./main.go:64:22: cannot use packfile (variable of type *object.ObjectIter) as io.Reader value in argument to io.Copy: *object.ObjectIter does not implement io.Reader (missing method Read)
 
 In: 
- x/git-cbor/main.go
+ x/git-bundle/main.go
 Out: 
- x/git-cbor/main.go
+ x/git-bundle/main.go
 Sysmsg: You are an expert Go programmer. Please make the requested changes
  to the given code or documentation.
 
+.stop
+ x/git-cbor/main.go
