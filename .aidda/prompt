@@ -1,9 +1,9 @@
 WIP first draft of x/git-bundle/
 
-vet: ./main.go:64:22: cannot use packfile (variable of type *object.ObjectIter) as io.Reader value in argument to io.Copy: *object.ObjectIter does not implement io.Reader (missing method Read)
-
 In: 
  x/git-bundle/main.go
+ /home/stevegt/go/1.22.1/pkg/mod/github.com/go-git/go-git/v5@v5.12.0/plumbing/format/packfile/encoder.go
+ /home/stevegt/go/1.22.1/pkg/mod/github.com/go-git/go-git/v5@v5.12.0/plumbing/object/object.go
 Out: 
  x/git-bundle/main.go
 Sysmsg: You are an expert Go programmer. Please make the requested changes

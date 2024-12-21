@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"io"
+	// "io"
 	"os"
 
 	"github.com/go-git/go-git/v5"
@@ -57,18 +57,26 @@ func createBundle(repoPath, outputFile string) error {
 		return fmt.Errorf("failed to write delimiter: %w", err)
 	}
 
-	// Write packfile
-	pw := packfile.NewWriter(f)
-	defer pw.Close()
+	// Create packfile encoder
+	pw := packfile.NewEncoder(f, repo.Storer, false)
 
+	// Get all object hashes
 	objectIter, err := repo.Objects()
 	if err != nil {
 		return fmt.Errorf("failed to get objects: %w", err)
 	}
 
-	err = objectIter.ForEach(func(obj *object.Object) error {
-		return pw.WriteObject(obj)
+	var hashes []plumbing.Hash
+	err = objectIter.ForEach(func(obj object.Object) error {
+		hashes = append(hashes, obj.ID())
+		return nil
 	})
+	if err != nil {
+		return fmt.Errorf("failed to collect object hashes: %w", err)
+	}
+
+	// Encode all objects into the packfile
+	_, err = pw.Encode(hashes, 10)
 	if err != nil {
 		return fmt.Errorf("failed to write packfile: %w", err)
 	}
