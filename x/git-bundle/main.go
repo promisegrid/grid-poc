@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
@@ -63,11 +64,13 @@ func createBundle(repoPath, outputFile string, refs []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to resolve reference '%s': %w", refName, err)
 		}
-		commit, err := repo.CommitObject(ref.Hash())
+
+		commitIter, err := repo.Log(&git.LogOptions{From: ref.Hash()})
 		if err != nil {
-			return fmt.Errorf("failed to get commit for reference '%s': %w", refName, err)
+			return fmt.Errorf("failed to get commit iterator for reference '%s': %w", refName, err)
 		}
-		err = commit.Visit(func(c *object.Commit) error {
+
+		err = commitIter.ForEach(func(c *object.Commit) error {
 			if !seen[c.Hash] {
 				seen[c.Hash] = true
 				hashes = append(hashes, c.Hash)
@@ -75,7 +78,7 @@ func createBundle(repoPath, outputFile string, refs []string) error {
 			return nil
 		})
 		if err != nil {
-			return fmt.Errorf("failed to visit commits for reference '%s': %w", refName, err)
+			return fmt.Errorf("failed to iterate commits for reference '%s': %w", refName, err)
 		}
 	}
 
