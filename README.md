@@ -6,7 +6,9 @@ Experimental proof of concept for
 influence the content of [the
 whitepaper](https://github.com/promisegrid/paper-ism) and vice versa.
 
-References:
+
+
+## References:
 
 - [CBOR](https://cbor.io/)
 - [Radix Tree](https://en.wikipedia.org/wiki/Radix_tree)
@@ -14,7 +16,7 @@ References:
 - [Merkle Tree](https://en.wikipedia.org/wiki/Merkle_tree)
 - [Merkle DAG](https://docs.ipfs.tech/concepts/merkle-dag/)
 
-Possible POC tentative goals:
+## Possible POC tentative goals:
 
 - Maybe POC that just takes data on input and spits out CBOR or vice versa
 - Maybe POC that takes CBOR in, finds and executes method in transition function graph, spits out CBOR
