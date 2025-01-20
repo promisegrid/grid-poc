@@ -12,7 +12,7 @@ References:
 - [Radix Tree](https://en.wikipedia.org/wiki/Radix_tree)
 - [Hypergraph](https://en.wikipedia.org/wiki/Hypergraph)
 - [Merkle Tree](https://en.wikipedia.org/wiki/Merkle_tree)
-- [Merkle DAG](https://en.wikipedia.org/wiki/Merkle_DAG)
+- [Merkle DAG](https://docs.ipfs.tech/concepts/merkle-dag/)
 
 Possible POC tentative goals:
 
