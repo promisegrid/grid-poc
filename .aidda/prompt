@@ -9,6 +9,10 @@ problem:
 - small sequence size ranges from a few bytes to hundreds of megabytes
 - large sequence size ranges from a few bytes to hundreds of gigabytes 
 - number of large sequences ranges from a few to billions
+- must be able to handle variable-length byte sequences
+- must be able to handle sequences containing any byte value
+- must be able to handle sequences containing any arbitrary sequence of
+  bytes
 - must be able to handle frequent appends to large sequences
 - must be able to handle slight modifications to large sequences while
   preserving the original large sequence (e.g. maybe the set of all
@@ -16,15 +20,8 @@ problem:
   
 changes:
 
-- remove BWT -- it's not a good fit for this problem because all byte
-  values are in the range 0-255, so there can't be any byte value that
-  is not in the input data, and there can be any arbitrary sequence of
-  bytes in the input data
-- describe how to use Merkle DAG to store large sequences of bytes
-- describe how to use Rabin-Karp algorithm to find a subsequence of
-  bytes in a large sequence of bytes
-
-Make no other changes.
+- refine conclusions
+- make no other changes
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
