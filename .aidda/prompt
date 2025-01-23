@@ -11,8 +11,9 @@ problem:
 
 possible solutions:
 
-- possibly use the sort of data structure used in DNA sequence database implementations
-- discuss the various data structures that could be used
+- include solutions already in description.md
+- include a monte carlo approach
+- include probabilistic data structures
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
