@@ -4,11 +4,16 @@ problem:
 
 - for the application described in README.md
 - that can store a large number of large byte sequences 
-- that can find a small subsequence of bytes among all large byte sequences
+- that can find a small subsequence of bytes among all large byte
+  sequences
 - small sequence size ranges from a few bytes to hundreds of megabytes
 - large sequence size ranges from a few bytes to hundreds of gigabytes 
 - number of large sequences ranges from a few to billions
-
+- must be able to handle frequent appends to large sequences
+- must be able to handle slight modifications to large sequences while
+  preserving the original large sequence (e.g. maybe the set of all
+  versions of a large sequence is a graph structure)
+  
 possible solutions:
 
 - include solutions already in description.md
