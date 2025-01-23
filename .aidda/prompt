@@ -1,12 +1,27 @@
-pass repoPath, outputFile, and ref names in as command line arguments
+recommend a data structure 
+
+problem:
+
+- for the application described in README.md
+- that can store a large number of large byte sequences 
+- that can find a small subsequence of bytes among all large byte sequences
+- small sequence size ranges from a few bytes to hundreds of megabytes
+- large sequence size ranges from a few bytes to hundreds of gigabytes 
+- number of large sequences ranges from a few to billions
+
+possible solutions:
+
+- possibly use the sort of data structure used in DNA sequence database implementations
+- discuss the various data structures that could be used
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
- x/git-bundle/main.go
- /home/stevegt/go/1.22.1/pkg/mod/github.com/go-git/go-git/v5@v5.12.0/plumbing/format/packfile/encoder.go
- /home/stevegt/go/1.22.1/pkg/mod/github.com/go-git/go-git/v5@v5.12.0/plumbing/object/object.go
+ README.md
+ x/data-structure/description.md
 Out: 
- x/git-bundle/main.go
+ x/data-structure/description.md
 
 .stop
- x/git-cbor/main.go
+
+- backrefs are in messages via hash chain
+- forward refs are on disk
