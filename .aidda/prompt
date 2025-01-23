@@ -20,6 +20,13 @@ problem:
   
 changes:
 
+- add data structures that are used in these use cases:
+  - given a variable-length byte sequence, find all large byte sequences
+    that contain the given byte sequence, returning the location of the
+    given byte sequence in each large byte sequence
+  - given a variable-length DNA fragment, find all genomes that contain
+    the given DNA fragment, returning the location of the given DNA
+    fragment in each genome
 - refine conclusions
 - make no other changes
 
