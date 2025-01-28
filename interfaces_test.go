@@ -8,8 +8,8 @@ import (
 // MockAtom is a mock Atom for testing.
 type MockAtom struct {
 	data     []byte
-	hashes   []multihash.Multihash
-	lastHash int
+	hashes   map[uint64]multihash.Multihash
+	lastHash uint64
 }
 
 // NewMockAtom returns a new MockAtom.
@@ -19,7 +19,11 @@ func NewMockAtom(data []byte) *MockAtom {
 
 // HashMRU returns the most recently computed multihash of the Atom.
 func (a *MockAtom) HashMRU() multihash.Multihash {
-	return a.hashes[a.lastHash]
+	hash, ok := a.hashes[a.lastHash]
+	if !ok {
+		return nil
+	}
+	return hash
 }
 
 // HashAdd adds and returns the multihash of the Atom given a
@@ -30,4 +34,23 @@ func (a *MockAtom) HashAdd(code uint64) multihash.Multihash {
 	buf, err := multihash.Encode(a.data, code)
 	Ck(err)
 	return buf
+}
+
+// HashAddName adds and returns the multihash of the Atom given a
+// multihash name.  If the Atom already has a hash using the same
+// algorithm, it will replace the old hash with the new one.
+func (a *MockAtom) HashAddName(name string) multihash.Multihash {
+	// hash the data using multihash.Encode
+	buf, err := multihash.EncodeName(a.data, name)
+	Ck(err)
+	return buf
+}
+
+// HashGet returns the multihash of the Atom given a multihash code.
+func (a *MockAtom) HashGet(code uint64) multihash.Multihash {
+	hash, ok := a.hashes[code]
+	if !ok {
+		return nil
+	}
+	return hash
 }
