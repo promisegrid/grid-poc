@@ -38,6 +38,16 @@ type Atom interface {
 	Data() []byte
 }
 
+// Universe is a hypergraph of world lines.  It is the top-level
+// structure in the grid.
+//
+// A Universe is roughly analogous to a git
+// repository.
+
+// XXX scratchpad below here
+
+// Hyperedge is a
+
 // Function is a type of Atom that is used for all grid transitions on
 // a world line.  It takes zero or more states as input and returns
 // zero or more states as output.  The input states are the prior
@@ -56,7 +66,7 @@ type Function interface {
 // State is a type of Atom that describes some part of the universe at
 // an instant in time.  A State has a timestamp, one or more parent
 // states, and a transition function that describes how the state
-// changed from the prior state(s).
+// changed from the prior state(s).  A
 //
 // A State is roughly analogous to a commit in git.  The parent states
 // are like the parent commits of a commit.  The transition function

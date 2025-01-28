@@ -2,7 +2,10 @@ module grid
 
 go 1.22.1
 
-require github.com/multiformats/go-multihash v0.2.3
+require (
+	github.com/multiformats/go-multihash v0.2.3
+	github.com/stevegt/goadapt v0.7.0
+)
 
 require (
 	github.com/klauspost/cpuid/v2 v2.0.9 // indirect
