@@ -38,6 +38,17 @@ type Atom interface {
 	Data() []byte
 }
 
+// Store is a data storage interface that is used to store and retrieve
+// Atoms.  It is roughly analogous to the .git/objects directory.
+type Store interface {
+	// Put stores an Atom in the Store.  It returns the multihash of
+	// the Atom.
+	Put(Atom) multihash.Multihash
+	// Get retrieves an Atom from the Store given a multihash.  It
+	// returns the Atom.
+	Get(multihash.Multihash) Atom
+}
+
 // Universe is a hypergraph of world lines.  It is the top-level
 // structure in the grid.
 //
