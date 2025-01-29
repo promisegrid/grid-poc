@@ -1,9 +1,10 @@
 package interfaces_git
 
 import (
-	"testing"
 	"crypto/sha256"
 	"encoding/hex"
+	"testing"
+
 	. "github.com/stevegt/goadapt"
 )
 
@@ -18,8 +19,8 @@ type MockObject struct {
 // NewMockObject creates a new MockObject given a type and content.
 func NewMockObject(typ string, content []byte) (obj *MockObject) {
 	obj = &MockObject{
-		content: content, 
-		typ: typ
+		content: content,
+		typ:     typ,
 	}
 	return
 }
@@ -43,8 +44,8 @@ func (obj *MockObject) Size() int {
 // a sha-256 hash of the content.
 func (obj *MockObject) Hash() (strhash string) {
 	binhash := sha256.Sum256(obj.content)
-	strhash := hex.EncodeToString(binhash)
-	return 
+	strhash := hex.EncodeToString(binhash[:])
+	return
 }
 
 // TestObjectHash tests the Hash method of the Object interface.
