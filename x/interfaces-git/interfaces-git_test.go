@@ -3,6 +3,7 @@ package interfaces_git
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"os"
 	"testing"
 
 	. "github.com/stevegt/goadapt"
@@ -95,11 +96,10 @@ func (store *MockStore) Store(obj Object) (err error) {
 	return
 }
 
-
 // TestStore tests the Store interface.
 func TestStore(t *testing.T) {
 	// Create a new Store
-	store := NewMockStore(dir string)
+	store := NewMockStore("/tmp/mockstore")
 	// Create a new Object
 	obj := NewMockObject("blob", []byte("Hello, World!"))
 	// Store the object
