@@ -51,7 +51,7 @@ func (obj *MockObject) Hash() (strhash string) {
 // TestObjectHash tests the Hash method of the Object interface.
 func TestObjectHash(t *testing.T) {
 	// Create a new Object
-	obj := NewMockObject()
+	obj := NewMockObject("blob", []byte("Hello, World!"))
 	// Test the Hash method
 	want := "XXX"
 	if obj.Hash() == want {
