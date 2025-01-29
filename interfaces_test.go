@@ -33,9 +33,11 @@ func (a *MockAtom) HashAdd(code uint64) multihash.Multihash {
 	// hash the data using multihash.Encode
 	buf, err := multihash.Encode(a.data, code)
 	Ck(err)
+	a.hashes[code] = buf
 	return buf
 }
 
+/*
 // HashAddName adds and returns the multihash of the Atom given a
 // multihash name.  If the Atom already has a hash using the same
 // algorithm, it will replace the old hash with the new one.
@@ -43,6 +45,11 @@ func (a *MockAtom) HashAddName(name string) multihash.Multihash {
 	// hash the data using multihash.Encode
 	buf, err := multihash.EncodeName(a.data, name)
 	Ck(err)
+	code, ok := multihash.Names[code]
+	if !ok {
+		return nil
+	}
+	// a.hashes[buf.Code] = buf
 	return buf
 }
 
@@ -50,7 +57,20 @@ func (a *MockAtom) HashAddName(name string) multihash.Multihash {
 func (a *MockAtom) HashGet(code uint64) multihash.Multihash {
 	hash, ok := a.hashes[code]
 	if !ok {
+		a.HashAdd(code)
+		hash = a.hashes[code]
+	}
+	return hash
+}
+
+// HashGetName returns the multihash of the Atom given a multihash name.
+func (a *MockAtom) HashGetName(name string) multihash.Multihash {
+	code, err := multihash.LookupCode(name)
+	Ck(err)
+	hash, ok := a.hashes[code]
+	if !ok {
 		return nil
 	}
 	return hash
 }
+*/
