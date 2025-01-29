@@ -26,7 +26,7 @@ type MockObject struct {
 }
 
 // NewMockObject creates a new MockObject given a type and content.
-func NewMockObject(typ string, content []byte) (obj *MockObject) {
+func NewMockObject(typ string, content []byte) (obj Object) {
 	obj = &MockObject{
 		content: content,
 		typ:     typ,
