@@ -8,6 +8,15 @@ import (
 	. "github.com/stevegt/goadapt"
 )
 
+/*
+e.g. in PromiseGrid:
+import (
+	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f as bar
+)
+
+bar.foo()
+*/
+
 var typ string = "blob"
 
 // MockObject is a test implementation of the Object interface.
