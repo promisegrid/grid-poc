@@ -70,3 +70,40 @@ func TestObjectHash(t *testing.T) {
 		}
 	*/
 }
+
+// MockStore is a test implementation of the Store interface.
+type MockStore struct {
+	dir string
+}
+
+// NewMockStore creates a new MockStore.
+func NewMockStore(dir string) (store Store) {
+	store = &MockStore{
+		dir: dir,
+	}
+	return
+}
+
+// Store stores an object on disk.
+func (store *MockStore) Store(obj Object) (err error) {
+	fn := store.dir + "/" + obj.Hash()
+	fh, err := os.Create(fn)
+	Ck(err)
+	defer fh.Close()
+	_, err = fh.Write(obj.Content())
+	Ck(err)
+	return
+}
+
+
+// TestStore tests the Store interface.
+func TestStore(t *testing.T) {
+	// Create a new Store
+	store := NewMockStore(dir string)
+	// Create a new Object
+	obj := NewMockObject("blob", []byte("Hello, World!"))
+	// Store the object
+	err := store.Store(obj)
+	// Test the Store method
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+}

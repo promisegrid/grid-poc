@@ -21,3 +21,11 @@ type Object interface {
 	// Size returns the size of the object in bytes.
 	Size() int
 }
+
+// Store is an interface for storing objects on disk.
+type Store interface {
+	// Store stores an object on disk.
+	Store(Object) error
+	// Retrieve retrieves an object from disk.
+	// Retrieve(string) (Object, error)
+}
