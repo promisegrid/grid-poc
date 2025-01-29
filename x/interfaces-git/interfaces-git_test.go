@@ -44,7 +44,7 @@ func (obj *MockObject) Size() int {
 // a sha-256 hash of the content.
 func (obj *MockObject) Hash() (strhash string) {
 	binhash := sha256.Sum256(obj.content)
-	strhash := hex.EncodeToString(binhash[:])
+	strhash = hex.EncodeToString(binhash[:])
 	return
 }
 
