@@ -54,7 +54,10 @@ func TestObjectHash(t *testing.T) {
 	obj := NewMockObject("blob", []byte("Hello, World!"))
 	// Test the Hash method
 	want := "XXX"
-	if obj.Hash() == want {
-		t.Errorf("Expected %s, got %s", want, obj.Hash())
-	}
+	Tassert(t, want == obj.Hash(), "Expected %s, got %s", want, obj.Hash())
+	/*
+		if obj.Hash() == want {
+			t.Errorf("Expected %s, got %s", want, obj.Hash())
+		}
+	*/
 }
