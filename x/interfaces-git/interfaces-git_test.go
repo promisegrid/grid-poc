@@ -44,13 +44,13 @@ func (obj *MockObject) GetType() string {
 	return obj.typ
 }
 
-// Content returns the content of the object.
-func (obj *MockObject) Content() []byte {
+// GetContent returns the content of the object.
+func (obj *MockObject) GetContent() []byte {
 	return obj.content
 }
 
-// Size returns the size of the object in bytes.
-func (obj *MockObject) Size() int {
+// GetSize returns the size of the object in bytes.
+func (obj *MockObject) GetSize() int {
 	return len(obj.content)
 }
 
@@ -98,7 +98,7 @@ func (store *MockStore) Store(obj Object) (err error) {
 	// write type as the first line
 	_, err = fh.Write([]byte(obj.GetType() + "\n"))
 	// write content
-	_, err = fh.Write(obj.Content())
+	_, err = fh.Write(obj.GetContent())
 	Ck(err)
 	return
 }
@@ -153,7 +153,7 @@ func TestStore(t *testing.T) {
 	// Test the Retrieve method
 	Tassert(t, err == nil, "Expected nil, got %v", err)
 	Tassert(t, obj.GetHash() == obj2.GetHash(), "Expected %s, got %s", obj.GetHash(), obj2.GetHash())
-	Tassert(t, string(obj.Content()) == string(obj2.Content()), "Expected %s, got %s", string(obj.Content()), string(obj2.Content()))
+	Tassert(t, string(obj.GetContent()) == string(obj2.GetContent()), "Expected %s, got %s", string(obj.GetContent()), string(obj2.GetContent()))
 }
 
 // MockBlob is a test implementation of the Blob interface.
@@ -192,9 +192,9 @@ func TestBlob(t *testing.T) {
 	// Test the Type method
 	Tassert(t, blob.GetType() == "blob", "Expected blob, got %s", blob.GetType())
 	// Test the Content method
-	Tassert(t, string(blob.Content()) == "Hello, World!", "Expected Hello, World!, got %s", string(blob.Content()))
+	Tassert(t, string(blob.GetContent()) == "Hello, World!", "Expected Hello, World!, got %s", string(blob.GetContent()))
 	// Test the Size method
-	Tassert(t, blob.Size() == 13, "Expected 13, got %d", blob.Size())
+	Tassert(t, blob.GetSize() == 13, "Expected 13, got %d", blob.GetSize())
 	// Test the Hash method
 	want := "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
 	Tassert(t, want == blob.GetHash(), "Expected %s, got %s", want, blob.GetHash())

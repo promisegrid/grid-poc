@@ -14,12 +14,12 @@ type Object interface {
 	GetHash() string
 	// GetType returns the type of the object, e.g. "blob", "tree", "commit".
 	GetType() string
-	// Content returns the content of the object.  This would be the
+	// GetContent returns the content of the object.  This would be the
 	// content of a blob, the list of entries in a tree, or the commit
 	// message in a commit.
-	Content() []byte
-	// Size returns the size of the object in bytes.
-	Size() int
+	GetContent() []byte
+	// GetSize returns the size of the object in bytes.
+	GetSize() int
 }
 
 // Store is an interface for storing objects on disk.
