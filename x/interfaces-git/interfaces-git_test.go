@@ -171,29 +171,21 @@ func NewMockBlob(name string, content []byte) (blob Blob) {
 	return
 }
 
-// NewBlob creates a new Blob given a name and content.
-func NewBlob(name string, content []byte) (blob Blob) {
+// NewBlob creates a new Blob given content.
+func NewBlob(content []byte) (blob Blob) {
 	blob = &MockBlob{
 		MockObject: MockObject{
 			content: content,
 			typ:     "blob",
 		},
-		name: name,
 	}
 	return
-}
-
-// Name returns the name of the blob.
-func (blob *MockBlob) Name() string {
-	return blob.name
 }
 
 // TestBlob tests the Blob interface.
 func TestBlob(t *testing.T) {
 	// Create a new Blob
-	blob := NewBlob("hello.txt", []byte("Hello, World!"))
-	// Test the Name method
-	Tassert(t, blob.Name() == "hello.txt", "Expected hello.txt, got %s", blob.Name())
+	blob := NewBlob([]byte("Hello, World!"))
 	// Test the Type method
 	Tassert(t, blob.Type() == "blob", "Expected blob, got %s", blob.Type())
 	// Test the Content method

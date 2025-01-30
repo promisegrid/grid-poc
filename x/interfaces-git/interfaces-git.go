@@ -33,7 +33,6 @@ type Store interface {
 // Blob is an interface for a blob object in a Git repository.
 type Blob interface {
 	Object
-	Name() string
 }
 
 // Tree is an interface for a tree object in a Git repository.
