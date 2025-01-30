@@ -7,6 +7,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/fxamacker/cbor/v2"
 	. "github.com/stevegt/goadapt"
 )
 
@@ -26,38 +27,38 @@ bar.foo()
 
 // MockObject is a test implementation of the Object interface.
 type MockObject struct {
-	content []byte
-	typ     string
+	Content []byte
+	Type    string
 }
 
 // NewMockObject creates a new MockObject given a type and content.
 func NewMockObject(typ string, content []byte) (obj Object) {
 	obj = &MockObject{
-		content: content,
-		typ:     typ,
+		Content: content,
+		Type:    typ,
 	}
 	return
 }
 
 // GetType returns the type of the object.
 func (obj *MockObject) GetType() string {
-	return obj.typ
+	return obj.Type
 }
 
 // GetContent returns the content of the object.
 func (obj *MockObject) GetContent() []byte {
-	return obj.content
+	return obj.Content
 }
 
 // GetSize returns the size of the object in bytes.
 func (obj *MockObject) GetSize() int {
-	return len(obj.content)
+	return len(obj.Content)
 }
 
 // GetHash returns the hash of the object as a hex string.  The hash is
 // a sha-256 hash of the content.
 func (obj *MockObject) GetHash() (strhash string) {
-	binhash := sha256.Sum256(obj.content)
+	binhash := sha256.Sum256(obj.Content)
 	strhash = hex.EncodeToString(binhash[:])
 	return
 }
@@ -95,10 +96,16 @@ func (store *MockStore) Store(obj Object) (err error) {
 	fh, err := os.Create(fn)
 	Ck(err)
 	defer fh.Close()
-	// write type as the first line
-	_, err = fh.Write([]byte(obj.GetType() + "\n"))
-	// write content
-	_, err = fh.Write(obj.GetContent())
+	/*
+		// write type as the first line
+		_, err = fh.Write([]byte(obj.GetType() + "\n"))
+		// write content
+		_, err = fh.Write(obj.GetContent())
+		Ck(err)
+	*/
+	buf, err := cbor.Marshal(obj)
+	Ck(err)
+	_, err = fh.Write(buf)
 	Ck(err)
 	return
 }
@@ -110,31 +117,38 @@ func (store *MockStore) Retrieve(hash string) (obj Object, err error) {
 	Ck(err)
 	defer fh.Close()
 
-	// type is the first line -- read bytes until newline
-	// XXX this all gets replaced by CBOR serialization
-	var typ []byte
-	b := make([]byte, 1)
-	for i := 0; i < 99; i++ {
-		_, err = fh.Read(b)
-		Ck(err)
-		if b[0] == '\n' {
-			break
+	/*
+		// type is the first line -- read bytes until newline
+		// XXX this all gets replaced by CBOR serialization
+		var typ []byte
+		b := make([]byte, 1)
+		for i := 0; i < 99; i++ {
+			_, err = fh.Read(b)
+			Ck(err)
+			if b[0] == '\n' {
+				break
+			}
+			typ = append(typ, b[0])
 		}
-		typ = append(typ, b[0])
-	}
 
-	// read the rest of the file
-	// get the size of the file
-	fi, err := fh.Stat()
-	Ck(err)
-	// subtract the size of the type line
-	size := fi.Size() - int64(len(typ)) - 1
-	// read the content into a buffer
-	content := make([]byte, size)
-	_, err = fh.Read(content)
+		// read the rest of the file
+		// get the size of the file
+		fi, err := fh.Stat()
+		Ck(err)
+		// subtract the size of the type line
+		size := fi.Size() - int64(len(typ)) - 1
+		// read the content into a buffer
+		content := make([]byte, size)
+		_, err = fh.Read(content)
+		Ck(err)
+		obj = NewMockObject(string(typ), content)
+	*/
+
+	decoder := cbor.NewDecoder(fh)
+	obj = &MockObject{}
+	err = decoder.Decode(obj)
 	Ck(err)
 
-	obj = NewMockObject(string(typ), content)
 	return
 }
 
@@ -166,8 +180,8 @@ type MockBlob struct {
 func NewMockBlob(name string, content []byte) (blob Blob) {
 	blob = &MockBlob{
 		MockObject: MockObject{
-			content: content,
-			typ:     "blob",
+			Content: content,
+			Type:    "blob",
 		},
 		name: name,
 	}
@@ -178,8 +192,8 @@ func NewMockBlob(name string, content []byte) (blob Blob) {
 func NewBlob(content []byte) (blob Blob) {
 	blob = &MockBlob{
 		MockObject: MockObject{
-			content: content,
-			typ:     "blob",
+			Content: content,
+			Type:    "blob",
 		},
 	}
 	return
@@ -210,7 +224,7 @@ type MockTree struct {
 func NewMockTree() (tree Tree) {
 	tree = &MockTree{
 		MockObject: MockObject{
-			typ: "tree",
+			Type: "tree",
 		},
 	}
 	return
