@@ -50,3 +50,12 @@ type Entry interface {
 	Hash() string
 	Mode() string
 }
+
+// Commit is an interface for a commit object in a Git repository.
+type Commit interface {
+	Object
+	Tree() string
+	Parents() []string
+	Author() string
+	Message() string
+}

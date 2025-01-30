@@ -10,9 +10,6 @@ import (
 	. "github.com/stevegt/goadapt"
 )
 
-// this file is a rough approximation of git semantics for demo and
-// discussion purposes.  it is not at all compatible with git.
-
 /*
 e.g. in PromiseGrid:
 import (
@@ -21,6 +18,11 @@ import (
 
 bar.foo()
 */
+
+// This file is a rough approximation of git semantics for demo and
+// discussion purposes.  It is not intended to be compatible with
+// git at all.  For instance, it uses CBOR serialization instead of
+// the git object serialization format.
 
 // MockObject is a test implementation of the Object interface.
 type MockObject struct {
