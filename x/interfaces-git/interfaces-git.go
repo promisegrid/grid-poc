@@ -29,3 +29,23 @@ type Store interface {
 	// Retrieve retrieves an object from disk.
 	Retrieve(string) (Object, error)
 }
+
+// Blob is an interface for a blob object in a Git repository.
+type Blob interface {
+	Object
+	Name() string
+}
+
+// Tree is an interface for a tree object in a Git repository.
+type Tree interface {
+	Object
+	Entries() []Entry
+}
+
+// Entry is an interface for an entry in a tree object in a Git
+// repository.
+type Entry interface {
+	Name() string
+	Hash() string
+	Mode() string
+}

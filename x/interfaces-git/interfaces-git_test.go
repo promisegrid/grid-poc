@@ -152,3 +152,55 @@ func TestStore(t *testing.T) {
 	Tassert(t, obj.Hash() == obj2.Hash(), "Expected %s, got %s", obj.Hash(), obj2.Hash())
 	Tassert(t, string(obj.Content()) == string(obj2.Content()), "Expected %s, got %s", string(obj.Content()), string(obj2.Content()))
 }
+
+// MockBlob is a test implementation of the Blob interface.
+type MockBlob struct {
+	MockObject
+	name string
+}
+
+// NewMockBlob creates a new MockBlob given a name and content.
+func NewMockBlob(name string, content []byte) (blob Blob) {
+	blob = &MockBlob{
+		MockObject: MockObject{
+			content: content,
+			typ:     "blob",
+		},
+		name: name,
+	}
+	return
+}
+
+// NewBlob creates a new Blob given a name and content.
+func NewBlob(name string, content []byte) (blob Blob) {
+	blob = &MockBlob{
+		MockObject: MockObject{
+			content: content,
+			typ:     "blob",
+		},
+		name: name,
+	}
+	return
+}
+
+// Name returns the name of the blob.
+func (blob *MockBlob) Name() string {
+	return blob.name
+}
+
+// TestBlob tests the Blob interface.
+func TestBlob(t *testing.T) {
+	// Create a new Blob
+	blob := NewBlob("hello.txt", []byte("Hello, World!"))
+	// Test the Name method
+	Tassert(t, blob.Name() == "hello.txt", "Expected hello.txt, got %s", blob.Name())
+	// Test the Type method
+	Tassert(t, blob.Type() == "blob", "Expected blob, got %s", blob.Type())
+	// Test the Content method
+	Tassert(t, string(blob.Content()) == "Hello, World!", "Expected Hello, World!, got %s", string(blob.Content()))
+	// Test the Size method
+	Tassert(t, blob.Size() == 13, "Expected 13, got %d", blob.Size())
+	// Test the Hash method
+	want := "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+	Tassert(t, want == blob.Hash(), "Expected %s, got %s", want, blob.Hash())
+}
