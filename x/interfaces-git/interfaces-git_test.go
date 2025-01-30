@@ -185,6 +185,14 @@ func NewMockBlob(name string, content []byte) (blob Blob) {
 		},
 		name: name,
 	}
+
+	/*
+		blob = &MockBlob{}
+		blob.Content = content
+		blob.Type = "blob"
+		blob.name = name
+	*/
+
 	return
 }
 
