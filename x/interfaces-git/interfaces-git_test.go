@@ -277,7 +277,11 @@ func TestTree(t *testing.T) {
 	Tassert(t, len(tree.Entries()) == 1, "Expected 1, got %d", len(tree.Entries()))
 	// Add another entry
 	entry = NewMockEntry("file2.txt", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", "100644")
+	tree.AddEntry(entry)
 	// Test the Hash method
 	want := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	Tassert(t, want == tree.Hash(), "Expected %s, got %s", want, tree.Hash())
+	// Test the String method
+	want = "tree\n100644 dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f file.txt\n100644 dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f file2.txt\n"
+	Tassert(t, want == tree.String(), "Expected %s, got %s", want, tree.String())
 }
