@@ -39,8 +39,8 @@ func NewMockObject(typ string, content []byte) (obj Object) {
 	return
 }
 
-// Type returns the type of the object.
-func (obj *MockObject) Type() string {
+// GetType returns the type of the object.
+func (obj *MockObject) GetType() string {
 	return obj.typ
 }
 
@@ -54,9 +54,9 @@ func (obj *MockObject) Size() int {
 	return len(obj.content)
 }
 
-// Hash returns the hash of the object as a hex string.  The hash is
+// GetHash returns the hash of the object as a hex string.  The hash is
 // a sha-256 hash of the content.
-func (obj *MockObject) Hash() (strhash string) {
+func (obj *MockObject) GetHash() (strhash string) {
 	binhash := sha256.Sum256(obj.content)
 	strhash = hex.EncodeToString(binhash[:])
 	return
@@ -68,7 +68,7 @@ func TestObjectHash(t *testing.T) {
 	obj := NewMockObject("blob", []byte("Hello, World!"))
 	// Test the Hash method
 	want := "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
-	Tassert(t, want == obj.Hash(), "Expected %s, got %s", want, obj.Hash())
+	Tassert(t, want == obj.GetHash(), "Expected %s, got %s", want, obj.GetHash())
 	/*
 		if obj.Hash() == want {
 			t.Errorf("Expected %s, got %s", want, obj.Hash())
@@ -91,12 +91,12 @@ func NewMockStore(dir string) (store Store) {
 
 // Store stores an object on disk.
 func (store *MockStore) Store(obj Object) (err error) {
-	fn := store.dir + "/" + obj.Hash()
+	fn := store.dir + "/" + obj.GetHash()
 	fh, err := os.Create(fn)
 	Ck(err)
 	defer fh.Close()
 	// write type as the first line
-	_, err = fh.Write([]byte(obj.Type() + "\n"))
+	_, err = fh.Write([]byte(obj.GetType() + "\n"))
 	// write content
 	_, err = fh.Write(obj.Content())
 	Ck(err)
@@ -149,10 +149,10 @@ func TestStore(t *testing.T) {
 	// Test the Store method
 	Tassert(t, err == nil, "Expected nil, got %v", err)
 	// Retrieve the object
-	obj2, err := store.Retrieve(obj.Hash())
+	obj2, err := store.Retrieve(obj.GetHash())
 	// Test the Retrieve method
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	Tassert(t, obj.Hash() == obj2.Hash(), "Expected %s, got %s", obj.Hash(), obj2.Hash())
+	Tassert(t, obj.GetHash() == obj2.GetHash(), "Expected %s, got %s", obj.GetHash(), obj2.GetHash())
 	Tassert(t, string(obj.Content()) == string(obj2.Content()), "Expected %s, got %s", string(obj.Content()), string(obj2.Content()))
 }
 
@@ -190,14 +190,14 @@ func TestBlob(t *testing.T) {
 	// Create a new Blob
 	blob := NewBlob([]byte("Hello, World!"))
 	// Test the Type method
-	Tassert(t, blob.Type() == "blob", "Expected blob, got %s", blob.Type())
+	Tassert(t, blob.GetType() == "blob", "Expected blob, got %s", blob.GetType())
 	// Test the Content method
 	Tassert(t, string(blob.Content()) == "Hello, World!", "Expected Hello, World!, got %s", string(blob.Content()))
 	// Test the Size method
 	Tassert(t, blob.Size() == 13, "Expected 13, got %d", blob.Size())
 	// Test the Hash method
 	want := "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
-	Tassert(t, want == blob.Hash(), "Expected %s, got %s", want, blob.Hash())
+	Tassert(t, want == blob.GetHash(), "Expected %s, got %s", want, blob.GetHash())
 }
 
 // MockTree is a test implementation of the Tree interface.
@@ -245,8 +245,8 @@ func (tree *MockTree) String() (str string) {
 	return
 }
 
-// Hash returns the hash of the tree.
-func (tree *MockTree) Hash() (strhash string) {
+// GetHash returns the hash of the tree.
+func (tree *MockTree) GetHash() (strhash string) {
 	// XXX this all gets replaced by CBOR serialization
 	// hash the sorted entries
 	binhash := sha256.Sum256([]byte(tree.String()))
@@ -292,7 +292,7 @@ func TestTree(t *testing.T) {
 	// Create a new Tree
 	tree := NewMockTree()
 	// Test the Type method
-	Tassert(t, tree.Type() == "tree", "Expected tree, got %s", tree.Type())
+	Tassert(t, tree.GetType() == "tree", "Expected tree, got %s", tree.GetType())
 	// Test the AddEntry method
 	entry := NewMockEntry("file.txt", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", "100644")
 	tree.AddEntry(entry)
@@ -302,7 +302,7 @@ func TestTree(t *testing.T) {
 	tree.AddEntry(entry)
 	// Test the Hash method
 	want := "2f3cfcd579e6319b7ee80bca4581654c903fc49d23824898070ead7758c9f691"
-	Tassert(t, want == tree.Hash(), "Expected %s, got %s", want, tree.Hash())
+	Tassert(t, want == tree.GetHash(), "Expected %s, got %s", want, tree.GetHash())
 	// Test the String method
 	want = "tree\n100644 dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f file.txt\n100644 dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f file2.txt\n"
 	Tassert(t, want == tree.String(), "Expected %s, got %s", want, tree.String())
