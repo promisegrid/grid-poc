@@ -204,3 +204,9 @@ func TestBlob(t *testing.T) {
 	want := "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
 	Tassert(t, want == blob.Hash(), "Expected %s, got %s", want, blob.Hash())
 }
+
+// MockTree is a test implementation of the Tree interface.
+type MockTree struct {
+	MockObject
+	entrees []Entry
+}

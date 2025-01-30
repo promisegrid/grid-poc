@@ -16,5 +16,5 @@ do
     git status
     grok commit | tee /tmp/$$
     cat /tmp/$$ | git commit -F-
-    padsp signalgen -t 100m sin 900
+    padsp signalgen -t 100m sin 800
 done
