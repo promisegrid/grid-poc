@@ -6,7 +6,7 @@ do
     inotifywait -r -e modify *
     padsp signalgen -t 100m sin 444
     sleep 1
-    if ! go test -v
+    if ! go test -v ./...
     then
         padsp signalgen -t 100m sin 300
         continue

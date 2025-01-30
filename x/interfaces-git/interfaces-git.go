@@ -27,5 +27,5 @@ type Store interface {
 	// Store stores an object on disk.
 	Store(Object) error
 	// Retrieve retrieves an object from disk.
-	// Retrieve(string) (Object, error)
+	Retrieve(string) (Object, error)
 }

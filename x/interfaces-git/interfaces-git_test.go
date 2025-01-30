@@ -96,6 +96,21 @@ func (store *MockStore) Store(obj Object) (err error) {
 	return
 }
 
+// Retrieve retrieves an object from disk.
+func (store *MockStore) Retrieve(hash string) (obj Object, err error) {
+	fn := store.dir + "/" + hash
+	fh, err := os.Open(fn)
+	Ck(err)
+	defer fh.Close()
+	fi, err := fh.Stat()
+	Ck(err)
+	content := make([]byte, fi.Size())
+	_, err = fh.Read(content)
+	Ck(err)
+	obj = NewMockObject(typ, content)
+	return
+}
+
 // TestStore tests the Store interface.
 func TestStore(t *testing.T) {
 	// Create a new Store
@@ -106,4 +121,10 @@ func TestStore(t *testing.T) {
 	err := store.Store(obj)
 	// Test the Store method
 	Tassert(t, err == nil, "Expected nil, got %v", err)
+	// Retrieve the object
+	obj2, err := store.Retrieve(obj.Hash())
+	// Test the Retrieve method
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	Tassert(t, obj.Hash() == obj2.Hash(), "Expected %s, got %s", obj.Hash(), obj2.Hash())
+	Tassert(t, string(obj.Content()) == string(obj2.Content()), "Expected %s, got %s", string(obj.Content()), string(obj2.Content()))
 }
