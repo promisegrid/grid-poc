@@ -9,6 +9,9 @@ import (
 	. "github.com/stevegt/goadapt"
 )
 
+// this file is a rough approximation of git semantics for demo and
+// discussion purposes.  it is not at all compatible with git.
+
 /*
 e.g. in PromiseGrid:
 import (
@@ -17,8 +20,6 @@ import (
 
 bar.foo()
 */
-
-var typ string = "blob"
 
 // MockObject is a test implementation of the Object interface.
 type MockObject struct {
@@ -91,6 +92,9 @@ func (store *MockStore) Store(obj Object) (err error) {
 	fh, err := os.Create(fn)
 	Ck(err)
 	defer fh.Close()
+	// write type as the first line
+	_, err = fh.Write([]byte(obj.Type() + "\n"))
+	// write content
 	_, err = fh.Write(obj.Content())
 	Ck(err)
 	return
@@ -102,12 +106,32 @@ func (store *MockStore) Retrieve(hash string) (obj Object, err error) {
 	fh, err := os.Open(fn)
 	Ck(err)
 	defer fh.Close()
+
+	// type is the first line -- read bytes until newline
+	// XXX this all gets replaced by CBOR serialization
+	var typ []byte
+	b := make([]byte, 1)
+	for i := 0; i < 99; i++ {
+		_, err = fh.Read(b)
+		Ck(err)
+		if b[0] == '\n' {
+			break
+		}
+		typ = append(typ, b[0])
+	}
+
+	// read the rest of the file
+	// get the size of the file
 	fi, err := fh.Stat()
 	Ck(err)
-	content := make([]byte, fi.Size())
+	// subtract the size of the type line
+	size := fi.Size() - int64(len(typ)) - 1
+	// read the content into a buffer
+	content := make([]byte, size)
 	_, err = fh.Read(content)
 	Ck(err)
-	obj = NewMockObject(typ, content)
+
+	obj = NewMockObject(string(typ), content)
 	return
 }
 
