@@ -38,7 +38,9 @@ type Blob interface {
 // Tree is an interface for a tree object in a Git repository.
 type Tree interface {
 	Object
+	AddEntry(Entry)
 	Entries() []Entry
+	String() string
 }
 
 // Entry is an interface for an entry in a tree object in a Git

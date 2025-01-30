@@ -202,3 +202,82 @@ type MockTree struct {
 	MockObject
 	entrees []Entry
 }
+
+// NewMockTree creates a new MockTree given a list of entries.
+func NewMockTree(entrees []Entry) (tree Tree) {
+	tree = &MockTree{
+		MockObject: MockObject{
+			typ: "tree",
+		},
+		entrees: entrees,
+	}
+	return
+}
+
+// AddEntry adds an entry to the tree.
+func (tree *MockTree) AddEntry(entry Entry) {
+	tree.entrees = append(tree.entrees, entry)
+}
+
+// Entries returns the entries in the tree.
+func (tree *MockTree) Entries() []Entry {
+	return tree.entrees
+}
+
+// String returns a string representation of the tree.
+func (tree *MockTree) String() (str string) {
+	str = "tree\n"
+	for _, entry := range tree.entrees {
+		str += entry.Mode() + " " + entry.Hash() + " " + entry.Name() + "\n"
+	}
+	return
+}
+
+// MockEntry is a test implementation of the Entry interface.
+type MockEntry struct {
+	name string
+	hash string
+	mode string
+}
+
+// NewMockEntry creates a new MockEntry given a name, hash, and mode.
+func NewMockEntry(name, hash, mode string) (entry Entry) {
+	entry = &MockEntry{
+		name: name,
+		hash: hash,
+		mode: mode,
+	}
+	return
+}
+
+// Name returns the name of the entry.
+func (entry *MockEntry) Name() string {
+	return entry.name
+}
+
+// Hash returns the hash of the entry.
+func (entry *MockEntry) Hash() string {
+	return entry.hash
+}
+
+// Mode returns the mode of the entry.
+func (entry *MockEntry) Mode() string {
+	return entry.mode
+}
+
+// TestTree tests the Tree interface.
+func TestTree(t *testing.T) {
+	// Create a new Tree
+	tree := NewMockTree([]Entry{})
+	// Test the Type method
+	Tassert(t, tree.Type() == "tree", "Expected tree, got %s", tree.Type())
+	// Test the AddEntry method
+	entry := NewMockEntry("file.txt", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", "100644")
+	tree.AddEntry(entry)
+	Tassert(t, len(tree.Entries()) == 1, "Expected 1, got %d", len(tree.Entries()))
+	// Add another entry
+	entry = NewMockEntry("file2.txt", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", "100644")
+	// Test the Hash method
+	want := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	Tassert(t, want == tree.Hash(), "Expected %s, got %s", want, tree.Hash())
+}
