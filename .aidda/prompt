@@ -1,8 +1,11 @@
-ask me questions about interfaces.go
+find the following error in the code
+
+x/interfaces-git/interfaces-git_test.go|231 col 2| Entry does not satisfy cmp.Ordered                                          
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
- interfaces.go
+ x/interfaces-git/interfaces-git.go
+ x/interfaces-git/interfaces-git_test.go
 
 .stop
 

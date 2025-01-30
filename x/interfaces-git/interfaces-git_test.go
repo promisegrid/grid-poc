@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
+	"slices"
 	"testing"
 
 	. "github.com/stevegt/goadapt"
@@ -204,12 +205,11 @@ type MockTree struct {
 }
 
 // NewMockTree creates a new MockTree given a list of entries.
-func NewMockTree(entrees []Entry) (tree Tree) {
+func NewMockTree() (tree Tree) {
 	tree = &MockTree{
 		MockObject: MockObject{
 			typ: "tree",
 		},
-		entrees: entrees,
 	}
 	return
 }
@@ -226,10 +226,30 @@ func (tree *MockTree) Entries() []Entry {
 
 // String returns a string representation of the tree.
 func (tree *MockTree) String() (str string) {
+	// sort the entries by name using SortFunc with a comparator
+	slices.SortFunc(tree.entrees, func(a, b Entry) int {
+		if a.Name() == b.Name() {
+			return 0
+		}
+		if a.Name() < b.Name() {
+			return -1
+		}
+		return 1
+	})
 	str = "tree\n"
 	for _, entry := range tree.entrees {
 		str += entry.Mode() + " " + entry.Hash() + " " + entry.Name() + "\n"
 	}
+	return
+}
+
+// Hash returns the hash of the tree.
+func (tree *MockTree) Hash() (strhash string) {
+	// XXX this all gets replaced by CBOR serialization
+	// hash the sorted entries
+	binhash := sha256.Sum256([]byte(tree.String()))
+	strhash = hex.EncodeToString(binhash[:])
+	// return the hash
 	return
 }
 
@@ -268,7 +288,7 @@ func (entry *MockEntry) Mode() string {
 // TestTree tests the Tree interface.
 func TestTree(t *testing.T) {
 	// Create a new Tree
-	tree := NewMockTree([]Entry{})
+	tree := NewMockTree()
 	// Test the Type method
 	Tassert(t, tree.Type() == "tree", "Expected tree, got %s", tree.Type())
 	// Test the AddEntry method
@@ -279,9 +299,10 @@ func TestTree(t *testing.T) {
 	entry = NewMockEntry("file2.txt", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", "100644")
 	tree.AddEntry(entry)
 	// Test the Hash method
-	want := "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	want := "2f3cfcd579e6319b7ee80bca4581654c903fc49d23824898070ead7758c9f691"
 	Tassert(t, want == tree.Hash(), "Expected %s, got %s", want, tree.Hash())
 	// Test the String method
 	want = "tree\n100644 dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f file.txt\n100644 dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f file2.txt\n"
 	Tassert(t, want == tree.String(), "Expected %s, got %s", want, tree.String())
+	Pl(tree.String())
 }
