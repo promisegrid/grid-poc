@@ -20,14 +20,16 @@ type Object interface {
 	GetContent() []byte
 	// GetSize returns the size of the object in bytes.
 	GetSize() int
+	// Encode returns the object encoded as a CBOR map.
+	Encode() ([]byte, error)
 }
 
 // Store is an interface for storing objects on disk.
 type Store interface {
-	// Store stores an object on disk.
-	Store(Object) error
-	// Retrieve retrieves an object from disk.
-	Retrieve(string) (Object, error)
+	// Put stores an object on disk.
+	Put(Object) error
+	// Get retrieves an object from disk.
+	Get(string) (Object, error)
 }
 
 // Blob is an interface for a blob object in a Git repository.

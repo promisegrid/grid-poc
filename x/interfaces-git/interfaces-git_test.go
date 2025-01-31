@@ -56,10 +56,28 @@ func (obj *MockObject) GetSize() int {
 }
 
 // GetHash returns the hash of the object as a hex string.  The hash is
-// a sha-256 hash of the content.
+// a sha-256 hash of the entire CBOR serialized object.  We use RFC
+// 8949 core deterministic encoding for CBOR serialization.
 func (obj *MockObject) GetHash() (strhash string) {
-	binhash := sha256.Sum256(obj.Content)
+	buf, err := obj.Encode()
+	Ck(err)
+	binhash := sha256.Sum256(buf)
 	strhash = hex.EncodeToString(binhash[:])
+	return
+}
+
+// Encode returns the object encoded as a CBOR map.
+func (obj *MockObject) Encode() (buf []byte, err error) {
+	defer Return(&err)
+	// XXX ensure we're doing all the things we need to do for deterministic encoding
+	// per section 4.2.1 of RFC 8949
+	opts := cbor.CoreDetEncOptions() // use preset options as a starting point
+	// opts.Time = cbor.TimeUnix          // change any settings if needed
+	// XXX Reuse the encoding mode. It is safe for concurrent use.
+	em, err := opts.EncMode() // create an immutable encoding mode
+	Ck(err)
+	buf, err = em.Marshal(obj)
+	Ck(err)
 	return
 }
 
@@ -68,7 +86,7 @@ func TestObjectHash(t *testing.T) {
 	// Create a new Object
 	obj := NewMockObject("blob", []byte("Hello, World!"))
 	// Test the Hash method
-	want := "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
 	Tassert(t, want == obj.GetHash(), "Expected %s, got %s", want, obj.GetHash())
 	/*
 		if obj.Hash() == want {
@@ -90,8 +108,8 @@ func NewMockStore(dir string) (store Store) {
 	return
 }
 
-// Store stores an object on disk.
-func (store *MockStore) Store(obj Object) (err error) {
+// Put stores an object on disk.
+func (store *MockStore) Put(obj Object) (err error) {
 	fn := store.dir + "/" + obj.GetHash()
 	fh, err := os.Create(fn)
 	Ck(err)
@@ -103,15 +121,15 @@ func (store *MockStore) Store(obj Object) (err error) {
 		_, err = fh.Write(obj.GetContent())
 		Ck(err)
 	*/
-	buf, err := cbor.Marshal(obj)
+	buf, err := obj.Encode()
 	Ck(err)
 	_, err = fh.Write(buf)
 	Ck(err)
 	return
 }
 
-// Retrieve retrieves an object from disk.
-func (store *MockStore) Retrieve(hash string) (obj Object, err error) {
+// Get retrieves an object from disk.
+func (store *MockStore) Get(hash string) (obj Object, err error) {
 	fn := store.dir + "/" + hash
 	fh, err := os.Open(fn)
 	Ck(err)
@@ -159,11 +177,11 @@ func TestStore(t *testing.T) {
 	// Create a new Object
 	obj := NewMockObject("blob", []byte("Hello, World!"))
 	// Store the object
-	err := store.Store(obj)
+	err := store.Put(obj)
 	// Test the Store method
 	Tassert(t, err == nil, "Expected nil, got %v", err)
 	// Retrieve the object
-	obj2, err := store.Retrieve(obj.GetHash())
+	obj2, err := store.Get(obj.GetHash())
 	// Test the Retrieve method
 	Tassert(t, err == nil, "Expected nil, got %v", err)
 	Tassert(t, obj.GetHash() == obj2.GetHash(), "Expected %s, got %s", obj.GetHash(), obj2.GetHash())
@@ -218,7 +236,7 @@ func TestBlob(t *testing.T) {
 	// Test the Size method
 	Tassert(t, blob.GetSize() == 13, "Expected 13, got %d", blob.GetSize())
 	// Test the Hash method
-	want := "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f"
+	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
 	Tassert(t, want == blob.GetHash(), "Expected %s, got %s", want, blob.GetHash())
 }
 
@@ -246,6 +264,21 @@ func (tree *MockTree) AddEntry(entry Entry) {
 // GetEntries returns the entries in the tree.
 func (tree *MockTree) GetEntries() []Entry {
 	return tree.Entries
+}
+
+// Encode returns the tree encoded as a CBOR map.
+func (tree *MockTree) Encode() (buf []byte, err error) {
+	defer Return(&err)
+	// XXX ensure we're doing all the things we need to do for deterministic encoding
+	// per section 4.2.1 of RFC 8949
+	opts := cbor.CoreDetEncOptions() // use preset options as a starting point
+	// opts.Time = cbor.TimeUnix          // change any settings if needed
+	// XXX Reuse the encoding mode. It is safe for concurrent use.
+	em, err := opts.EncMode() // create an immutable encoding mode
+	Ck(err)
+	buf, err = em.Marshal(tree)
+	Ck(err)
+	return
 }
 
 // String returns a string representation of the tree.
@@ -316,17 +349,26 @@ func TestTree(t *testing.T) {
 	// Test the Type method
 	Tassert(t, tree.GetType() == "tree", "Expected tree, got %s", tree.GetType())
 	// Test the AddEntry method
-	entry := NewMockEntry("file.txt", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", "100644")
+	entry := NewMockEntry("file.txt", "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d", "100644")
 	tree.AddEntry(entry)
 	Tassert(t, len(tree.GetEntries()) == 1, "Expected 1, got %d", len(tree.GetEntries()))
 	// Add another entry
-	entry = NewMockEntry("file2.txt", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", "100644")
+	entry = NewMockEntry("file2.txt", "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d", "100644")
 	tree.AddEntry(entry)
 	// Test the Hash method
-	want := "2f3cfcd579e6319b7ee80bca4581654c903fc49d23824898070ead7758c9f691"
+	want := "8dacb749aa28e977c9eac0c4ac57e3d3a33ec8b684f66025ae3ea9952fd35a31"
 	Tassert(t, want == tree.GetHash(), "Expected %s, got %s", want, tree.GetHash())
 	// Test the String method
-	want = "tree\n100644 dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f file.txt\n100644 dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f file2.txt\n"
+	want = "tree\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file.txt\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file2.txt\n"
 	Tassert(t, want == tree.String(), "Expected %s, got %s", want, tree.String())
 	Pl(tree.String())
+
+	// Test storing and retrieving a tree
+	store := NewMockStore("/tmp/mockstore")
+	err := store.Put(tree)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	tree2, err := store.Get(tree.GetHash())
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	Tassert(t, tree.GetHash() == tree2.GetHash(), "Expected %s, got %s", tree.GetHash(), tree2.GetHash())
+
 }
