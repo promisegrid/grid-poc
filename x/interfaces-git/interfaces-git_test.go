@@ -243,8 +243,8 @@ func (tree *MockTree) AddEntry(entry Entry) {
 	tree.entrees = append(tree.entrees, entry)
 }
 
-// Entries returns the entries in the tree.
-func (tree *MockTree) Entries() []Entry {
+// GetEntries returns the entries in the tree.
+func (tree *MockTree) GetEntries() []Entry {
 	return tree.entrees
 }
 
@@ -252,17 +252,17 @@ func (tree *MockTree) Entries() []Entry {
 func (tree *MockTree) String() (str string) {
 	// sort the entries by name using SortFunc with a comparator
 	slices.SortFunc(tree.entrees, func(a, b Entry) int {
-		if a.Name() == b.Name() {
+		if a.GetName() == b.GetName() {
 			return 0
 		}
-		if a.Name() < b.Name() {
+		if a.GetName() < b.GetName() {
 			return -1
 		}
 		return 1
 	})
 	str = "tree\n"
 	for _, entry := range tree.entrees {
-		str += entry.Mode() + " " + entry.Hash() + " " + entry.Name() + "\n"
+		str += entry.GetMode() + " " + entry.GetHash() + " " + entry.GetName() + "\n"
 	}
 	return
 }
@@ -294,18 +294,18 @@ func NewMockEntry(name, hash, mode string) (entry Entry) {
 	return
 }
 
-// Name returns the name of the entry.
-func (entry *MockEntry) Name() string {
+// GetName returns the name of the entry.
+func (entry *MockEntry) GetName() string {
 	return entry.name
 }
 
-// Hash returns the hash of the entry.
-func (entry *MockEntry) Hash() string {
+// GetHash returns the hash of the entry.
+func (entry *MockEntry) GetHash() string {
 	return entry.hash
 }
 
-// Mode returns the mode of the entry.
-func (entry *MockEntry) Mode() string {
+// GetMode returns the mode of the entry.
+func (entry *MockEntry) GetMode() string {
 	return entry.mode
 }
 
@@ -318,7 +318,7 @@ func TestTree(t *testing.T) {
 	// Test the AddEntry method
 	entry := NewMockEntry("file.txt", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", "100644")
 	tree.AddEntry(entry)
-	Tassert(t, len(tree.Entries()) == 1, "Expected 1, got %d", len(tree.Entries()))
+	Tassert(t, len(tree.GetEntries()) == 1, "Expected 1, got %d", len(tree.GetEntries()))
 	// Add another entry
 	entry = NewMockEntry("file2.txt", "dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f", "100644")
 	tree.AddEntry(entry)

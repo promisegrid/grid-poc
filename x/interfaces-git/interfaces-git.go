@@ -39,23 +39,23 @@ type Blob interface {
 type Tree interface {
 	Object
 	AddEntry(Entry)
-	Entries() []Entry
+	GetEntries() []Entry
 	String() string
 }
 
 // Entry is an interface for an entry in a tree object in a Git
 // repository.
 type Entry interface {
-	Name() string
-	Hash() string
-	Mode() string
+	GetName() string
+	GetHash() string
+	GetMode() string
 }
 
 // Commit is an interface for a commit object in a Git repository.
 type Commit interface {
 	Object
-	Tree() string
-	Parents() []string
-	Author() string
-	Message() string
+	GetTree() string
+	GetParents() []string
+	GetAuthor() string
+	GetMessage() string
 }
