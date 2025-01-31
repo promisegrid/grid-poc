@@ -173,7 +173,7 @@ func TestStore(t *testing.T) {
 // MockBlob is a test implementation of the Blob interface.
 type MockBlob struct {
 	MockObject
-	name string
+	Name string
 }
 
 // NewMockBlob creates a new MockBlob given a name and content.
@@ -183,7 +183,7 @@ func NewMockBlob(name string, content []byte) (blob Blob) {
 			Content: content,
 			Type:    "blob",
 		},
-		name: name,
+		Name: name,
 	}
 
 	/*
@@ -225,7 +225,7 @@ func TestBlob(t *testing.T) {
 // MockTree is a test implementation of the Tree interface.
 type MockTree struct {
 	MockObject
-	entrees []Entry
+	Entries []Entry
 }
 
 // NewMockTree creates a new MockTree given a list of entries.
@@ -240,18 +240,18 @@ func NewMockTree() (tree Tree) {
 
 // AddEntry adds an entry to the tree.
 func (tree *MockTree) AddEntry(entry Entry) {
-	tree.entrees = append(tree.entrees, entry)
+	tree.Entries = append(tree.Entries, entry)
 }
 
 // GetEntries returns the entries in the tree.
 func (tree *MockTree) GetEntries() []Entry {
-	return tree.entrees
+	return tree.Entries
 }
 
 // String returns a string representation of the tree.
 func (tree *MockTree) String() (str string) {
 	// sort the entries by name using SortFunc with a comparator
-	slices.SortFunc(tree.entrees, func(a, b Entry) int {
+	slices.SortFunc(tree.Entries, func(a, b Entry) int {
 		if a.GetName() == b.GetName() {
 			return 0
 		}
@@ -261,7 +261,7 @@ func (tree *MockTree) String() (str string) {
 		return 1
 	})
 	str = "tree\n"
-	for _, entry := range tree.entrees {
+	for _, entry := range tree.Entries {
 		str += entry.GetMode() + " " + entry.GetHash() + " " + entry.GetName() + "\n"
 	}
 	return
@@ -279,34 +279,34 @@ func (tree *MockTree) GetHash() (strhash string) {
 
 // MockEntry is a test implementation of the Entry interface.
 type MockEntry struct {
-	name string
-	hash string
-	mode string
+	Name string
+	Hash string
+	Mode string
 }
 
 // NewMockEntry creates a new MockEntry given a name, hash, and mode.
 func NewMockEntry(name, hash, mode string) (entry Entry) {
 	entry = &MockEntry{
-		name: name,
-		hash: hash,
-		mode: mode,
+		Name: name,
+		Hash: hash,
+		Mode: mode,
 	}
 	return
 }
 
 // GetName returns the name of the entry.
 func (entry *MockEntry) GetName() string {
-	return entry.name
+	return entry.Name
 }
 
 // GetHash returns the hash of the entry.
 func (entry *MockEntry) GetHash() string {
-	return entry.hash
+	return entry.Hash
 }
 
 // GetMode returns the mode of the entry.
 func (entry *MockEntry) GetMode() string {
-	return entry.mode
+	return entry.Mode
 }
 
 // TestTree tests the Tree interface.
