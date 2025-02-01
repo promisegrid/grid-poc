@@ -25,7 +25,7 @@ bar.foo()
 // git at all.  For instance, it uses CBOR serialization instead of
 // the git object serialization format.
 
-// MockBlob is a test implementation of the Object interface.
+// MockBlob is a test implementation of the Blob interface.
 type MockBlob struct {
 	Content []byte
 	Type    string
@@ -40,17 +40,17 @@ func NewMockBlob(content []byte) (obj *MockBlob) {
 	return
 }
 
-// GetType returns the type of the object.
+// GetType returns the type of the blob.
 func (obj *MockBlob) GetType() string {
 	return obj.Type
 }
 
-// GetContent returns the content of the object.
+// GetContent returns the content of the blob.
 func (obj *MockBlob) GetContent() []byte {
 	return obj.Content
 }
 
-// GetSize returns the size of the object in bytes.
+// GetSize returns the size of the blob in bytes.
 func (obj *MockBlob) GetSize() int {
 	return len(obj.Content)
 }
@@ -82,9 +82,9 @@ func Encode(obj Object) (buf []byte, err error) {
 	return
 }
 
-// TestObjectHash tests the Hash method of the Object interface.
-func TestObjectHash(t *testing.T) {
-	// Create a new Object
+// TestBlobHash tests the Hash method of the Blob interface.
+func TestBlobHash(t *testing.T) {
+	// Create a new Blob
 	obj := NewMockBlob([]byte("Hello, World!"))
 	// Test the Hash method
 	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
@@ -110,18 +110,12 @@ func NewMockStore(dir string) (store Store) {
 }
 
 // Put stores an object on disk.
-func (store *MockStore) Put(obj Object) (err error) {
-	fn := store.dir + "/" + GetHash(obj)
+func (store *MockStore) Put(obj Object) (hash string, err error) {
+	hash = GetHash(obj)
+	fn := store.dir + "/" + hash
 	fh, err := os.Create(fn)
 	Ck(err)
 	defer fh.Close()
-	/*
-		// write type as the first line
-		_, err = fh.Write([]byte(obj.GetType() + "\n"))
-		// write content
-		_, err = fh.Write(obj.GetContent())
-		Ck(err)
-	*/
 	buf, err := Encode(obj)
 	Ck(err)
 	_, err = fh.Write(buf)
@@ -130,44 +124,14 @@ func (store *MockStore) Put(obj Object) (err error) {
 }
 
 // Get retrieves an object from disk.
-func (store *MockStore) Get(hash string) (obj Object, err error) {
+func (store *MockStore) Get(hash string, obj Object) (err error) {
 	fn := store.dir + "/" + hash
 	fh, err := os.Open(fn)
 	Ck(err)
 	defer fh.Close()
-
-	/*
-		// type is the first line -- read bytes until newline
-		// XXX this all gets replaced by CBOR serialization
-		var typ []byte
-		b := make([]byte, 1)
-		for i := 0; i < 99; i++ {
-			_, err = fh.Read(b)
-			Ck(err)
-			if b[0] == '\n' {
-				break
-			}
-			typ = append(typ, b[0])
-		}
-
-		// read the rest of the file
-		// get the size of the file
-		fi, err := fh.Stat()
-		Ck(err)
-		// subtract the size of the type line
-		size := fi.Size() - int64(len(typ)) - 1
-		// read the content into a buffer
-		content := make([]byte, size)
-		_, err = fh.Read(content)
-		Ck(err)
-		obj = NewMockBlob(string(typ), content)
-	*/
-
 	decoder := cbor.NewDecoder(fh)
-	obj = &MockBlob{}
 	err = decoder.Decode(obj)
 	Ck(err)
-
 	return
 }
 
@@ -178,14 +142,14 @@ func TestStore(t *testing.T) {
 	// Create a new Object
 	obj := NewMockBlob([]byte("Hello, World!"))
 	// Store the object
-	err := store.Put(obj)
+	hash1, err := store.Put(obj)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
 	// Retrieve the object
-	raw2, err := store.Get(GetHash(obj))
-	obj2 := raw2.(*MockBlob)
+	obj2 := &MockBlob{}
+	err = store.Get(hash1, obj2)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	Tassert(t, GetHash(obj) == GetHash(obj2), "Expected %s, got %s", GetHash(obj), GetHash(obj2))
-	Tassert(t, string(obj.GetContent()) == string(obj2.GetContent()), "Expected %s, got %s", string(obj.GetContent()), string(obj2.GetContent()))
+	hash2 := GetHash(obj2)
+	Tassert(t, hash1 == hash2, "Expected %s, got %s", hash1, hash2)
 }
 
 // TestBlob tests the Blob interface.
@@ -205,16 +169,14 @@ func TestBlob(t *testing.T) {
 
 // MockTree is a test implementation of the Tree interface.
 type MockTree struct {
-	MockBlob
+	Type    string
 	Entries []Entry
 }
 
 // NewMockTree creates a new MockTree given a list of entries.
 func NewMockTree() (tree Tree) {
 	tree = &MockTree{
-		MockBlob: MockBlob{
-			Type: "tree",
-		},
+		Type: "tree",
 	}
 	return
 }
@@ -303,8 +265,8 @@ func TestTree(t *testing.T) {
 	// Add another entry
 	entry = NewMockEntry("file2.txt", "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d", "100644")
 	tree.AddEntry(entry)
-	// Test the Hash method
-	want := "8dacb749aa28e977c9eac0c4ac57e3d3a33ec8b684f66025ae3ea9952fd35a31"
+	// Test the Hash
+	want := "651a072cec2b04c195dbc90b208b8acd37319cfcafdb3d9ca9b6a11c32fda481"
 	Tassert(t, want == GetHash(tree), "Expected %s, got %s", want, GetHash(tree))
 	// Test the String method
 	want = "tree\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file.txt\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file2.txt\n"
@@ -313,10 +275,19 @@ func TestTree(t *testing.T) {
 
 	// Test storing and retrieving a tree
 	store := NewMockStore("/tmp/mockstore")
-	err := store.Put(tree)
+	hash1, err := store.Put(tree)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	tree2, err := store.Get(GetHash(tree))
+	tree2 := &MockTree{}
+	err = store.Get(hash1, tree2)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	Tassert(t, GetHash(tree) == GetHash(tree2), "Expected %s, got %s", GetHash(tree), GetHash(tree2))
+	hash2 := GetHash(tree2)
+	if hash1 != hash2 {
+		// show the difference
+		diag1 := tree.String()
+		diag2 := tree2.String()
+		Pl(diag1)
+		Pl(diag2)
+		t.Errorf("Expected %s, got %s", hash1, hash2)
+	}
 
 }
