@@ -25,41 +25,28 @@ bar.foo()
 // git at all.  For instance, it uses CBOR serialization instead of
 // the git object serialization format.
 
-// MockBlob is a test implementation of the Blob interface.
-type MockBlob struct {
-	Content []byte
-	Type    string
+// ObjectBase is a base struct for anything that implements the Object interface.
+type ObjectBase struct {
+	Type string
 }
 
-// NewMockBlob creates a new MockBlob given a type and content.
-func NewMockBlob(content []byte) (obj *MockBlob) {
-	obj = &MockBlob{
-		Content: content,
-		Type:    "blob",
-	}
-	return
-}
-
-// GetType returns the type of the blob.
-func (obj *MockBlob) GetType() string {
+// GetType returns the type of the object.
+func (obj *ObjectBase) GetType() string {
 	return obj.Type
 }
 
-// GetContent returns the content of the blob.
-func (obj *MockBlob) GetContent() []byte {
-	return obj.Content
+// GetSize returns the size of the object in bytes.
+func (obj *ObjectBase) GetSize() int {
+	buf, err := obj.Encode()
+	Ck(err)
+	return len(buf)
 }
 
-// GetSize returns the size of the blob in bytes.
-func (obj *MockBlob) GetSize() int {
-	return len(obj.Content)
-}
-
-// GetHash returns the hash of the object as a hex string.  The hash is
+// Hash returns the hash of the object as a hex string.  The hash is
 // a sha-256 hash of the entire CBOR serialized object.  We use RFC
 // 8949 section 4.2.1 core deterministic encoding for CBOR serialization.
-func GetHash(obj Object) (strhash string) {
-	buf, err := Encode(obj)
+func (obj *ObjectBase) Hash() (strhash string) {
+	buf, err := obj.Encode()
 	Ck(err)
 	binhash := sha256.Sum256(buf)
 	strhash = hex.EncodeToString(binhash[:])
@@ -68,7 +55,7 @@ func GetHash(obj Object) (strhash string) {
 
 // Encode returns the object encoded in deterministic CBOR format
 // per RFC 8949 section 4.2.1.
-func Encode(obj Object) (buf []byte, err error) {
+func (obj *ObjectBase) Encode() (buf []byte, err error) {
 	defer Return(&err)
 	// XXX ensure we're doing all the things we need to do for deterministic encoding
 	// per section 4.2.1 of RFC 8949
@@ -82,13 +69,50 @@ func Encode(obj Object) (buf []byte, err error) {
 	return
 }
 
+// MockBlob is a test implementation of the Blob interface.
+type MockBlob struct {
+	ObjectBase
+	Content []byte
+}
+
+// NewMockBlob creates a new MockBlob given a type and content.
+func NewMockBlob(content []byte) (obj *MockBlob) {
+	obj = &MockBlob{
+		ObjectBase: ObjectBase{
+			Type: "blob",
+		},
+		Content: content,
+	}
+	return
+}
+
+// GetType returns the type of the blob.
+func (obj *MockBlob) GetType() string {
+	return obj.Type
+}
+
+// GetSize returns the size of the blob in bytes.
+func (obj *MockBlob) GetSize() int {
+	return len(obj.Content)
+}
+
+// GetContent returns the content of the blob.
+func (obj *MockBlob) GetContent() []byte {
+	return obj.Content
+}
+
 // TestBlobHash tests the Hash method of the Blob interface.
 func TestBlobHash(t *testing.T) {
 	// Create a new Blob
 	obj := NewMockBlob([]byte("Hello, World!"))
+	{
+		buf, err := obj.Encode()
+		Ck(err)
+		Pl(cbor.Diagnose(buf))
+	}
 	// Test the Hash method
 	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
-	Tassert(t, want == GetHash(obj), "Expected %s, got %s", want, GetHash(obj))
+	Tassert(t, want == obj.Hash(), "Expected %s, got %s", want, obj.Hash())
 	/*
 		if obj.Hash() == want {
 			t.Errorf("Expected %s, got %s", want, obj.Hash())
@@ -111,12 +135,12 @@ func NewMockStore(dir string) (store Store) {
 
 // Put stores an object on disk.
 func (store *MockStore) Put(obj Object) (hash string, err error) {
-	hash = GetHash(obj)
+	hash = obj.Hash()
 	fn := store.dir + "/" + hash
 	fh, err := os.Create(fn)
 	Ck(err)
 	defer fh.Close()
-	buf, err := Encode(obj)
+	buf, err := obj.Encode()
 	Ck(err)
 	_, err = fh.Write(buf)
 	Ck(err)
@@ -148,7 +172,7 @@ func TestStore(t *testing.T) {
 	obj2 := &MockBlob{}
 	err = store.Get(hash1, obj2)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	hash2 := GetHash(obj2)
+	hash2 := obj2.Hash()
 	Tassert(t, hash1 == hash2, "Expected %s, got %s", hash1, hash2)
 }
 
@@ -164,17 +188,18 @@ func TestBlob(t *testing.T) {
 	Tassert(t, blob.GetSize() == 13, "Expected 13, got %d", blob.GetSize())
 	// Test the Hash method
 	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
-	Tassert(t, want == GetHash(blob), "Expected %s, got %s", want, GetHash(blob))
+	Tassert(t, want == blob.Hash(), "Expected %s, got %s", want, blob.Hash())
 }
 
 // MockTree is a test implementation of the Tree interface.
 type MockTree struct {
+	ObjectBase
 	Type    string
-	Entries []Entry
+	Entries []*MockEntry
 }
 
 // NewMockTree creates a new MockTree given a list of entries.
-func NewMockTree() (tree Tree) {
+func NewMockTree() (tree *MockTree) {
 	tree = &MockTree{
 		Type: "tree",
 	}
@@ -182,19 +207,20 @@ func NewMockTree() (tree Tree) {
 }
 
 // AddEntry adds an entry to the tree.
-func (tree *MockTree) AddEntry(entry Entry) {
+func (tree *MockTree) AddEntry(entry *MockEntry) {
 	tree.Entries = append(tree.Entries, entry)
 }
 
 // GetEntries returns the entries in the tree.
-func (tree *MockTree) GetEntries() []Entry {
+func (tree *MockTree) GetEntries() []*MockEntry {
 	return tree.Entries
 }
 
 // String returns a string representation of the tree.
 func (tree *MockTree) String() (str string) {
 	// sort the entries by name using SortFunc with a comparator
-	slices.SortFunc(tree.Entries, func(a, b Entry) int {
+	// XXX replace sort with serialization/deserialization
+	slices.SortFunc(tree.Entries, func(a, b *MockEntry) int {
 		if a.GetName() == b.GetName() {
 			return 0
 		}
@@ -228,7 +254,7 @@ type MockEntry struct {
 }
 
 // NewMockEntry creates a new MockEntry given a name, hash, and mode.
-func NewMockEntry(name, hash, mode string) (entry Entry) {
+func NewMockEntry(name, hash, mode string) (entry *MockEntry) {
 	entry = &MockEntry{
 		Name: name,
 		Hash: hash,
@@ -267,7 +293,7 @@ func TestTree(t *testing.T) {
 	tree.AddEntry(entry)
 	// Test the Hash
 	want := "651a072cec2b04c195dbc90b208b8acd37319cfcafdb3d9ca9b6a11c32fda481"
-	Tassert(t, want == GetHash(tree), "Expected %s, got %s", want, GetHash(tree))
+	Tassert(t, want == tree.Hash(), "Expected %s, got %s", want, tree.Hash())
 	// Test the String method
 	want = "tree\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file.txt\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file2.txt\n"
 	Tassert(t, want == tree.String(), "Expected %s, got %s", want, tree.String())
@@ -280,7 +306,7 @@ func TestTree(t *testing.T) {
 	tree2 := &MockTree{}
 	err = store.Get(hash1, tree2)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	hash2 := GetHash(tree2)
+	hash2 := tree2.Hash()
 	if hash1 != hash2 {
 		// show the difference
 		diag1 := tree.String()
@@ -290,4 +316,13 @@ func TestTree(t *testing.T) {
 		t.Errorf("Expected %s, got %s", hash1, hash2)
 	}
 
+}
+
+// Commit is an interface for a commit object in a Git repository.
+type Commit interface {
+	Object
+	GetTree() string
+	GetParents() []string
+	GetAuthor() string
+	GetMessage() string
 }

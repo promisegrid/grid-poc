@@ -14,6 +14,10 @@ type Object interface {
 	GetType() string
 	// GetSize returns the size of the object in bytes.
 	GetSize() int
+	// Hash returns the hash of the object.
+	Hash() string
+	// Encode returns the object encoded as a byte slice.
+	Encode() ([]byte, error)
 }
 
 // Store is an interface for storing objects on disk.
@@ -22,36 +26,4 @@ type Store interface {
 	Put(Object) (string, error)
 	// Get retrieves an object from disk.
 	Get(string, Object) error
-}
-
-// Blob is an interface for a blob object in a Git repository.
-type Blob interface {
-	Object
-	// GetContent returns the content of the blob.
-	GetContent() []byte
-}
-
-// Tree is an interface for a tree object in a Git repository.
-type Tree interface {
-	Object
-	AddEntry(Entry)
-	GetEntries() []Entry
-	String() string
-}
-
-// Entry is an interface for an entry in a tree object in a Git
-// repository.
-type Entry interface {
-	GetName() string
-	GetHash() string
-	GetMode() string
-}
-
-// Commit is an interface for a commit object in a Git repository.
-type Commit interface {
-	Object
-	GetTree() string
-	GetParents() []string
-	GetAuthor() string
-	GetMessage() string
 }

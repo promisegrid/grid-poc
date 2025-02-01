@@ -1,6 +1,10 @@
-find the following error in the code
+recommend a better design
 
-x/interfaces-git/interfaces-git_test.go|231 col 2| Entry does not satisfy cmp.Ordered                                          
+- with MockBlob embedding ObjectBase, the Encode method only encodes the Type field and ignores Content
+- we must satisfy the requirements for CBOR encoding and decoding
+- we must use the same code for encoding and decoding each type of
+  Object -- no duplication of code, no special cases for different types
+- we must not have concrete types with their own Encode and Decode methods
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
@@ -8,6 +12,12 @@ In:
  x/interfaces-git/interfaces-git_test.go
 
 .stop
+
+recommend a better design than the Get* methods but that still
+satisfies the requirements for CBOR encoding and decoding; we don't
+want method names and field names to be the same
+
+ensure Store is thread-safe
 
 
 recommend a data structure 
