@@ -25,40 +25,40 @@ bar.foo()
 // git at all.  For instance, it uses CBOR serialization instead of
 // the git object serialization format.
 
-// MockObject is a test implementation of the Object interface.
-type MockObject struct {
+// MockBlob is a test implementation of the Object interface.
+type MockBlob struct {
 	Content []byte
 	Type    string
 }
 
-// NewMockObject creates a new MockObject given a type and content.
-func NewMockObject(typ string, content []byte) (obj Object) {
-	obj = &MockObject{
+// NewMockBlob creates a new MockBlob given a type and content.
+func NewMockBlob(content []byte) (obj *MockBlob) {
+	obj = &MockBlob{
 		Content: content,
-		Type:    typ,
+		Type:    "blob",
 	}
 	return
 }
 
 // GetType returns the type of the object.
-func (obj *MockObject) GetType() string {
+func (obj *MockBlob) GetType() string {
 	return obj.Type
 }
 
 // GetContent returns the content of the object.
-func (obj *MockObject) GetContent() []byte {
+func (obj *MockBlob) GetContent() []byte {
 	return obj.Content
 }
 
 // GetSize returns the size of the object in bytes.
-func (obj *MockObject) GetSize() int {
+func (obj *MockBlob) GetSize() int {
 	return len(obj.Content)
 }
 
 // GetHash returns the hash of the object as a hex string.  The hash is
 // a sha-256 hash of the entire CBOR serialized object.  We use RFC
 // 8949 core deterministic encoding for CBOR serialization.
-func (obj *MockObject) GetHash() (strhash string) {
+func (obj *MockBlob) GetHash() (strhash string) {
 	buf, err := obj.Encode()
 	Ck(err)
 	binhash := sha256.Sum256(buf)
@@ -67,7 +67,7 @@ func (obj *MockObject) GetHash() (strhash string) {
 }
 
 // Encode returns the object encoded as a CBOR map.
-func (obj *MockObject) Encode() (buf []byte, err error) {
+func (obj *MockBlob) Encode() (buf []byte, err error) {
 	defer Return(&err)
 	// XXX ensure we're doing all the things we need to do for deterministic encoding
 	// per section 4.2.1 of RFC 8949
@@ -84,7 +84,7 @@ func (obj *MockObject) Encode() (buf []byte, err error) {
 // TestObjectHash tests the Hash method of the Object interface.
 func TestObjectHash(t *testing.T) {
 	// Create a new Object
-	obj := NewMockObject("blob", []byte("Hello, World!"))
+	obj := NewMockBlob([]byte("Hello, World!"))
 	// Test the Hash method
 	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
 	Tassert(t, want == obj.GetHash(), "Expected %s, got %s", want, obj.GetHash())
@@ -159,11 +159,11 @@ func (store *MockStore) Get(hash string) (obj Object, err error) {
 		content := make([]byte, size)
 		_, err = fh.Read(content)
 		Ck(err)
-		obj = NewMockObject(string(typ), content)
+		obj = NewMockBlob(string(typ), content)
 	*/
 
 	decoder := cbor.NewDecoder(fh)
-	obj = &MockObject{}
+	obj = &MockBlob{}
 	err = decoder.Decode(obj)
 	Ck(err)
 
@@ -175,60 +175,22 @@ func TestStore(t *testing.T) {
 	// Create a new Store
 	store := NewMockStore("/tmp/mockstore")
 	// Create a new Object
-	obj := NewMockObject("blob", []byte("Hello, World!"))
+	obj := NewMockBlob([]byte("Hello, World!"))
 	// Store the object
 	err := store.Put(obj)
-	// Test the Store method
 	Tassert(t, err == nil, "Expected nil, got %v", err)
 	// Retrieve the object
-	obj2, err := store.Get(obj.GetHash())
-	// Test the Retrieve method
+	raw2, err := store.Get(obj.GetHash())
+	obj2 := raw2.(*MockBlob)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
 	Tassert(t, obj.GetHash() == obj2.GetHash(), "Expected %s, got %s", obj.GetHash(), obj2.GetHash())
 	Tassert(t, string(obj.GetContent()) == string(obj2.GetContent()), "Expected %s, got %s", string(obj.GetContent()), string(obj2.GetContent()))
 }
 
-// MockBlob is a test implementation of the Blob interface.
-type MockBlob struct {
-	MockObject
-	Name string
-}
-
-// NewMockBlob creates a new MockBlob given a name and content.
-func NewMockBlob(name string, content []byte) (blob Blob) {
-	blob = &MockBlob{
-		MockObject: MockObject{
-			Content: content,
-			Type:    "blob",
-		},
-		Name: name,
-	}
-
-	/*
-		blob = &MockBlob{}
-		blob.Content = content
-		blob.Type = "blob"
-		blob.name = name
-	*/
-
-	return
-}
-
-// NewBlob creates a new Blob given content.
-func NewBlob(content []byte) (blob Blob) {
-	blob = &MockBlob{
-		MockObject: MockObject{
-			Content: content,
-			Type:    "blob",
-		},
-	}
-	return
-}
-
 // TestBlob tests the Blob interface.
 func TestBlob(t *testing.T) {
 	// Create a new Blob
-	blob := NewBlob([]byte("Hello, World!"))
+	blob := NewMockBlob([]byte("Hello, World!"))
 	// Test the Type method
 	Tassert(t, blob.GetType() == "blob", "Expected blob, got %s", blob.GetType())
 	// Test the Content method
@@ -242,14 +204,14 @@ func TestBlob(t *testing.T) {
 
 // MockTree is a test implementation of the Tree interface.
 type MockTree struct {
-	MockObject
+	MockBlob
 	Entries []Entry
 }
 
 // NewMockTree creates a new MockTree given a list of entries.
 func NewMockTree() (tree Tree) {
 	tree = &MockTree{
-		MockObject: MockObject{
+		MockBlob: MockBlob{
 			Type: "tree",
 		},
 	}
