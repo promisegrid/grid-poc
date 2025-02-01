@@ -57,8 +57,8 @@ func (obj *MockBlob) GetSize() int {
 
 // GetHash returns the hash of the object as a hex string.  The hash is
 // a sha-256 hash of the entire CBOR serialized object.  We use RFC
-// 8949 core deterministic encoding for CBOR serialization.
-func (obj *MockBlob) GetHash() (strhash string) {
+// 8949 section 4.2.1 core deterministic encoding for CBOR serialization.
+func GetHash(obj Object) (strhash string) {
 	buf, err := Encode(obj)
 	Ck(err)
 	binhash := sha256.Sum256(buf)
@@ -88,7 +88,7 @@ func TestObjectHash(t *testing.T) {
 	obj := NewMockBlob([]byte("Hello, World!"))
 	// Test the Hash method
 	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
-	Tassert(t, want == obj.GetHash(), "Expected %s, got %s", want, obj.GetHash())
+	Tassert(t, want == GetHash(obj), "Expected %s, got %s", want, GetHash(obj))
 	/*
 		if obj.Hash() == want {
 			t.Errorf("Expected %s, got %s", want, obj.Hash())
@@ -111,7 +111,7 @@ func NewMockStore(dir string) (store Store) {
 
 // Put stores an object on disk.
 func (store *MockStore) Put(obj Object) (err error) {
-	fn := store.dir + "/" + obj.GetHash()
+	fn := store.dir + "/" + GetHash(obj)
 	fh, err := os.Create(fn)
 	Ck(err)
 	defer fh.Close()
@@ -181,10 +181,10 @@ func TestStore(t *testing.T) {
 	err := store.Put(obj)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
 	// Retrieve the object
-	raw2, err := store.Get(obj.GetHash())
+	raw2, err := store.Get(GetHash(obj))
 	obj2 := raw2.(*MockBlob)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	Tassert(t, obj.GetHash() == obj2.GetHash(), "Expected %s, got %s", obj.GetHash(), obj2.GetHash())
+	Tassert(t, GetHash(obj) == GetHash(obj2), "Expected %s, got %s", GetHash(obj), GetHash(obj2))
 	Tassert(t, string(obj.GetContent()) == string(obj2.GetContent()), "Expected %s, got %s", string(obj.GetContent()), string(obj2.GetContent()))
 }
 
@@ -200,7 +200,7 @@ func TestBlob(t *testing.T) {
 	Tassert(t, blob.GetSize() == 13, "Expected 13, got %d", blob.GetSize())
 	// Test the Hash method
 	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
-	Tassert(t, want == blob.GetHash(), "Expected %s, got %s", want, blob.GetHash())
+	Tassert(t, want == GetHash(blob), "Expected %s, got %s", want, GetHash(blob))
 }
 
 // MockTree is a test implementation of the Tree interface.
@@ -305,7 +305,7 @@ func TestTree(t *testing.T) {
 	tree.AddEntry(entry)
 	// Test the Hash method
 	want := "8dacb749aa28e977c9eac0c4ac57e3d3a33ec8b684f66025ae3ea9952fd35a31"
-	Tassert(t, want == tree.GetHash(), "Expected %s, got %s", want, tree.GetHash())
+	Tassert(t, want == GetHash(tree), "Expected %s, got %s", want, GetHash(tree))
 	// Test the String method
 	want = "tree\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file.txt\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file2.txt\n"
 	Tassert(t, want == tree.String(), "Expected %s, got %s", want, tree.String())
@@ -315,8 +315,8 @@ func TestTree(t *testing.T) {
 	store := NewMockStore("/tmp/mockstore")
 	err := store.Put(tree)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	tree2, err := store.Get(tree.GetHash())
+	tree2, err := store.Get(GetHash(tree))
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	Tassert(t, tree.GetHash() == tree2.GetHash(), "Expected %s, got %s", tree.GetHash(), tree2.GetHash())
+	Tassert(t, GetHash(tree) == GetHash(tree2), "Expected %s, got %s", GetHash(tree), GetHash(tree2))
 
 }
