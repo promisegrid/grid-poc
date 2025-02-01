@@ -2,11 +2,13 @@ package interfaces_git
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"os"
 	"slices"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/fxamacker/cbor/v2"
 	. "github.com/stevegt/goadapt"
 )
@@ -20,33 +22,20 @@ import (
 bar.foo()
 */
 
+// Putting mocks and tests in one file like this is not idiomatic Go.
+// We're doing it here while getting thoughts in order. All of this
+// will be moved to other files in the future.
+
 // This file is a rough approximation of git semantics for demo and
 // discussion purposes.  It is not intended to be compatible with
 // git at all.  For instance, it uses CBOR serialization instead of
 // the git object serialization format.
 
-// ObjectBase is a base struct for anything that implements the Object interface.
-type ObjectBase struct {
-	Type string
-}
-
-// GetType returns the type of the object.
-func (obj *ObjectBase) GetType() string {
-	return obj.Type
-}
-
-// GetSize returns the size of the object in bytes.
-func (obj *ObjectBase) GetSize() int {
-	buf, err := obj.Encode()
-	Ck(err)
-	return len(buf)
-}
-
 // Hash returns the hash of the object as a hex string.  The hash is
 // a sha-256 hash of the entire CBOR serialized object.  We use RFC
 // 8949 section 4.2.1 core deterministic encoding for CBOR serialization.
-func (obj *ObjectBase) Hash() (strhash string) {
-	buf, err := obj.Encode()
+func Hash(obj Object) (strhash string) {
+	buf, err := Encode(obj)
 	Ck(err)
 	binhash := sha256.Sum256(buf)
 	strhash = hex.EncodeToString(binhash[:])
@@ -55,40 +44,69 @@ func (obj *ObjectBase) Hash() (strhash string) {
 
 // Encode returns the object encoded in deterministic CBOR format
 // per RFC 8949 section 4.2.1.
-func (obj *ObjectBase) Encode() (buf []byte, err error) {
+func Encode(obj Object) (buf []byte, err error) {
 	defer Return(&err)
+
+	// XXX Reuse this encoding mode. It is safe for concurrent use.
 	// XXX ensure we're doing all the things we need to do for deterministic encoding
 	// per section 4.2.1 of RFC 8949
 	opts := cbor.CoreDetEncOptions() // use preset options as a starting point
 	// opts.Time = cbor.TimeUnix          // change any settings if needed
-	// XXX Reuse the encoding mode. It is safe for concurrent use.
 	em, err := opts.EncMode() // create an immutable encoding mode
 	Ck(err)
-	buf, err = em.Marshal(obj)
+
+	typ := obj.Type()
+	// convert typ string to an integer
+	typTag := binary.BigEndian.Uint32([]byte(typ))
+	// marshal the object into a CBOR byte slice
+	payload, err := em.Marshal(obj)
+	Ck(err)
+
+	// Create nested CBOR tags per RFC 9277 section 2.2
+	msg := cbor.Tag{
+		Number: 55799, // CBOR Wrapped tag (0xd9d9f7)
+		Content: cbor.Tag{
+			// Number:  1735551332, // "grid" tag (0x67726964)
+			Number:  uint64(typTag),
+			Content: payload,
+		},
+	}
+
+	buf, err = em.Marshal(msg)
 	Ck(err)
 	return
 }
 
+// PrintDiag prints a human-readable diagnostic string for the given CBOR
+// buffer.
+func PrintDiag(buf []byte) {
+	// Diagnose the CBOR data
+	dm, err := cbor.DiagOptions{
+		ByteStringText:         true,
+		ByteStringEmbeddedCBOR: true,
+	}.DiagMode()
+	Ck(err)
+	diagnosis, err := dm.Diagnose(buf)
+	Ck(err)
+	Pl(diagnosis)
+}
+
 // MockBlob is a test implementation of the Blob interface.
 type MockBlob struct {
-	ObjectBase
 	Content []byte
 }
 
 // NewMockBlob creates a new MockBlob given a type and content.
 func NewMockBlob(content []byte) (obj *MockBlob) {
 	obj = &MockBlob{
-		ObjectBase: ObjectBase{
-			Type: "blob",
-		},
 		Content: content,
 	}
 	return
 }
 
-// GetType returns the type of the blob.
-func (obj *MockBlob) GetType() string {
-	return obj.Type
+// Type returns the type of the blob.
+func (obj *MockBlob) Type() string {
+	return "blob"
 }
 
 // GetSize returns the size of the blob in bytes.
@@ -105,17 +123,15 @@ func (obj *MockBlob) GetContent() []byte {
 func TestBlobHash(t *testing.T) {
 	// Create a new Blob
 	obj := NewMockBlob([]byte("Hello, World!"))
-	{
-		buf, err := obj.Encode()
-		Ck(err)
-		Pl(cbor.Diagnose(buf))
-	}
+	buf, err := Encode(obj)
+	Ck(err)
+	PrintDiag(buf)
 	// Test the Hash method
-	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
-	Tassert(t, want == obj.Hash(), "Expected %s, got %s", want, obj.Hash())
+	want := "bfb32213ffd89fc1cdb406c8835ec68bd61a5a6c637bd5829b8ee0d7a173fa90"
+	Tassert(t, want == Hash(obj), "Expected %s, got %s", want, Hash(obj))
 	/*
-		if obj.Hash() == want {
-			t.Errorf("Expected %s, got %s", want, obj.Hash())
+		if Hash(obj) == want {
+			t.Errorf("Expected %s, got %s", want, Hash(obj))
 		}
 	*/
 }
@@ -135,12 +151,12 @@ func NewMockStore(dir string) (store Store) {
 
 // Put stores an object on disk.
 func (store *MockStore) Put(obj Object) (hash string, err error) {
-	hash = obj.Hash()
+	hash = Hash(obj)
 	fn := store.dir + "/" + hash
 	fh, err := os.Create(fn)
 	Ck(err)
 	defer fh.Close()
-	buf, err := obj.Encode()
+	buf, err := Encode(obj)
 	Ck(err)
 	_, err = fh.Write(buf)
 	Ck(err)
@@ -154,6 +170,16 @@ func (store *MockStore) Get(hash string, obj Object) (err error) {
 	Ck(err)
 	defer fh.Close()
 	decoder := cbor.NewDecoder(fh)
+	// expect the file content to be a CBOR wrapped tag
+	msg := cbor.Tag{}
+	err = decoder.Decode(&msg)
+	Ck(err)
+	spew.Dump(msg)
+	// expect the wrapped tag to contain a CBOR tag
+	typ := cbor.Tag{}
+	err = decoder.Decode(&typ)
+	Ck(err)
+	// expect the CBOR tag to contain the object
 	err = decoder.Decode(obj)
 	Ck(err)
 	return
@@ -172,7 +198,7 @@ func TestStore(t *testing.T) {
 	obj2 := &MockBlob{}
 	err = store.Get(hash1, obj2)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	hash2 := obj2.Hash()
+	hash2 := Hash(obj2)
 	Tassert(t, hash1 == hash2, "Expected %s, got %s", hash1, hash2)
 }
 
@@ -181,29 +207,32 @@ func TestBlob(t *testing.T) {
 	// Create a new Blob
 	blob := NewMockBlob([]byte("Hello, World!"))
 	// Test the Type method
-	Tassert(t, blob.GetType() == "blob", "Expected blob, got %s", blob.GetType())
+	Tassert(t, blob.Type() == "blob", "Expected blob, got %s", blob.Type())
 	// Test the Content method
 	Tassert(t, string(blob.GetContent()) == "Hello, World!", "Expected Hello, World!, got %s", string(blob.GetContent()))
 	// Test the Size method
 	Tassert(t, blob.GetSize() == 13, "Expected 13, got %d", blob.GetSize())
 	// Test the Hash method
 	want := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
-	Tassert(t, want == blob.Hash(), "Expected %s, got %s", want, blob.Hash())
+	Tassert(t, want == Hash(blob), "Expected %s, got %s", want, Hash(blob))
 }
 
 // MockTree is a test implementation of the Tree interface.
 type MockTree struct {
-	ObjectBase
-	Type    string
 	Entries []*MockEntry
 }
 
-// NewMockTree creates a new MockTree given a list of entries.
+// NewMockTree creates a new MockTree
 func NewMockTree() (tree *MockTree) {
 	tree = &MockTree{
-		Type: "tree",
+		Entries: make([]*MockEntry, 0),
 	}
 	return
+}
+
+// Type returns the type of the object.
+func (tree *MockTree) Type() string {
+	return "tree"
 }
 
 // AddEntry adds an entry to the tree.
@@ -283,7 +312,7 @@ func TestTree(t *testing.T) {
 	// Create a new Tree
 	tree := NewMockTree()
 	// Test the Type method
-	Tassert(t, tree.GetType() == "tree", "Expected tree, got %s", tree.GetType())
+	Tassert(t, tree.Type() == "tree", "Expected tree, got %s", tree.Type())
 	// Test the AddEntry method
 	entry := NewMockEntry("file.txt", "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d", "100644")
 	tree.AddEntry(entry)
@@ -293,7 +322,7 @@ func TestTree(t *testing.T) {
 	tree.AddEntry(entry)
 	// Test the Hash
 	want := "651a072cec2b04c195dbc90b208b8acd37319cfcafdb3d9ca9b6a11c32fda481"
-	Tassert(t, want == tree.Hash(), "Expected %s, got %s", want, tree.Hash())
+	Tassert(t, want == Hash(tree), "Expected %s, got %s", want, Hash(tree))
 	// Test the String method
 	want = "tree\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file.txt\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file2.txt\n"
 	Tassert(t, want == tree.String(), "Expected %s, got %s", want, tree.String())
@@ -306,7 +335,7 @@ func TestTree(t *testing.T) {
 	tree2 := &MockTree{}
 	err = store.Get(hash1, tree2)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
-	hash2 := tree2.Hash()
+	hash2 := Hash(tree2)
 	if hash1 != hash2 {
 		// show the difference
 		diag1 := tree.String()

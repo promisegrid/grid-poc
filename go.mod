@@ -3,6 +3,7 @@ module grid
 go 1.22.1
 
 require (
+	github.com/davecgh/go-spew v1.1.1
 	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/stevegt/goadapt v0.7.0
