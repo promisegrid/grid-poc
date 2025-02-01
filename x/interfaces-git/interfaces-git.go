@@ -17,9 +17,6 @@ type Object interface {
 	GetType() string
 	// GetSize returns the size of the object in bytes.
 	GetSize() int
-	// Encode returns the object encoded in deterministic CBOR format
-	// per RFC 8949 section 4.2.1.
-	Encode() ([]byte, error)
 }
 
 // Store is an interface for storing objects on disk.

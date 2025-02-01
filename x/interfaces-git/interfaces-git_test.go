@@ -59,15 +59,16 @@ func (obj *MockBlob) GetSize() int {
 // a sha-256 hash of the entire CBOR serialized object.  We use RFC
 // 8949 core deterministic encoding for CBOR serialization.
 func (obj *MockBlob) GetHash() (strhash string) {
-	buf, err := obj.Encode()
+	buf, err := Encode(obj)
 	Ck(err)
 	binhash := sha256.Sum256(buf)
 	strhash = hex.EncodeToString(binhash[:])
 	return
 }
 
-// Encode returns the object encoded as a CBOR map.
-func (obj *MockBlob) Encode() (buf []byte, err error) {
+// Encode returns the object encoded in deterministic CBOR format
+// per RFC 8949 section 4.2.1.
+func Encode(obj Object) (buf []byte, err error) {
 	defer Return(&err)
 	// XXX ensure we're doing all the things we need to do for deterministic encoding
 	// per section 4.2.1 of RFC 8949
@@ -121,7 +122,7 @@ func (store *MockStore) Put(obj Object) (err error) {
 		_, err = fh.Write(obj.GetContent())
 		Ck(err)
 	*/
-	buf, err := obj.Encode()
+	buf, err := Encode(obj)
 	Ck(err)
 	_, err = fh.Write(buf)
 	Ck(err)
@@ -226,21 +227,6 @@ func (tree *MockTree) AddEntry(entry Entry) {
 // GetEntries returns the entries in the tree.
 func (tree *MockTree) GetEntries() []Entry {
 	return tree.Entries
-}
-
-// Encode returns the tree encoded as a CBOR map.
-func (tree *MockTree) Encode() (buf []byte, err error) {
-	defer Return(&err)
-	// XXX ensure we're doing all the things we need to do for deterministic encoding
-	// per section 4.2.1 of RFC 8949
-	opts := cbor.CoreDetEncOptions() // use preset options as a starting point
-	// opts.Time = cbor.TimeUnix          // change any settings if needed
-	// XXX Reuse the encoding mode. It is safe for concurrent use.
-	em, err := opts.EncMode() // create an immutable encoding mode
-	Ck(err)
-	buf, err = em.Marshal(tree)
-	Ck(err)
-	return
 }
 
 // String returns a string representation of the tree.
