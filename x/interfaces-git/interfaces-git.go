@@ -10,17 +10,15 @@ package interfaces_git
 // Object is an interface for objects that can be stored in a Git
 // repository.
 type Object interface {
-	// GetHash returns the hash of the object as a hex string.
+	// GetHash returns the hash of the object as a hex string.  The
+	// hash is the sha256 hash of the object's encoded CBOR.
 	GetHash() string
 	// GetType returns the type of the object, e.g. "blob", "tree", "commit".
 	GetType() string
-	// GetContent returns the content of the object.  This would be the
-	// content of a blob, the list of entries in a tree, or the commit
-	// message in a commit.
-	GetContent() []byte
 	// GetSize returns the size of the object in bytes.
 	GetSize() int
-	// Encode returns the object encoded as a CBOR map.
+	// Encode returns the object encoded in deterministic CBOR format
+	// per RFC 8949 section 4.2.1.
 	Encode() ([]byte, error)
 }
 
@@ -35,6 +33,8 @@ type Store interface {
 // Blob is an interface for a blob object in a Git repository.
 type Blob interface {
 	Object
+	// GetContent returns the content of the blob.
+	GetContent() []byte
 }
 
 // Tree is an interface for a tree object in a Git repository.
