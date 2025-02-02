@@ -7,9 +7,10 @@ import (
 )
 
 type Codec struct {
-	em   cbor.EncMode
-	dm   cbor.DecMode
-	tags cbor.TagSet
+	em        cbor.EncMode
+	dm        cbor.DecMode
+	tags      cbor.TagSet
+	typeToTag map[reflect.Type]uint64
 }
 
 type CodecConfig struct {
@@ -31,16 +32,20 @@ func NewCodec(config CodecConfig) (*Codec, error) {
 	}
 
 	return &Codec{
-		em:   em,
-		dm:   dm,
-		tags: tags,
+		em:        em,
+		dm:        dm,
+		tags:      tags,
+		typeToTag: make(map[reflect.Type]uint64),
 	}, nil
 }
 
 func (c *Codec) RegisterTag(tagNumber uint64, payloadType interface{}) error {
+	payloadReflectType := reflect.TypeOf(payloadType)
+	c.typeToTag[payloadReflectType] = tagNumber
+
 	return c.tags.Add(
 		cbor.TagOptions{EncTag: cbor.EncTagRequired, DecTag: cbor.DecTagRequired},
-		reflect.TypeOf(payloadType),
+		payloadReflectType,
 		tagNumber,
 	)
 }
@@ -64,10 +69,8 @@ func (c *Codec) Decode(data []byte) (interface{}, error) {
 
 func (c *Codec) getTagForType(payload interface{}) uint64 {
 	t := reflect.TypeOf(payload)
-	for _, tag := range c.tags.Tags() {
-		if tag.ContentType == t {
-			return tag.Number
-		}
+	if tag, ok := c.typeToTag[t]; ok {
+		return tag
 	}
 	return 0
 }

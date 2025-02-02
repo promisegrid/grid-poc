@@ -1,386 +1,80 @@
-To address the design challenges you've outlined, it's essential to create a flexible and maintainable system for encoding and decoding Git-like objects using CBOR. Here's a comprehensive redesign that meets all your requirements:
-
-1. **Centralize Encoding and Decoding Logic:**
-   - **Remove `Encode` from the `Object` Interface:** Instead of having each object implement its own `Encode` method, centralize the encoding and decoding logic. This eliminates duplication and ensures consistency across all object types.
-   
-2. **Utilize CBOR's Support for Interfaces and Type Registrations:**
-   - **Register Concrete Types with CBOR:** Leverage CBOR's ability to handle interface types by registering all concrete implementations. This allows CBOR to automatically handle encoding and decoding based on the concrete type.
-   
-3. **Implement a Factory Pattern for Decoding:**
-   - **Dynamic Instantiation Based on Type:** Create a factory that instantiates the correct concrete type based on the `Type` field during decoding. This ensures that each object is correctly reconstructed without special cases.
-
-4. **Leverage Struct Embedding Correctly:**
-   - **Ensure Complete Encoding of Embedded Fields:** Modify the `Encode` method to serialize the entire concrete object, including fields from embedded structs like `ObjectBase`.
-
-5. **Simplify the `Store` Interface:**
-   - **Decouple Storage Logic from Encoding:** By centralizing encoding/decoding, the `Store` interface can remain clean and focused solely on storage operations.
-
-### Detailed Implementation
-
-Below is the redesigned code incorporating the above principles:
-
-#### 1. **Define Concrete Types and Register Them with CBOR**
-
+File: /home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec.go
 ```go
-// File: interfaces_git.go
-package interfaces_git
+package codec
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
+	"reflect"
 
 	"github.com/fxamacker/cbor/v2"
 )
 
-// Object is an interface for objects that can be stored in a Git repository.
-type Object interface {
-	// GetType returns the type of the object, e.g. "blob", "tree", "commit".
-	GetType() string
-	// GetSize returns the size of the object in bytes.
-	GetSize() int
-	// Hash returns the hash of the object.
-	Hash() string
+type Codec struct {
+	em        cbor.EncMode
+	dm        cbor.DecMode
+	tags      cbor.TagSet
+	typeToTag map[reflect.Type]uint64
 }
 
-// ObjectBase contains the common fields for all objects.
-type ObjectBase struct {
-	Type string `cbor:"type"`
+type CodecConfig struct {
+	EncOptions cbor.EncOptions
+	DecOptions cbor.DecOptions
 }
 
-// GetType returns the type of the object.
-func (obj *ObjectBase) GetType() string {
-	return obj.Type
-}
+func NewCodec(config CodecConfig) (*Codec, error) {
+	tags := cbor.NewTagSet()
 
-// Hash returns the SHA-256 hash of the CBOR-encoded object.
-func (obj Object) Hash() string {
-	enc, err := EncodeObject(obj)
+	em, err := config.EncOptions.EncMode()
 	if err != nil {
-		panic(err) // Handle appropriately in production code
+		return nil, err
 	}
-	hash := sha256.Sum256(enc)
-	return hex.EncodeToString(hash[:])
-}
-```
 
-#### 2. **Implement Concrete Types Without `Encode` and `Decode` Methods**
+	dm, err := config.DecOptions.DecModeWithTags(tags)
+	if err != nil {
+		return nil, err
+	}
 
-```go
-// File: objects.go
-package interfaces_git
-
-// MockBlob is a test implementation of the Blob interface.
-type MockBlob struct {
-	ObjectBase
-	Content []byte `cbor:"content"`
+	return &Codec{
+		em:        em,
+		dm:        dm,
+		tags:      tags,
+		typeToTag: make(map[reflect.Type]uint64),
+	}, nil
 }
 
-// NewMockBlob creates a new MockBlob with the specified content.
-func NewMockBlob(content []byte) *MockBlob {
-	return &MockBlob{
-		ObjectBase: ObjectBase{
-			Type: "blob",
+func (c *Codec) RegisterTag(tagNumber uint64, payloadType interface{}) error {
+	payloadReflectType := reflect.TypeOf(payloadType)
+	c.typeToTag[payloadReflectType] = tagNumber
+
+	return c.tags.Add(
+		cbor.TagOptions{EncTag: cbor.EncTagRequired, DecTag: cbor.DecTagRequired},
+		payloadReflectType,
+		tagNumber,
+	)
+}
+
+func (c *Codec) Encode(payload interface{}) ([]byte, error) {
+	wrapped := cbor.Tag{
+		Number: 55799, // Outer self-describe tag
+		Content: cbor.Tag{
+			Number:  c.getTagForType(payload),
+			Content: payload,
 		},
-		Content: content,
 	}
+	return c.em.Marshal(wrapped)
 }
 
-// GetSize returns the size of the blob in bytes.
-func (blob *MockBlob) GetSize() int {
-	return len(blob.Content)
+func (c *Codec) Decode(data []byte) (interface{}, error) {
+	var decoded interface{}
+	err := c.dm.Unmarshal(data, &decoded)
+	return decoded, err
 }
 
-// MockTree is a test implementation of the Tree interface.
-type MockTree struct {
-	ObjectBase
-	Entries []*MockEntry `cbor:"entries"`
-}
-
-// NewMockTree creates a new MockTree.
-func NewMockTree() *MockTree {
-	return &MockTree{
-		ObjectBase: ObjectBase{
-			Type: "tree",
-		},
-		Entries: []*MockEntry{},
+func (c *Codec) getTagForType(payload interface{}) uint64 {
+	t := reflect.TypeOf(payload)
+	if tag, ok := c.typeToTag[t]; ok {
+		return tag
 	}
-}
-
-// GetSize returns the size of the tree in bytes.
-func (tree *MockTree) GetSize() int {
-	enc, err := EncodeObject(tree)
-	if err != nil {
-		panic(err) // Handle appropriately in production code
-	}
-	return len(enc)
-}
-
-// MockEntry represents an entry in a tree.
-type MockEntry struct {
-	Name string `cbor:"name"`
-	Hash string `cbor:"hash"`
-	Mode string `cbor:"mode"`
-}
-
-// NewMockEntry creates a new MockEntry.
-func NewMockEntry(name, hash, mode string) *MockEntry {
-	return &MockEntry{
-		Name: name,
-		Hash: hash,
-		Mode: mode,
-	}
-}
-
-// Implement additional concrete types (e.g., Commit) similarly...
-```
-
-#### 3. **Centralize Encoding and Decoding Logic**
-
-```go
-// File: encoding.go
-package interfaces_git
-
-import (
-	"io"
-
-	"github.com/fxamacker/cbor/v2"
-)
-
-// Encoder is a CBOR encoder with registered concrete types.
-var Encoder *cbor.EncMode
-
-// Decoder is a CBOR decoder with registered concrete types.
-var Decoder *cbor.DecMode
-
-func init() {
-	var err error
-	// Register concrete types for polymorphic encoding/decoding
-	Encoder, err = cbor.EncOptions{
-		// Enable deterministic encoding
-		UseSort: true,
-		// Include type information
-		BasicHandle: &cbor.BasicHandle{
-			DecodeOptions: cbor.DecodeOptions{
-				// Allow interfaces
-				Reuse: true,
-			},
-		},
-	}.EncMode()
-	if err != nil {
-		panic(err) // Handle appropriately in production code
-	}
-
-	Decoder, err = cbor.DecOptions{
-		// Enable deterministic decoding
-		MaxArrayElements: 0, // 0 means no limit
-	}.DecMode()
-	if err != nil {
-		panic(err) // Handle appropriately in production code
-	}
-}
-
-// EncodeObject serializes an Object into CBOR bytes.
-func EncodeObject(obj Object) ([]byte, error) {
-	return Encoder.Marshal(obj)
-}
-
-// DecodeObject deserializes CBOR bytes into an Object.
-// It uses the Type field to determine the concrete type.
-func DecodeObject(data []byte) (Object, error) {
-	// First, decode just the Type field
-	var base ObjectBase
-	if err := Decoder.Unmarshal(data, &base); err != nil {
-		return nil, err
-	}
-
-	// Instantiate the correct concrete type based on Type
-	var obj Object
-	switch base.Type {
-	case "blob":
-		obj = &MockBlob{}
-	case "tree":
-		obj = &MockTree{}
-	// case "commit":
-	// 	obj = &MockCommit{}
-	default:
-		return nil, errors.New("unknown object type")
-	}
-
-	// Now decode the full object
-	if err := Decoder.Unmarshal(data, obj); err != nil {
-		return nil, err
-	}
-
-	return obj, nil
+	return 0
 }
 ```
-
-#### 4. **Simplify the `Store` Interface and Implement Centralized Encoding/Decoding**
-
-```go
-// File: store.go
-package interfaces_git
-
-import (
-	"os"
-	"path/filepath"
-)
-
-// Store is an interface for storing objects on disk.
-type Store interface {
-	// Put stores an object on disk and returns its hash.
-	Put(Object) (string, error)
-	// Get retrieves an object from disk based on its hash.
-	Get(string) (Object, error)
-}
-
-// MockStore is a test implementation of the Store interface.
-type MockStore struct {
-	dir string
-}
-
-// NewMockStore creates a new MockStore.
-func NewMockStore(dir string) (Store, error) {
-	// Ensure the directory exists
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return nil, err
-	}
-	return &MockStore{dir: dir}, nil
-}
-
-// Put stores an object on disk.
-func (store *MockStore) Put(obj Object) (string, error) {
-	hash := obj.Hash()
-	filePath := filepath.Join(store.dir, hash)
-	// Check if the file already exists to avoid duplication
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		data, err := EncodeObject(obj)
-		if err != nil {
-			return "", err
-		}
-		return hash, os.WriteFile(filePath, data, 0644)
-	}
-	return hash, nil
-}
-
-// Get retrieves an object from disk based on its hash.
-func (store *MockStore) Get(hash string) (Object, error) {
-	filePath := filepath.Join(store.dir, hash)
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil, err
-	}
-	return DecodeObject(data)
-}
-```
-
-#### 5. **Update Test Files to Reflect the New Design**
-
-```go
-// File: interfaces_git_test.go
-package interfaces_git
-
-import (
-	"testing"
-)
-
-func TestMockBlob(t *testing.T) {
-	content := []byte("Hello, World!")
-	blob := NewMockBlob(content)
-
-	// Test GetType
-	if blob.GetType() != "blob" {
-		t.Errorf("Expected type 'blob', got '%s'", blob.GetType())
-	}
-
-	// Test GetSize
-	if blob.GetSize() != len(content) {
-		t.Errorf("Expected size %d, got %d", len(content), blob.GetSize())
-	}
-
-	// Test Hash
-	expectedHash := "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d"
-	if blob.Hash() != expectedHash {
-		t.Errorf("Expected hash %s, got %s", expectedHash, blob.Hash())
-	}
-
-	// Test Encode and Decode
-	encoded, err := EncodeObject(blob)
-	if err != nil {
-		t.Fatalf("EncodeObject failed: %v", err)
-	}
-
-	decodedObj, err := DecodeObject(encoded)
-	if err != nil {
-		t.Fatalf("DecodeObject failed: %v", err)
-	}
-
-	decodedBlob, ok := decodedObj.(*MockBlob)
-	if !ok {
-		t.Fatalf("Decoded object is not a MockBlob")
-	}
-
-	if string(decodedBlob.Content) != string(content) {
-		t.Errorf("Expected content '%s', got '%s'", content, decodedBlob.Content)
-	}
-}
-
-func TestStore(t *testing.T) {
-	store, err := NewMockStore("/tmp/mockstore_test")
-	if err != nil {
-		t.Fatalf("Failed to create store: %v", err)
-	}
-
-	content := []byte("Hello, Store!")
-	blob := NewMockBlob(content)
-
-	// Put the object into the store
-	hash, err := store.Put(blob)
-	if err != nil {
-		t.Fatalf("Put failed: %v", err)
-	}
-
-	// Get the object back
-	retrievedObj, err := store.Get(hash)
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-
-	retrievedBlob, ok := retrievedObj.(*MockBlob)
-	if !ok {
-		t.Fatalf("Retrieved object is not a MockBlob")
-	}
-
-	if string(retrievedBlob.Content) != string(content) {
-		t.Errorf("Expected content '%s', got '%s'", content, retrievedBlob.Content)
-	}
-
-	if retrievedBlob.Hash() != hash {
-		t.Errorf("Expected hash '%s', got '%s'", hash, retrievedBlob.Hash())
-	}
-}
-
-// Implement similar tests for MockTree and other objects...
-```
-
-### Benefits of the Redesigned Approach
-
-1. **Single Source of Truth for Encoding/Decoding:**
-   - All encoding and decoding logic is centralized, eliminating duplication and reducing the risk of inconsistencies.
-
-2. **Scalability:**
-   - Adding new object types (e.g., `Commit`, `Tag`) is straightforward. Simply define the new struct and register it with the encoder/decoder.
-
-3. **Maintainability:**
-   - By removing `Encode` and `Decode` methods from each concrete type, the codebase becomes easier to maintain and less error-prone.
-
-4. **Compliance with CBOR Standards:**
-   - Utilizing CBOR's interface capabilities ensures that the encoding is both efficient and standards-compliant.
-
-5. **Flexibility:**
-   - The factory pattern for decoding allows for dynamic instantiation of objects based on the `Type` field, making the system adaptable to various object types without special cases.
-
-### Final Thoughts
-
-This redesign adheres to idiomatic Go practices, ensures that encoding and decoding are handled uniformly across all object types, and eliminates code duplication. By leveraging CBOR's advanced features and centralizing the encoding logic, the system becomes robust, scalable, and maintainable.
+EOF_/home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec.go

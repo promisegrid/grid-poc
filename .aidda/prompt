@@ -1,6 +1,20 @@
+fix type lookup error
+
+codec/codec.go|67 col 29| c.tags.Tags undefined (type cbor.TagSet has no field or method Tags)
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
+ x/cbor-codec/codec/codec.go
+Out:
+ x/cbor-codec/codec/codec.go
+
+.stop
+
+ x/cbor-codec/codec/codec_test.go
+
+
+.stop
+
  x/interfaces-git/interfaces-git.go
  x/interfaces-git/interfaces-git_test.go
 
