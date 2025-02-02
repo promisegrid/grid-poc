@@ -54,10 +54,15 @@ func (c *Codec) RegisterTag(tagNumber uint64, payloadType interface{}) error {
 // Encode serializes the payload into a CBOR byte slice using wrapped
 // self-describe tag per RFC 9277.
 func (c *Codec) Encode(payload interface{}) ([]byte, error) {
+	tagNumber := c.getTagForType(payload)
+	if tagNumber == 0 {
+		return nil, fmt.Errorf("no tag registered for type %T", payload)
+	}
+
 	wrapped := cbor.Tag{
 		Number: 55799, // Outer self-describe tag
 		Content: cbor.Tag{
-			Number:  c.getTagForType(payload),
+			Number:  tagNumber,
 			Content: payload,
 		},
 	}
@@ -65,18 +70,27 @@ func (c *Codec) Encode(payload interface{}) ([]byte, error) {
 }
 
 func (c *Codec) Decode(data []byte) (interface{}, error) {
-	var tag cbor.Tag
-	if err := c.dm.Unmarshal(data, &tag); err != nil {
+	var outerTag cbor.Tag
+	if err := c.dm.Unmarshal(data, &outerTag); err != nil {
 		return nil, err
 	}
 
-	payloadType, ok := c.getTypeForTag(tag.Number)
+	if outerTag.Number != 55799 {
+		return nil, fmt.Errorf("expected outer tag number 55799, got %d", outerTag.Number)
+	}
+
+	innerTag, ok := outerTag.Content.(cbor.Tag)
 	if !ok {
-		return nil, fmt.Errorf("unknown tag number %d", tag.Number)
+		return nil, fmt.Errorf("expected inner tag, got %T", outerTag.Content)
+	}
+
+	payloadType, ok := c.getTypeForTag(innerTag.Number)
+	if !ok {
+		return nil, fmt.Errorf("unknown tag")
 	}
 
 	payloadPtr := reflect.New(payloadType).Interface()
-	if err := c.dm.Unmarshal(data, payloadPtr); err != nil {
+	if err := c.dm.Unmarshal(innerTag.Content, payloadPtr); err != nil {
 		return nil, err
 	}
 
