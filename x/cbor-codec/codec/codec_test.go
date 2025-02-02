@@ -72,7 +72,7 @@ func TestEncode(t *testing.T) {
 				Height: 600,
 				Format: "JPEG",
 			},
-			wantHex: "d9d9f7da67726965a30119032002190358031804444a504547",
+			wantHex: "d9d9f7da67726965a3011903200219025803644a504547",
 		},
 	}
 
