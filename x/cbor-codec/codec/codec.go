@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/fxamacker/cbor/v2"
@@ -50,6 +51,8 @@ func (c *Codec) RegisterTag(tagNumber uint64, payloadType interface{}) error {
 	)
 }
 
+// Encode serializes the payload into a CBOR byte slice using wrapped
+// self-describe tag per RFC 9277.
 func (c *Codec) Encode(payload interface{}) ([]byte, error) {
 	wrapped := cbor.Tag{
 		Number: 55799, // Outer self-describe tag
@@ -62,9 +65,22 @@ func (c *Codec) Encode(payload interface{}) ([]byte, error) {
 }
 
 func (c *Codec) Decode(data []byte) (interface{}, error) {
-	var decoded interface{}
-	err := c.dm.Unmarshal(data, &decoded)
-	return decoded, err
+	var tag cbor.Tag
+	if err := c.dm.Unmarshal(data, &tag); err != nil {
+		return nil, err
+	}
+
+	payloadType, ok := c.getTypeForTag(tag.Number)
+	if !ok {
+		return nil, fmt.Errorf("unknown tag number %d", tag.Number)
+	}
+
+	payloadPtr := reflect.New(payloadType).Interface()
+	if err := c.dm.Unmarshal(data, payloadPtr); err != nil {
+		return nil, err
+	}
+
+	return reflect.ValueOf(payloadPtr).Elem().Interface(), nil
 }
 
 func (c *Codec) getTagForType(payload interface{}) uint64 {
@@ -73,4 +89,13 @@ func (c *Codec) getTagForType(payload interface{}) uint64 {
 		return tag
 	}
 	return 0
+}
+
+func (c *Codec) getTypeForTag(tagNumber uint64) (reflect.Type, bool) {
+	for typ, tag := range c.typeToTag {
+		if tag == tagNumber {
+			return typ, true
+		}
+	}
+	return nil, false
 }
