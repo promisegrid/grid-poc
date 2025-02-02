@@ -77,6 +77,27 @@ func Encode(obj Object) (buf []byte, err error) {
 	return
 }
 
+// Decode returns the object decoded from the CBOR buffer.
+func Decode(buf []byte) (obj Object, err error) {
+	// create a new decoder
+	opts := cbor.DecOptions{}
+	decoder, err := opts.DecMode().NewDecoder(buf)
+
+	// expect the file content to be a CBOR wrapped tag
+	msg := cbor.Tag{}
+	err = decoder.Decode(&msg)
+	Ck(err)
+	spew.Dump(msg)
+	// expect the wrapped tag to contain a CBOR tag
+	typ := cbor.Tag{}
+	err = decoder.Decode(&typ)
+	Ck(err)
+	// expect the CBOR tag to contain the object
+	err = decoder.Decode(obj)
+	Ck(err)
+	return
+}
+
 // PrintDiag prints a human-readable diagnostic string for the given CBOR
 // buffer.
 func PrintDiag(buf []byte) {
@@ -164,25 +185,10 @@ func (store *MockStore) Put(obj Object) (hash string, err error) {
 }
 
 // Get retrieves an object from disk.
-func (store *MockStore) Get(hash string, obj Object) (err error) {
+func (store *MockStore) Get(hash string) (obj Object, err error) {
 	fn := store.dir + "/" + hash
-	fh, err := os.Open(fn)
-	Ck(err)
-	defer fh.Close()
-	decoder := cbor.NewDecoder(fh)
-	// expect the file content to be a CBOR wrapped tag
-	msg := cbor.Tag{}
-	err = decoder.Decode(&msg)
-	Ck(err)
-	spew.Dump(msg)
-	// expect the wrapped tag to contain a CBOR tag
-	typ := cbor.Tag{}
-	err = decoder.Decode(&typ)
-	Ck(err)
-	// expect the CBOR tag to contain the object
-	err = decoder.Decode(obj)
-	Ck(err)
-	return
+	// read the entire file into buf
+	// XXX
 }
 
 // TestStore tests the Store interface.
