@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/fxamacker/cbor/v2"
+	. "github.com/stevegt/goadapt"
 )
 
 type Codec struct {
@@ -51,50 +52,38 @@ func (c *Codec) RegisterTag(tagNumber uint64, payloadType interface{}) error {
 	)
 }
 
-// Encode serializes the payload into a CBOR byte slice using wrapped
-// self-describe tag per RFC 9277.
+// Encode serializes the payload into a CBOR byte slice
 func (c *Codec) Encode(payload interface{}) ([]byte, error) {
 	tagNumber := c.getTagForType(payload)
 	if tagNumber == 0 {
 		return nil, fmt.Errorf("no tag registered for type %T", payload)
 	}
 
-	wrapped := cbor.Tag{
-		Number: 55799, // Outer self-describe tag
-		Content: cbor.Tag{
-			Number:  tagNumber,
-			Content: payload,
-		},
+	obj := cbor.Tag{
+		Number:  tagNumber,
+		Content: payload,
 	}
-	return c.em.Marshal(wrapped)
+	return c.em.Marshal(obj)
 }
 
-func (c *Codec) Decode(data []byte) (interface{}, error) {
-	var outerTag cbor.Tag
-	if err := c.dm.Unmarshal(data, &outerTag); err != nil {
+func (c *Codec) Decode(data []byte) (any, error) {
+	var tag cbor.Tag
+	if err := c.dm.Unmarshal(data, &tag); err != nil {
 		return nil, err
 	}
 
-	if outerTag.Number != 55799 {
-		return nil, fmt.Errorf("expected outer tag number 55799, got %d", outerTag.Number)
-	}
-
-	innerTag, ok := outerTag.Content.(cbor.Tag)
-	if !ok {
-		return nil, fmt.Errorf("expected inner tag, got %T", outerTag.Content)
-	}
-
-	payloadType, ok := c.getTypeForTag(innerTag.Number)
+	payloadType, ok := c.getTypeForTag(tag.Number)
 	if !ok {
 		return nil, fmt.Errorf("unknown tag")
 	}
 
-	payloadPtr := reflect.New(payloadType).Interface()
-	if err := c.dm.Unmarshal(innerTag.Content.([]byte), payloadPtr); err != nil {
+	payloadPtr := reflect.New(payloadType)
+	Pf("payloadPtr: %#v\n", payloadPtr)
+	if err := c.dm.Unmarshal(tag.Content.([]byte), payloadPtr); err != nil {
 		return nil, err
 	}
 
-	return reflect.ValueOf(payloadPtr).Elem().Interface(), nil
+	return payloadPtr.Elem(), nil
 }
 
 func (c *Codec) getTagForType(payload interface{}) uint64 {

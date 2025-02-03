@@ -6,25 +6,40 @@ import (
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
+	. "github.com/stevegt/goadapt"
 	"github.com/stretchr/testify/assert"
 )
 
+// PrintDiag prints a human-readable diagnostic string for the given CBOR
+// buffer.
+func PrintDiag(buf []byte) {
+	// Diagnose the CBOR data
+	dm, err := cbor.DiagOptions{
+		ByteStringText:         true,
+		ByteStringEmbeddedCBOR: true,
+	}.DiagMode()
+	Ck(err)
+	diagnosis, err := dm.Diagnose(buf)
+	Ck(err)
+	Pl(diagnosis)
+}
+
 // Test payload types
 type GridPayload struct {
-	ID        []byte `cbor:"1,keyasint"`
-	Timestamp uint64 `cbor:"2,keyasint"`
+	ID        []byte
+	Timestamp uint64
 }
 
 type ImagePayload struct {
-	Width  uint   `cbor:"1,keyasint"`
-	Height uint   `cbor:"2,keyasint"`
-	Format string `cbor:"3,keyasint"`
+	Width  uint
+	Height uint
+	Format string
 }
 
 type SensorData struct {
-	SensorID  string  `cbor:"1,keyasint"`
-	Temp      float64 `cbor:"2,keyasint"`
-	Precision uint8   `cbor:"3,keyasint"`
+	SensorID  string
+	Temp      float64
+	Precision uint8
 }
 
 const (
@@ -63,7 +78,7 @@ func TestEncode(t *testing.T) {
 				ID:        []byte{0x01, 0x02},
 				Timestamp: 1614124800,
 			},
-			wantHex: "d9d9f7da67726964a201420102021a60359700",
+			wantHex: "da67726964a26249444201026954696d657374616d701a60359700",
 		},
 		{
 			name: "ImagePayload",
@@ -72,54 +87,22 @@ func TestEncode(t *testing.T) {
 				Height: 600,
 				Format: "JPEG",
 			},
-			wantHex: "d9d9f7da67726965a3011903200219025803644a504547",
+			wantHex: "da67726965a365576964746819032066466f726d6174644a50454766486569676874190258",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// encode
 			encoded, err := c.Encode(tt.payload)
 			assert.NoError(t, err)
+			PrintDiag(encoded)
 			assert.Equal(t, tt.wantHex, hex.EncodeToString(encoded))
-		})
-	}
-}
 
-func TestDecode(t *testing.T) {
-	c := setupCodec(t)
-
-	gridData, _ := hex.DecodeString("d9d9f7da67726964a201420102021a60359700")
-	imageData, _ := hex.DecodeString("d9d9f7da67726965a30119032002190358031804444a504547")
-
-	tests := []struct {
-		name     string
-		data     []byte
-		expected interface{}
-	}{
-		{
-			name: "GridPayload",
-			data: gridData,
-			expected: GridPayload{
-				ID:        []byte{0x01, 0x02},
-				Timestamp: 1614124800,
-			},
-		},
-		{
-			name: "ImagePayload",
-			data: imageData,
-			expected: ImagePayload{
-				Width:  800,
-				Height: 600,
-				Format: "JPEG",
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			decoded, err := c.Decode(tt.data)
+			// decode
+			decoded, err := c.Decode(encoded)
 			assert.NoError(t, err)
-			assert.Equal(t, tt.expected, decoded)
+			assert.Equal(t, tt.payload, decoded)
 		})
 	}
 }
