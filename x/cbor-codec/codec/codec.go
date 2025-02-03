@@ -90,7 +90,7 @@ func (c *Codec) Decode(data []byte) (interface{}, error) {
 	}
 
 	payloadPtr := reflect.New(payloadType).Interface()
-	if err := c.dm.Unmarshal(innerTag.Content, payloadPtr); err != nil {
+	if err := c.dm.Unmarshal(innerTag.Content.([]byte), payloadPtr); err != nil {
 		return nil, err
 	}
 
