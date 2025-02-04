@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/fxamacker/cbor/v2"
 	. "github.com/stevegt/goadapt"
 	"github.com/stretchr/testify/assert"
@@ -89,6 +90,15 @@ func TestEncode(t *testing.T) {
 			},
 			wantHex: "da67726965a365576964746819032066466f726d6174644a50454766486569676874190258",
 		},
+		{
+			name: "SensorData",
+			payload: SensorData{
+				SensorID:  "temp-1",
+				Temp:      25.0,
+				Precision: 2,
+			},
+			wantHex: "da67726966a36454656d70f94e406853656e736f7249446674656d702d3169507265636973696f6e02",
+		},
 	}
 
 	for _, tt := range tests {
@@ -108,13 +118,19 @@ func TestEncode(t *testing.T) {
 }
 
 func TestUnknownTag(t *testing.T) {
-	c := setupCodec(t)
+	// set up a codec without registering any tags
+	config := codec.CodecConfig{
+		EncOptions: cbor.CoreDetEncOptions(),
+		DecOptions: cbor.DecOptions{},
+	}
+	c, err := codec.NewCodec(config)
+	assert.NoError(t, err)
 
-	// Data with unregistered tag
-	data, _ := hex.DecodeString("d9d9f7da00000001a10102")
-	_, err := c.Decode(data)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown tag")
+	// Data with unregistered tag (GridTag)
+	data, _ := hex.DecodeString("da67726964a26249444201026954696d657374616d701a60359700")
+	obj, err := c.Decode(data)
+	assert.NoError(t, err)
+	spew.Dump(obj)
 }
 
 func TestInvalidStructure(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 )
 
 type Codec struct {
+	config    CodecConfig
 	em        cbor.EncMode
 	dm        cbor.DecMode
 	tags      cbor.TagSet
@@ -34,6 +35,7 @@ func NewCodec(config CodecConfig) (*Codec, error) {
 	}
 
 	return &Codec{
+		config:    config,
 		em:        em,
 		dm:        dm,
 		tags:      tags,
@@ -45,11 +47,18 @@ func (c *Codec) RegisterTag(tagNumber uint64, payloadType interface{}) error {
 	payloadReflectType := reflect.TypeOf(payloadType)
 	c.typeToTag[payloadReflectType] = tagNumber
 
-	return c.tags.Add(
+	err := c.tags.Add(
 		cbor.TagOptions{EncTag: cbor.EncTagRequired, DecTag: cbor.DecTagRequired},
 		payloadReflectType,
 		tagNumber,
 	)
+	Ck(err)
+
+	// re-initialize the decoder mode with the updated tag set
+	c.dm, err = c.config.DecOptions.DecModeWithTags(c.tags)
+	Ck(err)
+
+	return nil
 }
 
 // Encode serializes the payload into a CBOR byte slice
@@ -67,23 +76,30 @@ func (c *Codec) Encode(payload interface{}) ([]byte, error) {
 }
 
 func (c *Codec) Decode(data []byte) (any, error) {
-	var tag cbor.Tag
-	if err := c.dm.Unmarshal(data, &tag); err != nil {
+	/*
+		var tag cbor.Tag
+		if err := c.dm.Unmarshal(data, &tag); err != nil {
+			return nil, err
+		}
+
+		payloadType, ok := c.getTypeForTag(tag.Number)
+		if !ok {
+			return nil, fmt.Errorf("unknown tag")
+		}
+
+		payloadPtr := reflect.New(payloadType)
+		Pf("payloadPtr: %#v\n", payloadPtr)
+		if err := c.dm.Unmarshal(tag.Content.([]byte), payloadPtr); err != nil {
+			return nil, err
+		}
+
+		return payloadPtr.Elem(), nil
+	*/
+	var payload interface{}
+	if err := c.dm.Unmarshal(data, &payload); err != nil {
 		return nil, err
 	}
-
-	payloadType, ok := c.getTypeForTag(tag.Number)
-	if !ok {
-		return nil, fmt.Errorf("unknown tag")
-	}
-
-	payloadPtr := reflect.New(payloadType)
-	Pf("payloadPtr: %#v\n", payloadPtr)
-	if err := c.dm.Unmarshal(tag.Content.([]byte), payloadPtr); err != nil {
-		return nil, err
-	}
-
-	return payloadPtr.Elem(), nil
+	return payload, nil
 }
 
 func (c *Codec) getTagForType(payload interface{}) uint64 {
