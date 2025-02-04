@@ -14,13 +14,20 @@ import (
 )
 
 /*
-e.g. in PromiseGrid:
+Imports might work like this in a PromiseGrid-based language:
+
 import (
 	dffd6021bb2bd5b0af676290809ec3a53191dd81c7f70a4b28688a362182986f as bar
 )
 
 bar.foo()
 */
+
+const (
+	BlobTagName   = "blob"
+	TreeTagName   = "tree"
+	CommitTagName = "commit"
+)
 
 // Putting mocks and tests in one file like this is not idiomatic Go.
 // We're doing it here while getting thoughts in order. All of this

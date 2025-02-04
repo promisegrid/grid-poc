@@ -63,7 +63,7 @@ func (c *Codec) RegisterTag(tagNumber uint64, payloadType interface{}) error {
 
 // Encode serializes the payload into a CBOR byte slice
 func (c *Codec) Encode(payload interface{}) ([]byte, error) {
-	tagNumber := c.getTagForType(payload)
+	tagNumber := c.GetTagForType(payload)
 	if tagNumber == 0 {
 		return nil, fmt.Errorf("no tag registered for type %T", payload)
 	}
@@ -101,13 +101,13 @@ func (c *Codec) Decode(data []byte) (any, error) {
 	}
 
 	// return payload as well as an error if the tag is not registered
-	if _, ok := c.getTypeForTag(c.getTagForType(payload)); !ok {
+	if _, ok := c.GetTypeForTag(c.GetTagForType(payload)); !ok {
 		return payload, fmt.Errorf("unknown tag")
 	}
 	return payload, nil
 }
 
-func (c *Codec) getTagForType(payload interface{}) uint64 {
+func (c *Codec) GetTagForType(payload interface{}) uint64 {
 	t := reflect.TypeOf(payload)
 	if tag, ok := c.typeToTag[t]; ok {
 		return tag
@@ -115,7 +115,7 @@ func (c *Codec) getTagForType(payload interface{}) uint64 {
 	return 0
 }
 
-func (c *Codec) getTypeForTag(tagNumber uint64) (reflect.Type, bool) {
+func (c *Codec) GetTypeForTag(tagNumber uint64) (reflect.Type, bool) {
 	for typ, tag := range c.typeToTag {
 		if tag == tagNumber {
 			return typ, true
