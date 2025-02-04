@@ -193,3 +193,34 @@ func TestStringToNumAndNumToString(t *testing.T) {
 		})
 	}
 }
+
+func TestRegisterTagName(t *testing.T) {
+	config := codec.CodecConfig{
+		EncOptions: cbor.CoreDetEncOptions(),
+		DecOptions: cbor.DecOptions{},
+	}
+	c, err := codec.NewCodec(config)
+	assert.NoError(t, err)
+
+	tagName := "example"
+	expectedTag := codec.StringToNum(tagName)
+	type TestPayload struct {
+		Value string
+	}
+	payload := TestPayload{Value: "hello"}
+
+	// Register using tag name
+	err = c.RegisterTagName(tagName, payload)
+	assert.NoError(t, err)
+
+	// Verify that the tag number is correctly assigned for the payload type.
+	gotTag := c.GetTagForType(payload)
+	assert.Equal(t, expectedTag, gotTag, "RegisterTagName did not assign the expected tag number")
+
+	// Encode the payload and then decode it to ensure full round-trip functionality.
+	encoded, err := c.Encode(payload)
+	assert.NoError(t, err)
+	decoded, err := c.Decode(encoded)
+	assert.NoError(t, err)
+	assert.Equal(t, payload, decoded, "Decoded payload does not match the original")
+}

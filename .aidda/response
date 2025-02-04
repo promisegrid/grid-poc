@@ -66,8 +66,8 @@ func (c *Codec) RegisterTagNumber(tagNumber uint64, payloadType interface{}) err
 // RegisterTagName converts the given tag name to a tag number and
 // registers it with the codec.
 func (c *Codec) RegisterTagName(tagName string, payloadType interface{}) error {
-	// XXX
-	return nil
+	num := StringToNum(tagName)
+	return c.RegisterTagNumber(num, payloadType)
 }
 
 // Encode serializes the payload into a CBOR byte slice
@@ -144,7 +144,7 @@ func StringToNum(s string) (n uint64) {
 // NumToString converts a number to a string, e.g. 0x67726964 -> "grid"
 func NumToString(n uint64) (s string) {
 	for n > 0 {
-		s = string(n&0xff) + s
+		s = fmt.Sprintf("%c%s", n&0xff, s)
 		n >>= 8
 	}
 	return s
@@ -348,6 +348,37 @@ func TestStringToNumAndNumToString(t *testing.T) {
 			assert.Equal(t, s, str, "Round-trip conversion failed for %q", s)
 		})
 	}
+}
+
+func TestRegisterTagName(t *testing.T) {
+	config := codec.CodecConfig{
+		EncOptions: cbor.CoreDetEncOptions(),
+		DecOptions: cbor.DecOptions{},
+	}
+	c, err := codec.NewCodec(config)
+	assert.NoError(t, err)
+
+	tagName := "example"
+	expectedTag := codec.StringToNum(tagName)
+	type TestPayload struct {
+		Value string
+	}
+	payload := TestPayload{Value: "hello"}
+
+	// Register using tag name
+	err = c.RegisterTagName(tagName, payload)
+	assert.NoError(t, err)
+
+	// Verify that the tag number is correctly assigned for the payload type.
+	gotTag := c.GetTagForType(payload)
+	assert.Equal(t, expectedTag, gotTag, "RegisterTagName did not assign the expected tag number")
+
+	// Encode the payload and then decode it to ensure full round-trip functionality.
+	encoded, err := c.Encode(payload)
+	assert.NoError(t, err)
+	decoded, err := c.Decode(encoded)
+	assert.NoError(t, err)
+	assert.Equal(t, payload, decoded, "Decoded payload does not match the original")
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec_test.go
