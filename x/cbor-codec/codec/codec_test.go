@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/fxamacker/cbor/v2"
 	. "github.com/stevegt/goadapt"
 	"github.com/stretchr/testify/assert"
@@ -129,9 +128,12 @@ func TestUnknownTag(t *testing.T) {
 	// Data with unregistered tag (GridTag)
 	data, _ := hex.DecodeString("da67726964a26249444201026954696d657374616d701a60359700")
 	obj, err := c.Decode(data)
-	spew.Dump(obj)
+	// spew.Dump(obj)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown tag")
+	content := obj.(cbor.Tag).Content.(map[interface{}]interface{})
+	ts := content["Timestamp"].(uint64)
+	assert.Equal(t, ts, uint64(1614124800))
 }
 
 func TestInvalidStructure(t *testing.T) {
