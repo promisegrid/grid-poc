@@ -1,45 +1,12 @@
-fix test errors
-
-=== RUN   TestEncode
-=== RUN   TestEncode/GridPayload
-=== RUN   TestEncode/ImagePayload
---- PASS: TestEncode (0.00s)
-    --- PASS: TestEncode/GridPayload (0.00s)
-    --- PASS: TestEncode/ImagePayload (0.00s)
-=== RUN   TestDecode
-=== RUN   TestDecode/GridPayload
-=== RUN   TestDecode/ImagePayload
-    codec_test.go:121: 
-        	Error Trace:	/home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec_test.go:121
-        	Error:      	Received unexpected error:
-        	            	cbor: 5 bytes of extraneous data starting at index 20
-        	Test:       	TestDecode/ImagePayload
-    codec_test.go:122: 
-        	Error Trace:	/home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec_test.go:122
-        	Error:      	Not equal: 
-        	            	expected: codec_test.ImagePayload(codec_test.ImagePayload{Width:0x320, Height:0x258, Format:"JPEG"})
-        	            	actual  : <nil>(<nil>)
-        	Test:       	TestDecode/ImagePayload
---- FAIL: TestDecode (0.00s)
-    --- PASS: TestDecode/GridPayload (0.00s)
-    --- FAIL: TestDecode/ImagePayload (0.00s)
-=== RUN   TestUnknownTag
-    codec_test.go:134: 
-        	Error Trace:	/home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec_test.go:134
-        	Error:      	"cbor: tag number 1 must be followed by integer or floating-point number, got map" does not contain "unknown tag"
-        	Test:       	TestUnknownTag
---- FAIL: TestUnknownTag (0.00s)
-=== RUN   TestInvalidStructure
---- PASS: TestInvalidStructure (0.00s)
-FAIL
-exit status 1
-FAIL	cbor-codec/codec	0.004s
+write test cases for StringToNum and NumToString
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
  x/cbor-codec/codec/codec.go
+ x/cbor-codec/codec/codec_test.go
 Out:
  x/cbor-codec/codec/codec.go
+ x/cbor-codec/codec/codec_test.go
 
 .stop
 

@@ -61,6 +61,13 @@ func (c *Codec) RegisterTagNumber(tagNumber uint64, payloadType interface{}) err
 	return nil
 }
 
+// RegisterTagName converts the given tag name to a tag number and
+// registers it with the codec.
+func (c *Codec) RegisterTagName(tagName string, payloadType interface{}) error {
+	// XXX
+	return nil
+}
+
 // Encode serializes the payload into a CBOR byte slice
 func (c *Codec) Encode(payload interface{}) ([]byte, error) {
 	tagNumber := c.GetTagForType(payload)
@@ -122,4 +129,21 @@ func (c *Codec) GetTypeForTag(tagNumber uint64) (reflect.Type, bool) {
 		}
 	}
 	return nil, false
+}
+
+// StringToNum converts a string to a number, e.g. "grid" -> 0x67726964
+func StringToNum(s string) (n uint64) {
+	for _, r := range s {
+		n = (n << 8) + uint64(r)
+	}
+	return n
+}
+
+// NumToString converts a number to a string, e.g. 0x67726964 -> "grid"
+func NumToString(n uint64) (s string) {
+	for n > 0 {
+		s = fmt.Sprintf("%c%s", n&0xff, s)
+		n >>= 8
+	}
+	return s
 }

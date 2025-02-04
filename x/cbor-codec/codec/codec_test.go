@@ -144,3 +144,52 @@ func TestInvalidStructure(t *testing.T) {
 	_, err := c.Decode(data)
 	assert.Error(t, err)
 }
+
+func TestStringToNumAndNumToString(t *testing.T) {
+	tests := []struct {
+		input     string
+		expectNum uint64
+	}{
+		{
+			input:     "grid",
+			expectNum: 0x67726964,
+		},
+		{
+			input:     "hello",
+			expectNum: 0x68656c6c6f,
+		},
+		{
+			input:     "",
+			expectNum: 0,
+		},
+		{
+			input:     "GoLang",
+			// Calculate expected: 'G'=0x47, 'o'=0x6f, 'L'=0x4c, 'a'=0x61, 'n'=0x6e, 'g'=0x67
+			// Expected: 0x476f4c616e67
+			expectNum: 0x476f4c616e67,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run("StringToNum_"+tt.input, func(t *testing.T) {
+			result := codec.StringToNum(tt.input)
+			assert.Equal(t, tt.expectNum, result, "StringToNum(%q) should be %x", tt.input, tt.expectNum)
+		})
+
+		t.Run("NumToString_"+tt.input, func(t *testing.T) {
+			// For the zero case, ensure that converting 0 returns an empty string.
+			result := codec.NumToString(tt.expectNum)
+			assert.Equal(t, tt.input, result, "NumToString(%x) should be %q", tt.expectNum, tt.input)
+		})
+	}
+
+	// Additional round-trip test: converting a string to number and back should yield the original string.
+	stringsToTest := []string{"testing", "123abc", "CBOR", "Go", ""}
+	for _, s := range stringsToTest {
+		t.Run("RoundTrip_"+s, func(t *testing.T) {
+			num := codec.StringToNum(s)
+			str := codec.NumToString(num)
+			assert.Equal(t, s, str, "Round-trip conversion failed for %q", s)
+		})
+	}
+}
