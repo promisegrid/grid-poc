@@ -99,6 +99,11 @@ func (c *Codec) Decode(data []byte) (any, error) {
 	if err := c.dm.Unmarshal(data, &payload); err != nil {
 		return nil, err
 	}
+
+	// return payload as well as an error if the tag is not registered
+	if _, ok := c.getTypeForTag(c.getTagForType(payload)); !ok {
+		return payload, fmt.Errorf("unknown tag")
+	}
 	return payload, nil
 }
 

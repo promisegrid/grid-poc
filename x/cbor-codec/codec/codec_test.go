@@ -129,8 +129,9 @@ func TestUnknownTag(t *testing.T) {
 	// Data with unregistered tag (GridTag)
 	data, _ := hex.DecodeString("da67726964a26249444201026954696d657374616d701a60359700")
 	obj, err := c.Decode(data)
-	assert.NoError(t, err)
 	spew.Dump(obj)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown tag")
 }
 
 func TestInvalidStructure(t *testing.T) {
