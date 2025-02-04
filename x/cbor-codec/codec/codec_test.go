@@ -57,9 +57,9 @@ func setupCodec(t *testing.T) *codec.Codec {
 	c, err := codec.NewCodec(config)
 	assert.NoError(t, err)
 
-	assert.NoError(t, c.RegisterTag(GridTag, GridPayload{}))
-	assert.NoError(t, c.RegisterTag(ImageTag, ImagePayload{}))
-	assert.NoError(t, c.RegisterTag(SensorTag, SensorData{}))
+	assert.NoError(t, c.RegisterTagNumber(GridTag, GridPayload{}))
+	assert.NoError(t, c.RegisterTagNumber(ImageTag, ImagePayload{}))
+	assert.NoError(t, c.RegisterTagNumber(SensorTag, SensorData{}))
 
 	return c
 }

@@ -43,7 +43,7 @@ func NewCodec(config CodecConfig) (*Codec, error) {
 	}, nil
 }
 
-func (c *Codec) RegisterTag(tagNumber uint64, payloadType interface{}) error {
+func (c *Codec) RegisterTagNumber(tagNumber uint64, payloadType interface{}) error {
 	payloadReflectType := reflect.TypeOf(payloadType)
 	c.typeToTag[payloadReflectType] = tagNumber
 

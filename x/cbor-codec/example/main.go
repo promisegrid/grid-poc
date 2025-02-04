@@ -4,6 +4,7 @@ package main
 import (
 	"cbor-codec/codec"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/fxamacker/cbor/v2"
 )
 
@@ -17,9 +18,10 @@ func main() {
 		EncOptions: cbor.CoreDetEncOptions(),
 	})
 
-	c.RegisterTag(1234, CustomPayload{})
+	c.RegisterTagNumber(1234, CustomPayload{})
 
 	payload := CustomPayload{Field1: "test", Field2: 42}
 	encoded, _ := c.Encode(payload)
 	decoded, _ := c.Decode(encoded)
+	spew.Dump(decoded)
 }
