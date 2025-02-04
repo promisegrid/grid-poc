@@ -64,8 +64,8 @@ func (c *Codec) RegisterTagNumber(tagNumber uint64, payloadType interface{}) err
 // RegisterTagName converts the given tag name to a tag number and
 // registers it with the codec.
 func (c *Codec) RegisterTagName(tagName string, payloadType interface{}) error {
-	// XXX
-	return nil
+	num := StringToNum(tagName)
+	return c.RegisterTagNumber(num, payloadType)
 }
 
 // Encode serializes the payload into a CBOR byte slice
