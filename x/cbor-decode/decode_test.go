@@ -7,6 +7,11 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
+// Message is an example type to demonstrate CBOR decoding.
+type Message struct {
+	Value int
+}
+
 // Helper function to prepend a tag byte to CBOR-encoded data.
 func prependTag(tag byte, encoded []byte) []byte {
 	var buf bytes.Buffer

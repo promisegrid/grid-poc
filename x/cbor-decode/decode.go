@@ -6,11 +6,6 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-// Message is an example type to demonstrate CBOR decoding.
-type Message struct {
-	Value int
-}
-
 // DecodeInto decodes CBOR-encoded data into an existing instance provided by out.
 // It uses the fxamacker/cbor/v2 package as the decoding engine.
 // The expected format for the data is a single tag byte followed by
