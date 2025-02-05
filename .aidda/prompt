@@ -1,7 +1,10 @@
 decide how a CBOR codec Decode() method should work
 
-Help decide how a CBOR codec package's Decode() method should work. The
-choices seem to be:
+Help decide how a CBOR codec package's Decode() method should work.
+The codec must use the "github.com/fxamacker/cbor/v2" package as its
+decoding engine.  
+
+The choices seem to be:
 
 - return a pointer to an existing instance of the type being decoded
   - this would mean passing in a zero-valued instance of the type
@@ -25,10 +28,15 @@ return values, and let the caller cast the value to the correct type
 or otherwise handle it as needed.
 
 Write a version of each possible variant, along with a test case
-showing examples of how each choice would be used.
+showing examples of how each choice would be used. The encoded data
+must be actual CBOR data, not simulated; remove all simulated data
+from the test cases, and remove all handling of simulated data from
+the codec.
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
+  x/cbor-decode/decode.go
+  x/cbor-decode/decode_test.go
 Out:
   x/cbor-decode/decode.go
   x/cbor-decode/decode_test.go
