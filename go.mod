@@ -2,7 +2,10 @@ module grid
 
 go 1.22.1
 
+replace cbor-codec => /home/stevegt/lab/grid-poc/x/cbor-codec
+
 require (
+	cbor-codec v0.0.0-00010101000000-000000000000
 	github.com/davecgh/go-spew v1.1.1
 	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/multiformats/go-multihash v0.2.3

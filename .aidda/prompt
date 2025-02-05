@@ -1,15 +1,23 @@
-write test case for RegisterTagName
+replace the Encode() and Decode() methods with calls to codec methods 
+
+Create a helper function that creates a codec object and registers the
+appropriate types (blob, tree, commit).
+
+In each test case, call the codec's Encode() or Decode() methods as needed.
+
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
+ x/interfaces-git/interfaces-git.go
+ x/interfaces-git/interfaces-git_test.go
  x/cbor-codec/codec/codec.go
  x/cbor-codec/codec/codec_test.go
 Out:
- x/cbor-codec/codec/codec.go
- x/cbor-codec/codec/codec_test.go
+ x/interfaces-git/interfaces-git_test.go
 
 .stop
 
+ x/cbor-codec/codec/codec.go
  x/cbor-codec/codec/codec_test.go
 
 

@@ -1,175 +1,61 @@
-File: /home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec.go
+File: /home/stevegt/lab/grid-poc/x/interfaces-git/interfaces-git_test.go
 ```go
-package codec
+package interfaces_git
 
 import (
-	"fmt"
-	"reflect"
-
-	"github.com/fxamacker/cbor/v2"
-	. "github.com/stevegt/goadapt"
-)
-
-type Codec struct {
-	config    CodecConfig
-	em        cbor.EncMode
-	dm        cbor.DecMode
-	tags      cbor.TagSet
-	typeToTag map[reflect.Type]uint64
-}
-
-type CodecConfig struct {
-	EncOptions cbor.EncOptions
-	DecOptions cbor.DecOptions
-}
-
-func NewCodec(config CodecConfig) (*Codec, error) {
-	tags := cbor.NewTagSet()
-
-	em, err := config.EncOptions.EncMode()
-	if err != nil {
-		return nil, err
-	}
-
-	dm, err := config.DecOptions.DecModeWithTags(tags)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Codec{
-		config:    config,
-		em:        em,
-		dm:        dm,
-		tags:      tags,
-		typeToTag: make(map[reflect.Type]uint64),
-	}, nil
-}
-
-func (c *Codec) RegisterTagNumber(tagNumber uint64, payloadType interface{}) error {
-	payloadReflectType := reflect.TypeOf(payloadType)
-	c.typeToTag[payloadReflectType] = tagNumber
-
-	err := c.tags.Add(
-		cbor.TagOptions{EncTag: cbor.EncTagRequired, DecTag: cbor.DecTagRequired},
-		payloadReflectType,
-		tagNumber,
-	)
-	Ck(err)
-
-	// re-initialize the decoder mode with the updated tag set
-	c.dm, err = c.config.DecOptions.DecModeWithTags(c.tags)
-	Ck(err)
-
-	return nil
-}
-
-// RegisterTagName converts the given tag name to a tag number and
-// registers it with the codec.
-func (c *Codec) RegisterTagName(tagName string, payloadType interface{}) error {
-	num := StringToNum(tagName)
-	return c.RegisterTagNumber(num, payloadType)
-}
-
-// Encode serializes the payload into a CBOR byte slice
-func (c *Codec) Encode(payload interface{}) ([]byte, error) {
-	tagNumber := c.GetTagForType(payload)
-	if tagNumber == 0 {
-		return nil, fmt.Errorf("no tag registered for type %T", payload)
-	}
-
-	obj := cbor.Tag{
-		Number:  tagNumber,
-		Content: payload,
-	}
-	return c.em.Marshal(obj)
-}
-
-func (c *Codec) Decode(data []byte) (any, error) {
-	/*
-		var tag cbor.Tag
-		if err := c.dm.Unmarshal(data, &tag); err != nil {
-			return nil, err
-		}
-
-		payloadType, ok := c.getTypeForTag(tag.Number)
-		if !ok {
-			return nil, fmt.Errorf("unknown tag")
-		}
-
-		payloadPtr := reflect.New(payloadType)
-		Pf("payloadPtr: %#v\n", payloadPtr)
-		if err := c.dm.Unmarshal(tag.Content.([]byte), payloadPtr); err != nil {
-			return nil, err
-		}
-
-		return payloadPtr.Elem(), nil
-	*/
-	var payload interface{}
-	if err := c.dm.Unmarshal(data, &payload); err != nil {
-		return nil, err
-	}
-
-	// return payload as well as an error if the tag is not registered
-	if _, ok := c.GetTypeForTag(c.GetTagForType(payload)); !ok {
-		return payload, fmt.Errorf("unknown tag")
-	}
-	return payload, nil
-}
-
-func (c *Codec) GetTagForType(payload interface{}) uint64 {
-	t := reflect.TypeOf(payload)
-	if tag, ok := c.typeToTag[t]; ok {
-		return tag
-	}
-	return 0
-}
-
-func (c *Codec) GetTypeForTag(tagNumber uint64) (reflect.Type, bool) {
-	for typ, tag := range c.typeToTag {
-		if tag == tagNumber {
-			return typ, true
-		}
-	}
-	return nil, false
-}
-
-// StringToNum converts a string to a number, e.g. "grid" -> 0x67726964
-func StringToNum(s string) (n uint64) {
-	for _, r := range s {
-		n = (n << 8) + uint64(r)
-	}
-	return n
-}
-
-// NumToString converts a number to a string, e.g. 0x67726964 -> "grid"
-func NumToString(n uint64) (s string) {
-	for n > 0 {
-		s = fmt.Sprintf("%c%s", n&0xff, s)
-		n >>= 8
-	}
-	return s
-}
-```
-EOF_/home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec.go
-
-File: /home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec_test.go
-```go
-package codec_test
-
-import (
-	"cbor-codec/codec"
+	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"os"
+	"slices"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/fxamacker/cbor/v2"
+	"cbor-codec/codec"
 	. "github.com/stevegt/goadapt"
-	"github.com/stretchr/testify/assert"
 )
 
-// PrintDiag prints a human-readable diagnostic string for the given CBOR
-// buffer.
+const (
+	BlobTagName   = "blob"
+	TreeTagName   = "tree"
+	CommitTagName = "commit"
+)
+
+// setupCodecForGit creates a codec instance and registers the appropriate types.
+func setupCodecForGit() *codec.Codec {
+	config := codec.CodecConfig{
+		EncOptions: cbor.CoreDetEncOptions(),
+		DecOptions: cbor.DecOptions{},
+	}
+	c, err := codec.NewCodec(config)
+	Ck(err)
+
+	// Register the types for blob, tree, and commit.
+	err = c.RegisterTagName(BlobTagName, MockBlob{})
+	Ck(err)
+	err = c.RegisterTagName(TreeTagName, MockTree{})
+	Ck(err)
+	// Commit is an interface; we register a dummy struct for it.
+	var dummyCommit struct{}
+	err = c.RegisterTagName(CommitTagName, dummyCommit)
+	Ck(err)
+
+	return c
+}
+
+// Hash returns the hash of the object as a hex string.
+// The hash is computed as the sha-256 digest over the CBOR-encoded object.
+func Hash(obj Object) string {
+	c := setupCodecForGit()
+	buf, err := c.Encode(obj)
+	Ck(err)
+	sum := sha256.Sum256(buf)
+	return hex.EncodeToString(sum[:])
+}
+
+// PrintDiag prints a human-readable diagnostic string for the given CBOR buffer.
 func PrintDiag(buf []byte) {
-	// Diagnose the CBOR data
 	dm, err := cbor.DiagOptions{
 		ByteStringText:         true,
 		ByteStringEmbeddedCBOR: true,
@@ -180,205 +66,251 @@ func PrintDiag(buf []byte) {
 	Pl(diagnosis)
 }
 
-// Test payload types
-type GridPayload struct {
-	ID        []byte
-	Timestamp uint64
+// MockBlob is a test implementation of a Blob object.
+type MockBlob struct {
+	Content []byte
 }
 
-type ImagePayload struct {
-	Width  uint
-	Height uint
-	Format string
-}
-
-type SensorData struct {
-	SensorID  string
-	Temp      float64
-	Precision uint8
-}
-
-const (
-	GridTag   = 1735551332
-	ImageTag  = 1735551333
-	SensorTag = 1735551334
-)
-
-func setupCodec(t *testing.T) *codec.Codec {
-	config := codec.CodecConfig{
-		EncOptions: cbor.CoreDetEncOptions(),
-		DecOptions: cbor.DecOptions{},
-	}
-
-	c, err := codec.NewCodec(config)
-	assert.NoError(t, err)
-
-	assert.NoError(t, c.RegisterTagNumber(GridTag, GridPayload{}))
-	assert.NoError(t, c.RegisterTagNumber(ImageTag, ImagePayload{}))
-	assert.NoError(t, c.RegisterTagNumber(SensorTag, SensorData{}))
-
-	return c
-}
-
-func TestEncode(t *testing.T) {
-	c := setupCodec(t)
-
-	tests := []struct {
-		name    string
-		payload interface{}
-		wantHex string
-	}{
-		{
-			name: "GridPayload",
-			payload: GridPayload{
-				ID:        []byte{0x01, 0x02},
-				Timestamp: 1614124800,
-			},
-			wantHex: "da67726964a26249444201026954696d657374616d701a60359700",
-		},
-		{
-			name: "ImagePayload",
-			payload: ImagePayload{
-				Width:  800,
-				Height: 600,
-				Format: "JPEG",
-			},
-			wantHex: "da67726965a365576964746819032066466f726d6174644a50454766486569676874190258",
-		},
-		{
-			name: "SensorData",
-			payload: SensorData{
-				SensorID:  "temp-1",
-				Temp:      25.0,
-				Precision: 2,
-			},
-			wantHex: "da67726966a36454656d70f94e406853656e736f7249446674656d702d3169507265636973696f6e02",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// encode
-			encoded, err := c.Encode(tt.payload)
-			assert.NoError(t, err)
-			PrintDiag(encoded)
-			assert.Equal(t, tt.wantHex, hex.EncodeToString(encoded))
-
-			// decode
-			decoded, err := c.Decode(encoded)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.payload, decoded)
-		})
+// NewMockBlob creates a new MockBlob with the given content.
+func NewMockBlob(content []byte) *MockBlob {
+	return &MockBlob{
+		Content: content,
 	}
 }
 
-func TestUnknownTag(t *testing.T) {
-	// set up a codec without registering any tags
-	config := codec.CodecConfig{
-		EncOptions: cbor.CoreDetEncOptions(),
-		DecOptions: cbor.DecOptions{},
-	}
-	c, err := codec.NewCodec(config)
-	assert.NoError(t, err)
-
-	// Data with unregistered tag (GridTag)
-	data, _ := hex.DecodeString("da67726964a26249444201026954696d657374616d701a60359700")
-	obj, err := c.Decode(data)
-	// spew.Dump(obj)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown tag")
-	content := obj.(cbor.Tag).Content.(map[interface{}]interface{})
-	ts := content["Timestamp"].(uint64)
-	assert.Equal(t, ts, uint64(1614124800))
+// Type returns the type of the blob.
+func (b *MockBlob) Type() string {
+	return "blob"
 }
 
-func TestInvalidStructure(t *testing.T) {
-	c := setupCodec(t)
-
-	// Malformed CBOR data
-	data := []byte{0xd9, 0xd9, 0xf7, 0xda, 0x67, 0x72, 0x69, 0x64} // truncated
-	_, err := c.Decode(data)
-	assert.Error(t, err)
+// GetSize returns the size of the blob in bytes.
+func (b *MockBlob) GetSize() int {
+	return len(b.Content)
 }
 
-func TestStringToNumAndNumToString(t *testing.T) {
-	tests := []struct {
-		input     string
-		expectNum uint64
-	}{
-		{
-			input:     "grid",
-			expectNum: 0x67726964,
-		},
-		{
-			input:     "hello",
-			expectNum: 0x68656c6c6f,
-		},
-		{
-			input:     "",
-			expectNum: 0,
-		},
-		{
-			input:     "GoLang",
-			// Calculate expected: 'G'=0x47, 'o'=0x6f, 'L'=0x4c, 'a'=0x61, 'n'=0x6e, 'g'=0x67
-			// Expected: 0x476f4c616e67
-			expectNum: 0x476f4c616e67,
-		},
-	}
+// GetContent returns the content of the blob.
+func (b *MockBlob) GetContent() []byte {
+	return b.Content
+}
 
-	for _, tt := range tests {
-		t.Run("StringToNum_"+tt.input, func(t *testing.T) {
-			result := codec.StringToNum(tt.input)
-			assert.Equal(t, tt.expectNum, result, "StringToNum(%q) should be %x", tt.input, tt.expectNum)
-		})
+// TestBlobHash tests the Hash method for Blob objects.
+func TestBlobHash(t *testing.T) {
+	c := setupCodecForGit()
+	// Create a new Blob.
+	obj := NewMockBlob([]byte("Hello, World!"))
+	buf, err := c.Encode(obj)
+	Ck(err)
+	PrintDiag(buf)
+	// Test the Hash method.
+	want := "bfb32213ffd89fc1cdb406c8835ec68bd61a5a6c637bd5829b8ee0d7a173fa90"
+	Tassert(t, want == Hash(obj), "Expected %s, got %s", want, Hash(obj))
+}
 
-		t.Run("NumToString_"+tt.input, func(t *testing.T) {
-			// For the zero case, ensure that converting 0 returns an empty string.
-			result := codec.NumToString(tt.expectNum)
-			assert.Equal(t, tt.input, result, "NumToString(%x) should be %q", tt.expectNum, tt.input)
-		})
-	}
+// MockStore is a test implementation of the Store interface.
+type MockStore struct {
+	dir   string
+	codec *codec.Codec
+}
 
-	// Additional round-trip test: converting a string to number and back should yield the original string.
-	stringsToTest := []string{"testing", "123abc", "CBOR", "Go", ""}
-	for _, s := range stringsToTest {
-		t.Run("RoundTrip_"+s, func(t *testing.T) {
-			num := codec.StringToNum(s)
-			str := codec.NumToString(num)
-			assert.Equal(t, s, str, "Round-trip conversion failed for %q", s)
-		})
+// NewMockStore creates a new MockStore with the provided directory and codec.
+func NewMockStore(dir string, c *codec.Codec) Store {
+	return &MockStore{
+		dir:   dir,
+		codec: c,
 	}
 }
 
-func TestRegisterTagName(t *testing.T) {
-	config := codec.CodecConfig{
-		EncOptions: cbor.CoreDetEncOptions(),
-		DecOptions: cbor.DecOptions{},
+// Put stores an object on disk.
+func (store *MockStore) Put(obj Object) (hash string, err error) {
+	hash = Hash(obj)
+	fn := store.dir + "/" + hash
+	fh, err := os.Create(fn)
+	Ck(err)
+	defer fh.Close()
+	buf, err := store.codec.Encode(obj)
+	Ck(err)
+	_, err = fh.Write(buf)
+	Ck(err)
+	return
+}
+
+// Get retrieves an object from disk and decodes it into the provided obj.
+func (store *MockStore) Get(hash string, obj Object) error {
+	fn := store.dir + "/" + hash
+	buf, err := os.ReadFile(fn)
+	if err != nil {
+		return err
 	}
-	c, err := codec.NewCodec(config)
-	assert.NoError(t, err)
-
-	tagName := "example"
-	expectedTag := codec.StringToNum(tagName)
-	type TestPayload struct {
-		Value string
+	decoded, err := store.codec.Decode(buf)
+	if err != nil {
+		return err
 	}
-	payload := TestPayload{Value: "hello"}
+	// Copy the decoded value into the provided object.
+	switch target := obj.(type) {
+	case *MockBlob:
+		decodedBlob, ok := decoded.(*MockBlob)
+		if !ok {
+			return fmt.Errorf("type mismatch: expected *MockBlob")
+		}
+		*target = *decodedBlob
+	case *MockTree:
+		decodedTree, ok := decoded.(*MockTree)
+		if !ok {
+			return fmt.Errorf("type mismatch: expected *MockTree")
+		}
+		*target = *decodedTree
+	default:
+		return fmt.Errorf("unsupported type in Get")
+	}
+	return nil
+}
 
-	// Register using tag name
-	err = c.RegisterTagName(tagName, payload)
-	assert.NoError(t, err)
+// TestStore tests the Store interface.
+func TestStore(t *testing.T) {
+	c := setupCodecForGit()
+	// Create a new Store.
+	store := NewMockStore("/tmp/mockstore", c)
+	// Create a new Object.
+	obj := NewMockBlob([]byte("Hello, World!"))
+	// Store the object.
+	hash1, err := store.Put(obj)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	// Retrieve the object.
+	obj2 := &MockBlob{}
+	err = store.Get(hash1, obj2)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	hash2 := Hash(obj2)
+	Tassert(t, hash1 == hash2, "Expected %s, got %s", hash1, hash2)
+}
 
-	// Verify that the tag number is correctly assigned for the payload type.
-	gotTag := c.GetTagForType(payload)
-	assert.Equal(t, expectedTag, gotTag, "RegisterTagName did not assign the expected tag number")
+// MockTree is a test implementation of a Tree object.
+type MockTree struct {
+	Entries []*MockEntry
+}
 
-	// Encode the payload and then decode it to ensure full round-trip functionality.
-	encoded, err := c.Encode(payload)
-	assert.NoError(t, err)
-	decoded, err := c.Decode(encoded)
-	assert.NoError(t, err)
-	assert.Equal(t, payload, decoded, "Decoded payload does not match the original")
+// NewMockTree creates a new MockTree.
+func NewMockTree() *MockTree {
+	return &MockTree{
+		Entries: make([]*MockEntry, 0),
+	}
+}
+
+// Type returns the type of the tree.
+func (tree *MockTree) Type() string {
+	return "tree"
+}
+
+// AddEntry adds an entry to the tree.
+func (tree *MockTree) AddEntry(entry *MockEntry) {
+	tree.Entries = append(tree.Entries, entry)
+}
+
+// GetEntries returns the entries in the tree.
+func (tree *MockTree) GetEntries() []*MockEntry {
+	return tree.Entries
+}
+
+// String returns a string representation of the tree.
+func (tree *MockTree) String() string {
+	slices.SortFunc(tree.Entries, func(a, b *MockEntry) int {
+		if a.GetName() == b.GetName() {
+			return 0
+		}
+		if a.GetName() < b.GetName() {
+			return -1
+		}
+		return 1
+	})
+	str := "tree\n"
+	for _, entry := range tree.Entries {
+		str += entry.GetMode() + " " + entry.GetHash() + " " + entry.GetName() + "\n"
+	}
+	return str
+}
+
+// GetHash returns the hash of the tree.
+func (tree *MockTree) GetHash() string {
+	sum := sha256.Sum256([]byte(tree.String()))
+	return hex.EncodeToString(sum[:])
+}
+
+// MockEntry is a test implementation of an Entry in a tree.
+type MockEntry struct {
+	Name string
+	Hash string
+	Mode string
+}
+
+// NewMockEntry creates a new MockEntry with the given name, hash, and mode.
+func NewMockEntry(name, hash, mode string) *MockEntry {
+	return &MockEntry{
+		Name: name,
+		Hash: hash,
+		Mode: mode,
+	}
+}
+
+// GetName returns the name of the entry.
+func (entry *MockEntry) GetName() string {
+	return entry.Name
+}
+
+// GetHash returns the hash of the entry.
+func (entry *MockEntry) GetHash() string {
+	return entry.Hash
+}
+
+// GetMode returns the mode of the entry.
+func (entry *MockEntry) GetMode() string {
+	return entry.Mode
+}
+
+// TestTree tests the Tree interface.
+func TestTree(t *testing.T) {
+	c := setupCodecForGit()
+	// Create a new Tree.
+	tree := NewMockTree()
+	// Test the Type method.
+	Tassert(t, tree.Type() == "tree", "Expected tree, got %s", tree.Type())
+	// Test the AddEntry method.
+	entry := NewMockEntry("file.txt", "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d", "100644")
+	tree.AddEntry(entry)
+	Tassert(t, len(tree.GetEntries()) == 1, "Expected 1, got %d", len(tree.GetEntries()))
+	// Add another entry.
+	entry = NewMockEntry("file2.txt", "2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d", "100644")
+	tree.AddEntry(entry)
+	// Test the Hash.
+	want := "651a072cec2b04c195dbc90b208b8acd37319cfcafdb3d9ca9b6a11c32fda481"
+	Tassert(t, want == Hash(tree), "Expected %s, got %s", want, Hash(tree))
+	// Test the String method.
+	wantStr := "tree\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file.txt\n100644 2bbef151425ac7b6e79482589fd28d21bd852422bc0ca70f26a8f8792e8f934d file2.txt\n"
+	Tassert(t, wantStr == tree.String(), "Expected %s, got %s", wantStr, tree.String())
+	Pl(tree.String())
+
+	// Test storing and retrieving a tree.
+	store := NewMockStore("/tmp/mockstore", c)
+	hash1, err := store.Put(tree)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	tree2 := &MockTree{}
+	err = store.Get(hash1, tree2)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	hash2 := Hash(tree2)
+	if hash1 != hash2 {
+		diag1 := tree.String()
+		diag2 := tree2.String()
+		Pl(diag1)
+		Pl(diag2)
+		t.Errorf("Expected %s, got %s", hash1, hash2)
+	}
+}
+
+// Commit is an interface for a commit object in a Git repository.
+type Commit interface {
+	Object
+	GetTree() string
+	GetParents() []string
+	GetAuthor() string
+	GetMessage() string
 }
 ```
-EOF_/home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec_test.go
+EOF_/home/stevegt/lab/grid-poc/x/interfaces-git/interfaces-git_test.go
