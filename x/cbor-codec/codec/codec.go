@@ -82,15 +82,17 @@ func (c *Codec) Encode(payload interface{}) ([]byte, error) {
 	return c.em.Marshal(obj)
 }
 
-func (c *Codec) Decode(data []byte) (any, error) {
+func (c *Codec) Decode(data []byte) (interface{}, error) {
 	var payload interface{}
 	if err := c.dm.Unmarshal(data, &payload); err != nil {
 		return nil, err
 	}
 
-	typ, ok := c.GetTypeForTag(c.GetTagForType(payload))
+	// typ, ok := c.GetTypeForTag(c.GetTagForType(payload))
+	typ := reflect.TypeOf(payload)
 
 	// return payload as well as an error if the tag is not registered
+	_, ok := c.typeToTag[typ]
 	if !ok {
 		return payload, fmt.Errorf("unknown tag")
 	}
