@@ -83,35 +83,23 @@ func (c *Codec) Encode(payload interface{}) ([]byte, error) {
 }
 
 func (c *Codec) Decode(data []byte) (any, error) {
-	/*
-		var tag cbor.Tag
-		if err := c.dm.Unmarshal(data, &tag); err != nil {
-			return nil, err
-		}
-
-		payloadType, ok := c.getTypeForTag(tag.Number)
-		if !ok {
-			return nil, fmt.Errorf("unknown tag")
-		}
-
-		payloadPtr := reflect.New(payloadType)
-		Pf("payloadPtr: %#v\n", payloadPtr)
-		if err := c.dm.Unmarshal(tag.Content.([]byte), payloadPtr); err != nil {
-			return nil, err
-		}
-
-		return payloadPtr.Elem(), nil
-	*/
 	var payload interface{}
 	if err := c.dm.Unmarshal(data, &payload); err != nil {
 		return nil, err
 	}
 
+	typ, ok := c.GetTypeForTag(c.GetTagForType(payload))
+
 	// return payload as well as an error if the tag is not registered
-	if _, ok := c.GetTypeForTag(c.GetTagForType(payload)); !ok {
+	if !ok {
 		return payload, fmt.Errorf("unknown tag")
 	}
-	return payload, nil
+
+	// cast payload to typ
+	obj := reflect.New(typ).Interface()
+	reflect.ValueOf(obj).Elem().Set(reflect.ValueOf(payload))
+
+	return obj, nil
 }
 
 func (c *Codec) GetTagForType(payload interface{}) uint64 {

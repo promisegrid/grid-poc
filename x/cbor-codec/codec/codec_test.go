@@ -163,7 +163,7 @@ func TestStringToNumAndNumToString(t *testing.T) {
 			expectNum: 0,
 		},
 		{
-			input:     "GoLang",
+			input: "GoLang",
 			// Calculate expected: 'G'=0x47, 'o'=0x6f, 'L'=0x4c, 'a'=0x61, 'n'=0x6e, 'g'=0x67
 			// Expected: 0x476f4c616e67
 			expectNum: 0x476f4c616e67,
@@ -222,5 +222,5 @@ func TestRegisterTagName(t *testing.T) {
 	assert.NoError(t, err)
 	decoded, err := c.Decode(encoded)
 	assert.NoError(t, err)
-	assert.Equal(t, payload, decoded, "Decoded payload does not match the original")
+	assert.Equal(t, &payload, decoded, "Decoded payload does not match the original")
 }
