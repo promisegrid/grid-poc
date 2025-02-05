@@ -1,5 +1,7 @@
 decide how a CBOR codec Decode() method should work
 
+Finished the following:
+
 Help decide how a CBOR codec package's Decode() method should work.
 The codec must use the "github.com/fxamacker/cbor/v2" package as its
 decoding engine.  
