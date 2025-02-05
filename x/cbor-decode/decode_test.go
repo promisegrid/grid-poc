@@ -12,10 +12,9 @@ type Message struct {
 }
 
 // encodeWithTag encodes the given value v into CBOR format and wraps it in a proper CBOR tag,
-// where tagNum is the CBOR tag number. It first encodes v, then creates a cbor.RawTag
-// whose Content is the encoding of v, and finally marshals the RawTag.
-// Note: To avoid conflicting with reserved tag numbers in the CBOR specification,
-// the test cases use non-reserved tag numbers (e.g., 258, 259, etc.).
+// where tagNum is the CBOR tag number. It first encodes v, then creates a cbor.RawTag whose Content
+// is the encoding of v, and finally marshals the RawTag. Note: To avoid conflicting with reserved CBOR
+// tag numbers, test cases here use non-reserved tags (e.g., 258, 259, etc.).
 func encodeWithTag(tagNum uint64, v interface{}) ([]byte, error) {
 	encodedContent, err := cbor.Marshal(v)
 	if err != nil {
@@ -28,12 +27,11 @@ func encodeWithTag(tagNum uint64, v interface{}) ([]byte, error) {
 	return cbor.Marshal(tagged)
 }
 
-// TestDecodeInto demonstrates the use of DecodeInto where the caller supplies an existing instance
-// for decoding into. The encoded data uses a proper CBOR tag.
+// TestDecodeInto demonstrates the use of DecodeInto where the caller supplies an existing instance.
 func TestDecodeInto(t *testing.T) {
 	// Example 1: decoding into a Message.
 	originalMsg := Message{Value: 100}
-	// Use tag 258 (non-reserved) for Message.
+	// Use tag 258 for Message.
 	dataMsg, err := encodeWithTag(258, originalMsg)
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
@@ -52,7 +50,7 @@ func TestDecodeInto(t *testing.T) {
 
 	// Example 2: decoding into an int.
 	originalInt := 200
-	// Use tag 259 (non-reserved) for int.
+	// Use tag 259 for int.
 	dataInt, err := encodeWithTag(259, originalInt)
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
@@ -70,12 +68,11 @@ func TestDecodeInto(t *testing.T) {
 	}
 }
 
-// TestDecodeNew demonstrates the use of DecodeNew which returns a pointer to a newly allocated instance
-// of the decoded type. The encoded data uses a proper CBOR tag.
+// TestDecodeNew demonstrates the use of DecodeNew which returns a pointer to a newly allocated instance.
 func TestDecodeNew(t *testing.T) {
 	// Example 1: decoding into a new Message instance.
 	originalMsg := Message{Value: 150}
-	// Use tag 260 (non-reserved) for Message.
+	// Use tag 260 for Message.
 	dataMsg, err := encodeWithTag(260, originalMsg)
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
@@ -93,7 +90,7 @@ func TestDecodeNew(t *testing.T) {
 
 	// Example 2: decoding into a new int instance.
 	originalInt := 250
-	// Use tag 261 (non-reserved) for int.
+	// Use tag 261 for int.
 	dataInt, err := encodeWithTag(261, originalInt)
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
@@ -110,12 +107,11 @@ func TestDecodeNew(t *testing.T) {
 	}
 }
 
-// TestDecodeValue demonstrates the use of DecodeValue which returns a conventional Go value rather than a pointer.
-// The encoded data uses a proper CBOR tag.
+// TestDecodeValue demonstrates the use of DecodeValue which returns a conventional Go value.
 func TestDecodeValue(t *testing.T) {
 	// Example 1: decoding into a Message value.
 	originalMsg := Message{Value: 175}
-	// Use tag 262 (non-reserved) for Message.
+	// Use tag 262 for Message.
 	dataMsg, err := encodeWithTag(262, originalMsg)
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
@@ -133,7 +129,7 @@ func TestDecodeValue(t *testing.T) {
 
 	// Example 2: decoding into an int value.
 	originalInt := 225
-	// Use tag 263 (non-reserved) for int.
+	// Use tag 263 for int.
 	dataInt, err := encodeWithTag(263, originalInt)
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
@@ -147,5 +143,32 @@ func TestDecodeValue(t *testing.T) {
 	}
 	if number != originalInt {
 		t.Errorf("expected int value %d, got %d", originalInt, number)
+	}
+}
+
+// TestDecodeUnknown demonstrates decoding when the caller does not know the type at compile time.
+// In this example, we use the DecodeValue function with T instantiated as interface{}.
+func TestDecodeUnknown(t *testing.T) {
+	// Example: decoding an int into a dynamic interface{}
+	originalInt := 300
+	// Use tag 264 for this test.
+	dataInt, err := encodeWithTag(264, originalInt)
+	if err != nil {
+		t.Fatalf("encodeWithTag failed: %v", err)
+	}
+	decoded, tag, err := DecodeValue[interface{}](dataInt)
+	if err != nil {
+		t.Fatalf("DecodeValue[interface{}] failed: %v", err)
+	}
+	if tag != 264 {
+		t.Errorf("expected tag 264, got %d", tag)
+	}
+	// fxamacker/cbor decodes numeric values into uint64 when using interface{}.
+	intResult, ok := decoded.(uint64)
+	if !ok {
+		t.Errorf("expected uint64 type, got %T", decoded)
+	}
+	if intResult != uint64(originalInt) {
+		t.Errorf("expected uint64 value %d, got %d", originalInt, intResult)
 	}
 }

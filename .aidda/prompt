@@ -38,20 +38,9 @@ non-CBOR tag.
 Explain the difference between cbor.RawTag and cbor.Tag, and justify
 the choice of one or the other in the code.
 
-Fix these errors:
-
-=== RUN   TestDecodeInto
-    decode_test.go:36: encodeWithTag failed: cbor: error calling MarshalCBOR for type cbor.RawTag: cbor: tag number 1 must be followed by integer or floating-point number, got map
---- FAIL: TestDecodeInto (0.00s)
-=== RUN   TestDecodeNew
-    decode_test.go:76: encodeWithTag failed: cbor: error calling MarshalCBOR for type cbor.RawTag: cbor: tag number 2 or 3 must be followed by byte string, got map
---- FAIL: TestDecodeNew (0.00s)
-=== RUN   TestDecodeValue
---- PASS: TestDecodeValue (0.00s)
-FAIL
-FAIL    grid/x/cbor-decode      0.003s
-FAIL
-
+Attempt to add an example in which the caller doesn't know the type
+being decoded, and must pass in nil, a zero-valued interface{} value,
+or something else that doesn't require importing reflect.
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
