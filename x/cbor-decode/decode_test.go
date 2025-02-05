@@ -13,10 +13,9 @@ type Message struct {
 
 // encodeWithTag encodes the given value v into CBOR format and wraps it in a proper CBOR tag,
 // where tagNum is the CBOR tag number. It first encodes v, then creates a cbor.RawTag whose Content
-// is the encoding of v, and finally marshals the RawTag. Note: To avoid conflicting with reserved CBOR
-// tag numbers, test cases here use non-reserved tags (e.g., 258, 259, etc.).
+// is the encoding of v, and finally marshals the RawTag.
 func encodeWithTag(tagNum uint64, v interface{}) ([]byte, error) {
-	encodedContent, err := cbor.Marshal(v)
+	encodedContent, err := encMode.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
@@ -24,7 +23,7 @@ func encodeWithTag(tagNum uint64, v interface{}) ([]byte, error) {
 		Number:  tagNum,
 		Content: encodedContent,
 	}
-	return cbor.Marshal(tagged)
+	return encMode.Marshal(tagged)
 }
 
 // TestDecodeInto demonstrates the use of DecodeInto where the caller supplies an existing instance.

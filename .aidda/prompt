@@ -1,48 +1,10 @@
-decide how a CBOR codec Decode() method should work
+use custom decoder options
 
-Finished the following:
+Refactor the code to use these custom encoding and decoder options
+instead of the defaults:
 
-Help decide how a CBOR codec package's Decode() method should work.
-The codec must use the "github.com/fxamacker/cbor/v2" package as its
-decoding engine.  
-
-The choices seem to be:
-
-- return a pointer to an existing instance of the type being decoded
-  - this would mean passing in a zero-valued instance of the type
-  - this is similar to how the encoding/json package works
-  - the caller must be able to provide either nil or a zero-valued
-    interface{} value in cases where the caller doesn't know the type
-    being decoded
-  - the caller must not need to import reflect
-- return a pointer to a new instance of the type being decoded
-  - the pointer must be a conventional Go pointer, not an interface,
-    and not a reflect-related thing 
-  - the caller must not need to import reflect
-- return a value of the type being decoded
-  - the value must be a conventional Go value, not an interface, and
-    not a reflect-related thing
-  - the caller must not need to import reflect
-
-An alternative choice that may apply to any or all of the above is to
-return both the decoded value and the tag number, if any, as separate
-return values, and let the caller cast the value to the correct type
-or otherwise handle it as needed.
-
-Write a version of each possible variant, along with a test case
-showing examples of how each choice would be used. The encoded data
-must be actual CBOR data, not simulated; remove all simulated data
-from the test cases, and remove all handling of simulated data from
-the codec.  The tag must be an actual CBOR tag, not a simulated one,
-and not a simple prepended byte; remove the code that simulates a
-non-CBOR tag.
-
-Explain the difference between cbor.RawTag and cbor.Tag, and justify
-the choice of one or the other in the code.
-
-Attempt to add an example in which the caller doesn't know the type
-being decoded, and must pass in nil, a zero-valued interface{} value,
-or something else that doesn't require importing reflect.
+		EncOptions: cbor.CoreDetEncOptions(),
+		DecOptions: cbor.DecOptions{},
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
