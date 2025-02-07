@@ -1,6 +1,7 @@
 package cbordecode
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
@@ -169,5 +170,34 @@ func TestDecodeUnknown(t *testing.T) {
 	}
 	if intResult != uint64(originalInt) {
 		t.Errorf("expected uint64 value %d, got %d", originalInt, intResult)
+	}
+}
+
+// TestDecodeFromReader demonstrates the use of decMode.NewDecoder to decode from an io.Reader.
+// It encodes a Message with a specific tag and then decodes it using a bytes.Reader.
+func TestDecodeFromReader(t *testing.T) {
+	originalMsg := Message{Value: 999}
+	// Use tag 265 for this test.
+	data, err := encodeWithTag(265, originalMsg)
+	if err != nil {
+		t.Fatalf("encodeWithTag failed: %v", err)
+	}
+	reader := bytes.NewReader(data)
+	decoder := decMode.NewDecoder(reader)
+	
+	var rawTag cbor.RawTag
+	if err := decoder.Decode(&rawTag); err != nil {
+		t.Fatalf("decoding raw tag from io.Reader failed: %v", err)
+	}
+	if int(rawTag.Number) != 265 {
+		t.Errorf("expected tag 265, got %d", rawTag.Number)
+	}
+
+	var msg Message
+	if err := decMode.Unmarshal(rawTag.Content, &msg); err != nil {
+		t.Fatalf("decoding Message content failed: %v", err)
+	}
+	if msg != originalMsg {
+		t.Errorf("expected Message %+v, got %+v", originalMsg, msg)
 	}
 }

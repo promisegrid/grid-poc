@@ -1,10 +1,6 @@
-use custom decoder options
+add io.Reader decoding test
 
-Refactor the code to use these custom encoding and decoder options
-instead of the defaults:
-
-		EncOptions: cbor.CoreDetEncOptions(),
-		DecOptions: cbor.DecOptions{},
+- add an example of using decMode.NewDecoder to decode from an io.Reader
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
