@@ -1,9 +1,15 @@
-add io.Reader decoding test
+fix error
 
-- add an example of using decMode.NewDecoder to decode from an io.Reader
+codec_test.go:4:2: package cbor-codec/codec is not in std (/home/stevegt/.goenv/versions/1.22.1/src/cbor-codec/codec)
+
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
+ x/cbor-codec/codec.go
+ x/cbor-codec/codec_test.go
+
+.stop
+
   x/cbor-decode/decode.go
   x/cbor-decode/decode_test.go
 Out:
@@ -12,8 +18,6 @@ Out:
 
 .stop
 
- x/cbor-codec/codec/codec.go
- x/cbor-codec/codec/codec_test.go
 
 fix test error
 

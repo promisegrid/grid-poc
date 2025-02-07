@@ -1,9 +1,10 @@
 package codec_test
 
 import (
-	"cbor-codec/codec"
 	"encoding/hex"
 	"testing"
+
+	codec "github.com/stevegt/grid-poc/x/cbor-codec"
 
 	"github.com/fxamacker/cbor/v2"
 	. "github.com/stevegt/goadapt"

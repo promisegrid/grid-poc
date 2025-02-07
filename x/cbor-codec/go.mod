@@ -1,4 +1,4 @@
-module cbor-codec
+module github.com/stevegt/grid-poc/x/cbor-codec
 
 go 1.22.1
 
