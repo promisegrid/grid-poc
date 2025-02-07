@@ -11,6 +11,28 @@ var (
 	decMode cbor.DecMode
 )
 
+// The fxamacker/cbor/v2 package provides two related types: cbor.RawTag and cbor.Tag.
+// cbor.RawTag is a simple structure with a Number field (the tag number) and a
+// Content field which contains the raw, still-encoded CBOR bytes. This type is
+// ideal for situations where you need to explicitly extract the tag number and then
+// decode the inner content into a provided type without forcing the caller to use
+// reflection.
+//
+// cbor.Tag, in contrast, is used to associate a tag with a value such that the content
+// is automatically decoded as part of a larger structure. This can hide the tag and
+// processing details. In our implementation, we want to give explicit control to the caller,
+// so we make use of cbor.RawTag and then perform a secondary decode of its Content. This
+// design avoids requiring the caller to import reflect or handle any reflection-related details.
+//
+// The codec package below provides three variants of a Decode() method:
+// 1. DecodeInto: the caller supplies an existing instance (or pointer thereof) to decode into.
+// 2. DecodeNew: the codec allocates a new instance of the desired type and returns a pointer to it.
+// 3. DecodeValue: the codec returns a new instance as a conventional value (not a pointer).
+//
+// For callers that do not know the type at compile time, DecodeValue can be instantiated
+// with the generic type interface{}. This allows for dynamic decoding without the caller having
+// to import or use reflection.
+
 func init() {
 	var err error
 	encMode, err = cbor.CoreDetEncOptions().EncMode()
