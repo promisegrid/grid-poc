@@ -2,8 +2,8 @@ update cbor-codec based on cbor-decode lessons learned
 
 Examine the cbor-decode package and its tests. Update the cbor-codec
 package to use the same techniques as cbor-decode.  Do not import the
-cbor-decode package into the cbor-codec package.
-
+cbor-decode package into the cbor-codec package. Do not use
+reflect.  Keep the code as simple as the cbor-decode package.
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 

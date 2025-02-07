@@ -62,6 +62,8 @@ func setupCodec(t *testing.T) *codec.Codec {
 	c, err := codec.NewCodec(config)
 	assert.NoError(t, err)
 
+	// For RegisterTagNumber, we are registering with a value (non-pointer),
+	// so decoding will return the dereferenced value.
 	assert.NoError(t, c.RegisterTagNumber(GridTag, GridPayload{}))
 	assert.NoError(t, c.RegisterTagNumber(ImageTag, ImagePayload{}))
 	assert.NoError(t, c.RegisterTagNumber(SensorTag, SensorData{}))
