@@ -43,6 +43,10 @@ type SensorData struct {
 	Precision uint8
 }
 
+type TestPayload struct {
+	Value string
+}
+
 const (
 	GridTag   = 1735551332
 	ImageTag  = 1735551333
@@ -165,7 +169,6 @@ func TestStringToNumAndNumToString(t *testing.T) {
 		},
 		{
 			input: "GoLang",
-			// Calculate expected: 'G'=0x47, 'o'=0x6f, 'L'=0x4c, 'a'=0x61, 'n'=0x6e, 'g'=0x67
 			// Expected: 0x476f4c616e67
 			expectNum: 0x476f4c616e67,
 		},
@@ -205,17 +208,19 @@ func TestRegisterTagName(t *testing.T) {
 
 	tagName := "example"
 	expectedTag := codec.StringToNum(tagName)
-	type TestPayload struct {
-		Value string
-	}
+	// TestPayload will be registered so that decoding returns a pointer.
 	payload := TestPayload{Value: "hello"}
 
-	// Register using tag name
+	// Register using tag name.
 	err = c.RegisterTagName(tagName, payload)
 	assert.NoError(t, err)
 
 	// Verify that the tag number is correctly assigned for the payload type.
 	gotTag := c.GetTagForType(payload)
+	// It might be found via the pointer mapping.
+	if gotTag == 0 {
+		gotTag = c.GetTagForType(&payload)
+	}
 	assert.Equal(t, expectedTag, gotTag, "RegisterTagName did not assign the expected tag number")
 
 	// Encode the payload and then decode it to ensure full round-trip functionality.
@@ -223,5 +228,6 @@ func TestRegisterTagName(t *testing.T) {
 	assert.NoError(t, err)
 	decoded, err := c.Decode(encoded)
 	assert.NoError(t, err)
+	// For tag name registration, decoding returns a pointer.
 	assert.Equal(t, &payload, decoded, "Decoded payload does not match the original")
 }

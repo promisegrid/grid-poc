@@ -1,17 +1,22 @@
-fix error
+update cbor-codec based on cbor-decode lessons learned
 
-codec_test.go:4:2: package cbor-codec/codec is not in std (/home/stevegt/.goenv/versions/1.22.1/src/cbor-codec/codec)
+Examine the cbor-decode package and its tests. Update the cbor-codec
+package to use the same techniques as cbor-decode.  Do not import the
+cbor-decode package into the cbor-codec package.
 
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 
  x/cbor-codec/codec.go
  x/cbor-codec/codec_test.go
+ x/cbor-decode/decode.go
+ x/cbor-decode/decode_test.go
+Out:
+ x/cbor-codec/codec.go
+ x/cbor-codec/codec_test.go
 
 .stop
 
-  x/cbor-decode/decode.go
-  x/cbor-decode/decode_test.go
 Out:
   x/cbor-decode/decode.go
   x/cbor-decode/decode_test.go
