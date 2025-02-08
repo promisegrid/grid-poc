@@ -74,10 +74,10 @@ func DecodeNew[T any](data []byte) (*T, int, error) {
 	return p, tag, nil
 }
 
-// DecodeValue decodes CBOR-encoded data into an existing instance provided by out.
+// DecodeContent decodes CBOR-encoded data into an existing instance provided by out.
 // It expects the data to contain a proper CBOR tag (major type 6) which wraps the actual
 // encoded content.
-func DecodeValue(data []byte, out interface{}) error {
+func DecodeContent(data []byte, out interface{}) error {
 	var rawTag cbor.RawTag
 	if err := decMode.Unmarshal(data, &rawTag); err != nil {
 		return fmt.Errorf("failed to unmarshal tag: %w", err)

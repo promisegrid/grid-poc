@@ -107,8 +107,8 @@ func TestDecodeNew(t *testing.T) {
 	}
 }
 
-// TestDecodeValue demonstrates the use of DecodeValue which decodes into an existing instance.
-func TestDecodeValue(t *testing.T) {
+// TestDecodeContent demonstrates the use of DecodeContent which decodes into an existing instance.
+func TestDecodeContent(t *testing.T) {
 	// Example 1: decoding into a Message value.
 	originalMsg := Message{Value: 175}
 	// Use tag 262 for Message.
@@ -117,9 +117,9 @@ func TestDecodeValue(t *testing.T) {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
 	var msg Message
-	err = DecodeValue(dataMsg, &msg)
+	err = DecodeContent(dataMsg, &msg)
 	if err != nil {
-		t.Fatalf("DecodeValue failed: %v", err)
+		t.Fatalf("DecodeContent failed: %v", err)
 	}
 	if msg != originalMsg {
 		t.Errorf("expected Message %+v, got %+v", originalMsg, msg)
@@ -133,9 +133,9 @@ func TestDecodeValue(t *testing.T) {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
 	var number int
-	err = DecodeValue(dataInt, &number)
+	err = DecodeContent(dataInt, &number)
 	if err != nil {
-		t.Fatalf("DecodeValue failed: %v", err)
+		t.Fatalf("DecodeContent failed: %v", err)
 	}
 	if number != originalInt {
 		t.Errorf("expected int value %d, got %d", originalInt, number)
@@ -143,7 +143,7 @@ func TestDecodeValue(t *testing.T) {
 }
 
 // TestDecodeUnknown demonstrates decoding when the caller does not know the type at compile time.
-// In this example, we use the DecodeValue function with T instantiated as interface{}.
+// In this example, we use the DecodeContent function with T instantiated as interface{}.
 func TestDecodeUnknown(t *testing.T) {
 	// Example: decoding an int into a dynamic interface{}
 	originalInt := 300
@@ -153,9 +153,9 @@ func TestDecodeUnknown(t *testing.T) {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
 	var decoded interface{}
-	err = DecodeValue(dataInt, &decoded)
+	err = DecodeContent(dataInt, &decoded)
 	if err != nil {
-		t.Fatalf("DecodeValue failed: %v", err)
+		t.Fatalf("DecodeContent failed: %v", err)
 	}
 	// fxamacker/cbor decodes numeric values into uint64 when using interface{}.
 	intResult, ok := decoded.(uint64)
