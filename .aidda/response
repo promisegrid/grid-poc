@@ -76,15 +76,11 @@ func DecodeNew[T any](data []byte) (*T, int, error) {
 	return p, tag, nil
 }
 
-// DecodeValue decodes CBOR-encoded data into an existing instance provided by out.
-// It expects the data to contain a proper CBOR tag (major type 6) which wraps the actual
-// encoded content.
-func DecodeValue(data []byte, out interface{}) error {
-	var rawTag cbor.RawTag
-	if err := decMode.Unmarshal(data, &rawTag); err != nil {
-		return fmt.Errorf("failed to unmarshal tag: %w", err)
-	}
-	return decMode.Unmarshal(rawTag.Content, out)
+// DecodeRaw decodes a CBOR value from a byte slice into the given value.
+// It performs a single-level decode and does not recursively unwrap CBOR tags.
+// This function is useful for decoding the payload obtained from DecodeTag.
+func DecodeRaw(data []byte, out interface{}) error {
+	return decMode.Unmarshal(data, out)
 }
 
 // DecodeTag decodes a CBOR tag from a byte slice.
@@ -219,8 +215,9 @@ func TestDecodeNew(t *testing.T) {
 	}
 }
 
-// TestDecodeValue demonstrates the use of DecodeValue which decodes into an existing instance.
-func TestDecodeValue(t *testing.T) {
+// TestDecodeRaw demonstrates the use of DecodeRaw which decodes a single-level CBOR value.
+// It first extracts the raw content via DecodeTag, then decodes that content.
+func TestDecodeRaw(t *testing.T) {
 	// Example 1: decoding into a Message value.
 	originalMsg := Message{Value: 175}
 	// Use tag 262 for Message.
@@ -228,10 +225,17 @@ func TestDecodeValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
-	var msg Message
-	err = DecodeValue(dataMsg, &msg)
+	tag, content, err := DecodeTag(dataMsg)
 	if err != nil {
-		t.Fatalf("DecodeValue failed: %v", err)
+		t.Fatalf("DecodeTag failed: %v", err)
+	}
+	if tag != 262 {
+		t.Errorf("expected tag 262, got %d", tag)
+	}
+	var msg Message
+	err = DecodeRaw(content, &msg)
+	if err != nil {
+		t.Fatalf("DecodeRaw failed: %v", err)
 	}
 	if msg != originalMsg {
 		t.Errorf("expected Message %+v, got %+v", originalMsg, msg)
@@ -244,10 +248,17 @@ func TestDecodeValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
-	var number int
-	err = DecodeValue(dataInt, &number)
+	tag, content, err = DecodeTag(dataInt)
 	if err != nil {
-		t.Fatalf("DecodeValue failed: %v", err)
+		t.Fatalf("DecodeTag failed: %v", err)
+	}
+	if tag != 263 {
+		t.Errorf("expected tag 263, got %d", tag)
+	}
+	var number int
+	err = DecodeRaw(content, &number)
+	if err != nil {
+		t.Fatalf("DecodeRaw failed: %v", err)
 	}
 	if number != originalInt {
 		t.Errorf("expected int value %d, got %d", originalInt, number)
@@ -255,7 +266,7 @@ func TestDecodeValue(t *testing.T) {
 }
 
 // TestDecodeUnknown demonstrates decoding when the caller does not know the type at compile time.
-// In this example, we use the DecodeValue function with T instantiated as interface{}.
+// Here, the raw CBOR content is decoded into an interface{}.
 func TestDecodeUnknown(t *testing.T) {
 	// Example: decoding an int into a dynamic interface{}
 	originalInt := 300
@@ -264,10 +275,14 @@ func TestDecodeUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
-	var decoded interface{}
-	err = DecodeValue(dataInt, &decoded)
+	_, content, err := DecodeTag(dataInt)
 	if err != nil {
-		t.Fatalf("DecodeValue failed: %v", err)
+		t.Fatalf("DecodeTag failed: %v", err)
+	}
+	var decoded interface{}
+	err = DecodeRaw(content, &decoded)
+	if err != nil {
+		t.Fatalf("DecodeRaw failed: %v", err)
 	}
 	// fxamacker/cbor decodes numeric values into uint64 when using interface{}.
 	intResult, ok := decoded.(uint64)

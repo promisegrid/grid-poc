@@ -107,8 +107,9 @@ func TestDecodeNew(t *testing.T) {
 	}
 }
 
-// TestDecodeContent demonstrates the use of DecodeContent which decodes into an existing instance.
-func TestDecodeContent(t *testing.T) {
+// TestDecodeRaw demonstrates the use of DecodeRaw which decodes a single-level CBOR value.
+// It first extracts the raw content via DecodeTag, then decodes that content.
+func TestDecodeRaw(t *testing.T) {
 	// Example 1: decoding into a Message value.
 	originalMsg := Message{Value: 175}
 	// Use tag 262 for Message.
@@ -116,10 +117,17 @@ func TestDecodeContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
-	var msg Message
-	err = DecodeContent(dataMsg, &msg)
+	tag, content, err := DecodeTag(dataMsg)
 	if err != nil {
-		t.Fatalf("DecodeContent failed: %v", err)
+		t.Fatalf("DecodeTag failed: %v", err)
+	}
+	if tag != 262 {
+		t.Errorf("expected tag 262, got %d", tag)
+	}
+	var msg Message
+	err = DecodeRaw(content, &msg)
+	if err != nil {
+		t.Fatalf("DecodeRaw failed: %v", err)
 	}
 	if msg != originalMsg {
 		t.Errorf("expected Message %+v, got %+v", originalMsg, msg)
@@ -132,10 +140,17 @@ func TestDecodeContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
-	var number int
-	err = DecodeContent(dataInt, &number)
+	tag, content, err = DecodeTag(dataInt)
 	if err != nil {
-		t.Fatalf("DecodeContent failed: %v", err)
+		t.Fatalf("DecodeTag failed: %v", err)
+	}
+	if tag != 263 {
+		t.Errorf("expected tag 263, got %d", tag)
+	}
+	var number int
+	err = DecodeRaw(content, &number)
+	if err != nil {
+		t.Fatalf("DecodeRaw failed: %v", err)
 	}
 	if number != originalInt {
 		t.Errorf("expected int value %d, got %d", originalInt, number)
@@ -143,7 +158,7 @@ func TestDecodeContent(t *testing.T) {
 }
 
 // TestDecodeUnknown demonstrates decoding when the caller does not know the type at compile time.
-// In this example, we use the DecodeContent function with T instantiated as interface{}.
+// Here, the raw CBOR content is decoded into an interface{}.
 func TestDecodeUnknown(t *testing.T) {
 	// Example: decoding an int into a dynamic interface{}
 	originalInt := 300
@@ -152,10 +167,14 @@ func TestDecodeUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
-	var decoded interface{}
-	err = DecodeContent(dataInt, &decoded)
+	_, content, err := DecodeTag(dataInt)
 	if err != nil {
-		t.Fatalf("DecodeContent failed: %v", err)
+		t.Fatalf("DecodeTag failed: %v", err)
+	}
+	var decoded interface{}
+	err = DecodeRaw(content, &decoded)
+	if err != nil {
+		t.Fatalf("DecodeRaw failed: %v", err)
 	}
 	// fxamacker/cbor decodes numeric values into uint64 when using interface{}.
 	intResult, ok := decoded.(uint64)

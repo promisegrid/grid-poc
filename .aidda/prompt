@@ -1,19 +1,15 @@
-add DecodeTag, fix DecodeValue signature
+remove DecodeContent, add DecodeRaw
 
-Add this function to the cbor-decode package:
+Remove the DecodeContent function from the cbor-decode package because
+it is redundant with DecodeInto.
 
-DecodeTag([]byte) (uint64, []byte, error)
+Add a DecodeRaw function to the cbor-decode package:
 
-DecodeTag decodes a CBOR tag from a byte slice.  It returns the tag
-number, the tag data, and an error.  If the byte slice does not contain
-a tag, it returns 0, nil, nil.
+DecodeRaw([]byte, interface{}) error
 
-Fix the signature of DecodeValue to look like this:
-
-DecodeValue([]byte, interface{}) error
-
-In other words, we will pass a byte slice and a pointer to a value to
-decode into, rather than using generics.  
+DecodeRaw decodes a CBOR value from a byte slice into the given value.
+It does not recursively decode the value.  It is useful for decoding
+the payload of a CBOR that was returned from DecodeTag.
 
 In:
  x/cbor-decode/decode.go
