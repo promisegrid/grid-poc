@@ -1,21 +1,16 @@
-remove DecodeContent, add DecodeRaw
+add TestDecodeVarious
 
-Remove the DecodeContent function from the cbor-decode package because
-it is redundant with DecodeInto.
+Add a test that demonstrates the use of DecodeTag and DecodeRaw.  The
+test should define a few different tag numbers and tagged values, then
+use a 'for' loop to iterate over them.  Inside the loop, use a switch
+statement to decide which struct to pass to DecodeRaw based on the tag
+number.
 
-Add a DecodeRaw function to the cbor-decode package:
-
-DecodeRaw([]byte, interface{}) error
-
-DecodeRaw decodes a CBOR value from a byte slice into the given value.
-It does not recursively decode the value.  It is useful for decoding
-the payload of a CBOR that was returned from DecodeTag.
 
 In:
  x/cbor-decode/decode.go
  x/cbor-decode/decode_test.go
 Out:
- x/cbor-decode/decode.go
  x/cbor-decode/decode_test.go
 
 .stop

@@ -254,3 +254,76 @@ func TestDecodeFromReader(t *testing.T) {
 		t.Errorf("expected Message %+v, got %+v", originalMsg, msg)
 	}
 }
+
+// TestDecodeVarious demonstrates the use of DecodeTag and DecodeRaw with multiple tagged values.
+func TestDecodeVarious(t *testing.T) {
+	// Define another struct for testing.
+	type Other struct {
+		Name string
+	}
+
+	// Prepare a list of test cases with different tag numbers and corresponding values.
+	type testCase struct {
+		tag   uint64
+		value interface{}
+	}
+	testCases := []testCase{
+		{tag: 300, value: Message{Value: 111}},
+		{tag: 301, value: 222},
+		{tag: 302, value: Other{Name: "Test"}},
+	}
+
+	// Encode each test case.
+	var encodedData [][]byte
+	for _, tc := range testCases {
+		data, err := encodeWithTag(tc.tag, tc.value)
+		if err != nil {
+			t.Fatalf("failed to encode value with tag %d: %v", tc.tag, err)
+		}
+		encodedData = append(encodedData, data)
+	}
+
+	// Iterate over the encoded data and decode based on tag.
+	for i, data := range encodedData {
+		tag, content, err := DecodeTag(data)
+		if err != nil {
+			t.Fatalf("DecodeTag failed for test case %d: %v", i, err)
+		}
+		switch tag {
+		case 300:
+			var msg Message
+			if err := DecodeRaw(content, &msg); err != nil {
+				t.Errorf("DecodeRaw failed for tag 300: %v", err)
+				continue
+			}
+			expected := testCases[i].value.(Message)
+			if msg != expected {
+				t.Errorf("for tag 300, expected Message %+v, got %+v", expected, msg)
+			}
+		case 301:
+			var number int
+			if err := DecodeRaw(content, &number); err != nil {
+				t.Errorf("DecodeRaw failed for tag 301: %v", err)
+				continue
+			}
+			expected := testCases[i].value.(int)
+			if number != expected {
+				t.Errorf("for tag 301, expected int %d, got %d", expected, number)
+			}
+		case 302:
+			var other struct {
+				Name string
+			}
+			if err := DecodeRaw(content, &other); err != nil {
+				t.Errorf("DecodeRaw failed for tag 302: %v", err)
+				continue
+			}
+			expected := testCases[i].value.(Other)
+			if other.Name != expected.Name {
+				t.Errorf("for tag 302, expected Other %+v, got %+v", expected, other)
+			}
+		default:
+			t.Errorf("unexpected tag %d in test case %d", tag, i)
+		}
+	}
+}
