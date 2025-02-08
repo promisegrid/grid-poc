@@ -25,14 +25,10 @@ var (
 // design avoids requiring the caller to import reflect or handle any reflection-related details.
 //
 // The codec package below provides three variants of a Decode() method:
-// 1. DecodeInto: the caller supplies an existing instance (or pointer thereof) to decode into.
-// 2. DecodeNew: the codec allocates a new instance of the desired type and returns a pointer to it.
-// 3. DecodeValue: the codec returns a new instance as a conventional value (not a pointer).
-//
-// For callers that do not know the type at compile time, DecodeValue can be instantiated
-// with the generic type interface{}. This allows for dynamic decoding without the caller having
-// to import or use reflection.
-
+//  1. DecodeInto: the caller supplies an existing instance (or pointer thereof) to decode into.
+//  2. DecodeNew: the codec allocates a new instance of the desired type and returns a pointer to it.
+//  3. DecodeValue: the codec decodes into a provided pointer; this variant is provided
+//     for callers that do not want to use generics.
 func init() {
 	var err error
 	encMode, err = cbor.CoreDetEncOptions().EncMode()
@@ -78,20 +74,32 @@ func DecodeNew[T any](data []byte) (*T, int, error) {
 	return p, tag, nil
 }
 
-// DecodeValue decodes CBOR-encoded data and returns a new instance of type T as a conventional value.
-// It expects the data to contain a proper CBOR tag (major type 6). The tag number is returned along with
-// the decoded value. This function is especially useful when the caller wishes to decode dynamically by
-// instantiating T as interface{}.
-func DecodeValue[T any](data []byte) (T, int, error) {
-	var zero T
+// DecodeValue decodes CBOR-encoded data into an existing instance provided by out.
+// It expects the data to contain a proper CBOR tag (major type 6) which wraps the actual
+// encoded content.
+func DecodeValue(data []byte, out interface{}) error {
 	var rawTag cbor.RawTag
 	if err := decMode.Unmarshal(data, &rawTag); err != nil {
-		return zero, 0, fmt.Errorf("failed to unmarshal tag: %w", err)
+		return fmt.Errorf("failed to unmarshal tag: %w", err)
 	}
-	tag := int(rawTag.Number)
-	p := new(T)
-	if err := decMode.Unmarshal(rawTag.Content, p); err != nil {
-		return *p, tag, fmt.Errorf("failed to unmarshal content: %w", err)
+	return decMode.Unmarshal(rawTag.Content, out)
+}
+
+// DecodeTag decodes a CBOR tag from a byte slice.
+// It returns the tag number as a uint64, the tag data, and an error.
+// If the byte slice does not contain a tag, it returns 0, nil, nil.
+func DecodeTag(data []byte) (uint64, []byte, error) {
+	if len(data) == 0 {
+		return 0, nil, nil
 	}
-	return *p, tag, nil
+	// Check if the first byte indicates a CBOR tag (major type 6).
+	if (data[0] >> 5) != 6 {
+		return 0, nil, nil
+	}
+
+	var rawTag cbor.RawTag
+	if err := decMode.Unmarshal(data, &rawTag); err != nil {
+		return 0, nil, fmt.Errorf("failed to unmarshal tag: %w", err)
+	}
+	return rawTag.Number, rawTag.Content, nil
 }

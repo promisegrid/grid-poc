@@ -1,3 +1,29 @@
+add DecodeTag, fix DecodeValue signature
+
+Add this function to the cbor-decode package:
+
+DecodeTag([]byte) (uint64, []byte, error)
+
+DecodeTag decodes a CBOR tag from a byte slice.  It returns the tag
+number, the tag data, and an error.  If the byte slice does not contain
+a tag, it returns 0, nil, nil.
+
+Fix the signature of DecodeValue to look like this:
+
+DecodeValue([]byte, interface{}) error
+
+In other words, we will pass a byte slice and a pointer to a value to
+decode into, rather than using generics.  
+
+In:
+ x/cbor-decode/decode.go
+ x/cbor-decode/decode_test.go
+Out:
+ x/cbor-decode/decode.go
+ x/cbor-decode/decode_test.go
+
+.stop
+
 update cbor-codec based on cbor-decode lessons learned
 
 Examine the cbor-decode package and its tests. Update the cbor-codec
@@ -23,30 +49,6 @@ Out:
 
 .stop
 
-
-fix test error
-
-=== RUN   TestEncode/GridPayload
-1735551332({"ID": '\u0001\u0002', "Timestamp": 1614124800})
-    codec_test.go:114: 
-                Error Trace:    /home/stevegt/lab/grid-poc/x/cbor-codec/codec/codec_test.go:114
-                Error:          Not equal: 
-                                expected: codec_test.GridPayload(codec_test.GridPayload{ID:[]uint8{0x1, 0x2}, Timestamp:0x60359700})
-                                actual  : *codec_test.GridPayload(&codec_test.GridPayload{ID:[]uint8{0x1, 0x2}, Timestamp:0x60359700})
-                            
-                                Diff:
-                                --- Expected
-                                +++ Actual
-                                @@ -1,2 +1,2 @@
-                                -(codec_test.GridPayload) {
-                                +(*codec_test.GridPayload)({
-                                  ID: ([]uint8) (len=2) {
-                                @@ -5,3 +5,3 @@
-                                  Timestamp: (uint64) 1614124800
-                                -}
-                                +})
-                                 
-                Test:           TestEncode/GridPayload
 
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.

@@ -107,7 +107,7 @@ func TestDecodeNew(t *testing.T) {
 	}
 }
 
-// TestDecodeValue demonstrates the use of DecodeValue which returns a conventional Go value.
+// TestDecodeValue demonstrates the use of DecodeValue which decodes into an existing instance.
 func TestDecodeValue(t *testing.T) {
 	// Example 1: decoding into a Message value.
 	originalMsg := Message{Value: 175}
@@ -116,12 +116,10 @@ func TestDecodeValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
-	msg, tag, err := DecodeValue[Message](dataMsg)
+	var msg Message
+	err = DecodeValue(dataMsg, &msg)
 	if err != nil {
-		t.Fatalf("DecodeValue[Message] failed: %v", err)
-	}
-	if tag != 262 {
-		t.Errorf("expected tag 262, got %d", tag)
+		t.Fatalf("DecodeValue failed: %v", err)
 	}
 	if msg != originalMsg {
 		t.Errorf("expected Message %+v, got %+v", originalMsg, msg)
@@ -134,12 +132,10 @@ func TestDecodeValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
-	number, tag, err := DecodeValue[int](dataInt)
+	var number int
+	err = DecodeValue(dataInt, &number)
 	if err != nil {
-		t.Fatalf("DecodeValue[int] failed: %v", err)
-	}
-	if tag != 263 {
-		t.Errorf("expected tag 263, got %d", tag)
+		t.Fatalf("DecodeValue failed: %v", err)
 	}
 	if number != originalInt {
 		t.Errorf("expected int value %d, got %d", originalInt, number)
@@ -156,12 +152,10 @@ func TestDecodeUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWithTag failed: %v", err)
 	}
-	decoded, tag, err := DecodeValue[interface{}](dataInt)
+	var decoded interface{}
+	err = DecodeValue(dataInt, &decoded)
 	if err != nil {
-		t.Fatalf("DecodeValue[interface{}] failed: %v", err)
-	}
-	if tag != 264 {
-		t.Errorf("expected tag 264, got %d", tag)
+		t.Fatalf("DecodeValue failed: %v", err)
 	}
 	// fxamacker/cbor decodes numeric values into uint64 when using interface{}.
 	intResult, ok := decoded.(uint64)
@@ -170,6 +164,46 @@ func TestDecodeUnknown(t *testing.T) {
 	}
 	if intResult != uint64(originalInt) {
 		t.Errorf("expected uint64 value %d, got %d", originalInt, intResult)
+	}
+}
+
+// TestDecodeTag demonstrates the use of DecodeTag which decodes just the tag and its content.
+func TestDecodeTag(t *testing.T) {
+	originalInt := 1234
+	// Use tag 270 for this test.
+	dataInt, err := encodeWithTag(270, originalInt)
+	if err != nil {
+		t.Fatalf("encodeWithTag failed: %v", err)
+	}
+
+	tag, content, err := DecodeTag(dataInt)
+	if err != nil {
+		t.Fatalf("DecodeTag failed: %v", err)
+	}
+	if tag != 270 {
+		t.Errorf("expected tag 270, got %d", tag)
+	}
+
+	// Now decode the content manually.
+	var decodedInt int
+	if err := decMode.Unmarshal(content, &decodedInt); err != nil {
+		t.Fatalf("failed to unmarshal content from DecodeTag: %v", err)
+	}
+	if decodedInt != originalInt {
+		t.Errorf("expected int value %d, got %d", originalInt, decodedInt)
+	}
+
+	// Test with data that does not start with a tag.
+	nonTagData, err := encMode.Marshal(originalInt)
+	if err != nil {
+		t.Fatalf("failed to marshal non-tag data: %v", err)
+	}
+	tag, content, err = DecodeTag(nonTagData)
+	if err != nil {
+		t.Fatalf("DecodeTag with non-tag data failed: %v", err)
+	}
+	if tag != 0 || content != nil {
+		t.Errorf("expected 0, nil for non-tag data, got %d, %v", tag, content)
 	}
 }
 
@@ -184,7 +218,7 @@ func TestDecodeFromReader(t *testing.T) {
 	}
 	reader := bytes.NewReader(data)
 	decoder := decMode.NewDecoder(reader)
-	
+
 	var rawTag cbor.RawTag
 	if err := decoder.Decode(&rawTag); err != nil {
 		t.Fatalf("decoding raw tag from io.Reader failed: %v", err)
