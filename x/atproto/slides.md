@@ -7,7 +7,6 @@
 
 ### Basic Concepts
 - CWTs are compact tokens for representing claims, encoded using CBOR.
-- Similar to JWTs but use binary encoding for efficiency.
 - Can be secured using CBOR Object Signing and Encryption (COSE).
 
 ---
@@ -42,12 +41,11 @@
 
 ## IPLD (InterPlanetary Linked Data)
 
-XXX IPFS history
-
-### Relationship with CWTs
-- No direct relationship between IPLD and CWTs/JWTs.
-- IPLD is a data model for content-addressable systems.
-- CWTs/JWTs are token formats for representing claims.
+### Relationship between IPFS and IPLD
+- IPFS (InterPlanetary File System) is a distributed file storage system that uses content-addressing to uniquely identify files.
+- IPLD is the data model underlying IPFS; it defines a uniform way to link and reference data across different systems.
+- In IPFS, data is stored as nodes in a Merkle DAG that adheres to the IPLD specification, enabling interoperability and verification of content.
+- IPLD not only structures data within IPFS but also allows integration with other decentralized systems by providing a consistent addressing and linking mechanism.
 
 ---
 
@@ -151,5 +149,3 @@ CWTs offer a flexible and efficient token format with potential applications in 
 ---
 
 ## Q&A
-
-
