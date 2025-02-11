@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/atproto/main.go
-```go
 package main
 
 import (
@@ -83,5 +81,3 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/atproto/main.go

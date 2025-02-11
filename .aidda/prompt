@@ -1,11 +1,17 @@
-add a .thtml file that is a Go template for displaying the slides using remark.js
+add a main.go to display the slides using remark.js
 
+- read slides.thtml and slides.md
+- extract .Title from slides.md
+- execute slides.thtml with slides.md as the .Slides field
+- save the result to slides.html
+- serve slides.html on localhost:8192
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
   x/atproto/slides.md
-Out:
   x/atproto/slides.thtml
+Out:
+  x/atproto/main.go
 
 .stop
 
