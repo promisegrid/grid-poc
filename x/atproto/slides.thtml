@@ -24,7 +24,7 @@
     var slideshow = remark.create({
       ratio: '16:9',
       navigation: {
-        scroll: false,   // Disables scrolling navigation
+        scroll: true,   // Disables scrolling navigation
         touch: true      // Enables touch navigation
       }
     });
