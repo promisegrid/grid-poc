@@ -1,10 +1,11 @@
-convert slides.md to remark.js format
+add a .thtml file that is a Go template for displaying the slides using remark.js
+
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
   x/atproto/slides.md
 Out:
-  x/atproto/slides.md
+  x/atproto/slides.thtml
 
 .stop
 
