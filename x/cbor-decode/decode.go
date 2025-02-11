@@ -90,7 +90,7 @@ func DecodeTag(data []byte) (uint64, []byte, error) {
 	}
 	// Check if the first byte indicates a CBOR tag (major type 6).
 	if (data[0] >> 5) != 6 {
-		return 0, nil, nil
+		return 0, nil, fmt.Errorf("data does not contain a CBOR tag")
 	}
 
 	var rawTag cbor.RawTag

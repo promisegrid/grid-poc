@@ -1,26 +1,29 @@
-add TestDecodeVarious
-
-Add a test that demonstrates the use of DecodeTag and DecodeRaw.  The
-test should define a few different tag numbers and tagged values, then
-use a 'for' loop to iterate over them.  Inside the loop, use a switch
-statement to decide which struct to pass to DecodeRaw based on the tag
-number.
-
-
-In:
- x/cbor-decode/decode.go
- x/cbor-decode/decode_test.go
-Out:
- x/cbor-decode/decode_test.go
-
-.stop
-
 update cbor-codec based on cbor-decode lessons learned
 
-Examine the cbor-decode package and its tests. Update the cbor-codec
-package to use the same techniques as cbor-decode.  Do not import the
-cbor-decode package into the cbor-codec package. Do not use
-reflect.  Keep the code as simple as the cbor-decode package.
+Examine the cbor-decode package and its tests -- we are specifically
+interested in DecodeTag, DecodeRaw, and the TestDecodeVarious example.
+
+Update the cbor-codec package to use the same techniques as in
+DecodeTag, DecodeRaw, and the TestDecodeVarious example:
+
+- remove the map and factory code
+- use DecodeTag to get the tag number
+- use a DecodeRaw to decode the tag content
+
+Do not import the cbor-decode package into the cbor-codec package. Do
+not use reflect.  
+
+The main difference between the two packages is that cbor-codec
+uses an object-oriented approach to implement a Codec struct.  There
+should be DecodeTag and DecodeRaw methods on the Codec struct that
+work the same way as in cbor-decode.  
+
+The main purpose of the cbor-codec package is to provide a struct that
+can retain the encoding and decoding options between calls to the
+decode and encode methods.  
+
+Ensure test cases are updated to reflect the new implementation, and
+that the tests are passing.
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In: 

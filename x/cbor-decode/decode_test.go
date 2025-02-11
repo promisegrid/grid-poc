@@ -218,8 +218,8 @@ func TestDecodeTag(t *testing.T) {
 		t.Fatalf("failed to marshal non-tag data: %v", err)
 	}
 	tag, content, err = DecodeTag(nonTagData)
-	if err != nil {
-		t.Fatalf("DecodeTag with non-tag data failed: %v", err)
+	if err == nil {
+		t.Fatalf("DecodeTag with non-tag data did not return an error")
 	}
 	if tag != 0 || content != nil {
 		t.Errorf("expected 0, nil for non-tag data, got %d, %v", tag, content)

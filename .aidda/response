@@ -1,333 +1,398 @@
-File: /home/stevegt/lab/grid-poc/x/cbor-decode/decode_test.go
+File: /home/stevegt/lab/grid-poc/x/cbor-codec/codec.go
 ```go
-package cbordecode
+package codec
 
 import (
-	"bytes"
-	"testing"
+	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
 )
 
-// Message is an example type used to demonstrate CBOR decoding.
-type Message struct {
-	Value int
+// CodecConfig holds CBOR encoding/decoding options.
+type CodecConfig struct {
+	EncOptions cbor.EncOptions
+	DecOptions cbor.DecOptions
 }
 
-// encodeWithTag encodes the given value v into CBOR format and wraps it in a proper CBOR tag,
-// where tagNum is the CBOR tag number. It first encodes v, then creates a cbor.RawTag whose Content
-// is the encoding of v, and finally marshals the RawTag.
-func encodeWithTag(tagNum uint64, v interface{}) ([]byte, error) {
-	encodedContent, err := encMode.Marshal(v)
+// Codec performs CBOR encoding and decoding with persistent configurations.
+type Codec struct {
+	config CodecConfig
+	em     cbor.EncMode
+	dm     cbor.DecMode
+}
+
+// NewCodec creates a new Codec with the provided configuration.
+func NewCodec(config CodecConfig) (*Codec, error) {
+	em, err := config.EncOptions.EncMode()
 	if err != nil {
 		return nil, err
 	}
-	tagged := cbor.RawTag{
-		Number:  tagNum,
-		Content: encodedContent,
+	dm, err := config.DecOptions.DecMode()
+	if err != nil {
+		return nil, err
 	}
-	return encMode.Marshal(tagged)
+	return &Codec{
+		config: config,
+		em:     em,
+		dm:     dm,
+	}, nil
 }
 
-// TestDecodeInto demonstrates the use of DecodeInto where the caller supplies an existing instance.
-func TestDecodeInto(t *testing.T) {
-	// Example 1: decoding into a Message.
-	originalMsg := Message{Value: 100}
-	// Use tag 258 for Message.
-	dataMsg, err := encodeWithTag(258, originalMsg)
-	if err != nil {
-		t.Fatalf("encodeWithTag failed: %v", err)
-	}
-	var msg Message
-	tag, err := DecodeInto(dataMsg, &msg)
-	if err != nil {
-		t.Fatalf("DecodeInto failed: %v", err)
-	}
-	if tag != 258 {
-		t.Errorf("expected tag 258, got %d", tag)
-	}
-	if msg != originalMsg {
-		t.Errorf("expected Message %+v, got %+v", originalMsg, msg)
-	}
-
-	// Example 2: decoding into an int.
-	originalInt := 200
-	// Use tag 259 for int.
-	dataInt, err := encodeWithTag(259, originalInt)
-	if err != nil {
-		t.Fatalf("encodeWithTag failed: %v", err)
-	}
-	var number int
-	tag, err = DecodeInto(dataInt, &number)
-	if err != nil {
-		t.Fatalf("DecodeInto failed: %v", err)
-	}
-	if tag != 259 {
-		t.Errorf("expected tag 259, got %d", tag)
-	}
-	if number != originalInt {
-		t.Errorf("expected int value %d, got %d", originalInt, number)
+// getTagForPayload returns the CBOR tag number for known payload types.
+func getTagForPayload(payload interface{}) (uint64, error) {
+	switch payload.(type) {
+	case GridPayload, *GridPayload:
+		return 1735551332, nil // "grid" tag
+	case ImagePayload, *ImagePayload:
+		return 1735551333, nil // "griE" tag
+	case SensorData, *SensorData:
+		return 1735551334, nil // "grif" tag
+	case TestPayload, *TestPayload:
+		return StringToNum("example"), nil
+	default:
+		return 0, fmt.Errorf("no known tag for type %T", payload)
 	}
 }
 
-// TestDecodeNew demonstrates the use of DecodeNew which returns a pointer to a newly allocated instance.
-func TestDecodeNew(t *testing.T) {
-	// Example 1: decoding into a new Message instance.
-	originalMsg := Message{Value: 150}
-	// Use tag 260 for Message.
-	dataMsg, err := encodeWithTag(260, originalMsg)
+// Encode serializes the payload into a CBOR byte slice.
+// It first marshals the payload, then wraps the encoded content in a CBOR raw tag.
+func (c *Codec) Encode(payload interface{}) ([]byte, error) {
+	tagNumber, err := getTagForPayload(payload)
 	if err != nil {
-		t.Fatalf("encodeWithTag failed: %v", err)
+		return nil, err
 	}
-	msgPtr, tag, err := DecodeNew[Message](dataMsg)
+	innerEncoded, err := c.em.Marshal(payload)
 	if err != nil {
-		t.Fatalf("DecodeNew[Message] failed: %v", err)
+		return nil, err
 	}
-	if tag != 260 {
-		t.Errorf("expected tag 260, got %d", tag)
+	rawTag := cbor.RawTag{
+		Number:  tagNumber,
+		Content: innerEncoded,
 	}
-	if *msgPtr != originalMsg {
-		t.Errorf("expected Message %+v, got %+v", originalMsg, *msgPtr)
-	}
+	return c.em.Marshal(rawTag)
+}
 
-	// Example 2: decoding into a new int instance.
-	originalInt := 250
-	// Use tag 261 for int.
-	dataInt, err := encodeWithTag(261, originalInt)
+// Decode deserializes the CBOR data.
+// It uses DecodeTag to extract the tag and its raw content, and then decodes based on the tag.
+// For recognized tags, it decodes into the expected payload type:
+//   - For GridPayload, ImagePayload, SensorData the decoded value is returned (non-pointer).
+//   - For TestPayload (registered via a tag name) a pointer is returned.
+// For an unknown tag, the inner content is decoded into an interface{} and returned
+// wrapped in a cbor.Tag along with an error.
+func (c *Codec) Decode(data []byte) (interface{}, error) {
+	tag, content, err := c.DecodeTag(data)
 	if err != nil {
-		t.Fatalf("encodeWithTag failed: %v", err)
+		return nil, err
 	}
-	intPtr, tag, err := DecodeNew[int](dataInt)
-	if err != nil {
-		t.Fatalf("DecodeNew[int] failed: %v", err)
-	}
-	if tag != 261 {
-		t.Errorf("expected tag 261, got %d", tag)
-	}
-	if *intPtr != originalInt {
-		t.Errorf("expected int value %d, got %d", originalInt, *intPtr)
+	switch tag {
+	case 1735551332: // GridPayload
+		var payload GridPayload
+		if err := c.DecodeRaw(content, &payload); err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case 1735551333: // ImagePayload
+		var payload ImagePayload
+		if err := c.DecodeRaw(content, &payload); err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case 1735551334: // SensorData
+		var payload SensorData
+		if err := c.DecodeRaw(content, &payload); err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case StringToNum("example"):
+		var payload TestPayload
+		if err := c.DecodeRaw(content, &payload); err != nil {
+			return nil, err
+		}
+		return &payload, nil
+	default:
+		var unknown interface{}
+		if err := c.DecodeRaw(content, &unknown); err != nil {
+			return nil, err
+		}
+		return cbor.Tag{Number: tag, Content: unknown}, fmt.Errorf("unknown tag %d", tag)
 	}
 }
 
-// TestDecodeRaw demonstrates the use of DecodeRaw which decodes a single-level CBOR value.
-// It first extracts the raw content via DecodeTag, then decodes that content.
-func TestDecodeRaw(t *testing.T) {
-	// Example 1: decoding into a Message value.
-	originalMsg := Message{Value: 175}
-	// Use tag 262 for Message.
-	dataMsg, err := encodeWithTag(262, originalMsg)
-	if err != nil {
-		t.Fatalf("encodeWithTag failed: %v", err)
+// DecodeTag decodes a CBOR tag from a byte slice.
+// It returns the tag number and the raw encoded content.
+func (c *Codec) DecodeTag(data []byte) (uint64, []byte, error) {
+	if len(data) == 0 {
+		return 0, nil, nil
 	}
-	tag, content, err := DecodeTag(dataMsg)
-	if err != nil {
-		t.Fatalf("DecodeTag failed: %v", err)
+	// Major type 6 indicates a CBOR tag.
+	if (data[0] >> 5) != 6 {
+		return 0, nil, nil
 	}
-	if tag != 262 {
-		t.Errorf("expected tag 262, got %d", tag)
-	}
-	var msg Message
-	err = DecodeRaw(content, &msg)
-	if err != nil {
-		t.Fatalf("DecodeRaw failed: %v", err)
-	}
-	if msg != originalMsg {
-		t.Errorf("expected Message %+v, got %+v", originalMsg, msg)
-	}
-
-	// Example 2: decoding into an int value.
-	originalInt := 225
-	// Use tag 263 for int.
-	dataInt, err := encodeWithTag(263, originalInt)
-	if err != nil {
-		t.Fatalf("encodeWithTag failed: %v", err)
-	}
-	tag, content, err = DecodeTag(dataInt)
-	if err != nil {
-		t.Fatalf("DecodeTag failed: %v", err)
-	}
-	if tag != 263 {
-		t.Errorf("expected tag 263, got %d", tag)
-	}
-	var number int
-	err = DecodeRaw(content, &number)
-	if err != nil {
-		t.Fatalf("DecodeRaw failed: %v", err)
-	}
-	if number != originalInt {
-		t.Errorf("expected int value %d, got %d", originalInt, number)
-	}
-}
-
-// TestDecodeUnknown demonstrates decoding when the caller does not know the type at compile time.
-// Here, the raw CBOR content is decoded into an interface{}.
-func TestDecodeUnknown(t *testing.T) {
-	// Example: decoding an int into a dynamic interface{}
-	originalInt := 300
-	// Use tag 264 for this test.
-	dataInt, err := encodeWithTag(264, originalInt)
-	if err != nil {
-		t.Fatalf("encodeWithTag failed: %v", err)
-	}
-	_, content, err := DecodeTag(dataInt)
-	if err != nil {
-		t.Fatalf("DecodeTag failed: %v", err)
-	}
-	var decoded interface{}
-	err = DecodeRaw(content, &decoded)
-	if err != nil {
-		t.Fatalf("DecodeRaw failed: %v", err)
-	}
-	// fxamacker/cbor decodes numeric values into uint64 when using interface{}.
-	intResult, ok := decoded.(uint64)
-	if !ok {
-		t.Errorf("expected uint64 type, got %T", decoded)
-	}
-	if intResult != uint64(originalInt) {
-		t.Errorf("expected uint64 value %d, got %d", originalInt, intResult)
-	}
-}
-
-// TestDecodeTag demonstrates the use of DecodeTag which decodes just the tag and its content.
-func TestDecodeTag(t *testing.T) {
-	originalInt := 1234
-	// Use tag 270 for this test.
-	dataInt, err := encodeWithTag(270, originalInt)
-	if err != nil {
-		t.Fatalf("encodeWithTag failed: %v", err)
-	}
-
-	tag, content, err := DecodeTag(dataInt)
-	if err != nil {
-		t.Fatalf("DecodeTag failed: %v", err)
-	}
-	if tag != 270 {
-		t.Errorf("expected tag 270, got %d", tag)
-	}
-
-	// Now decode the content manually.
-	var decodedInt int
-	if err := decMode.Unmarshal(content, &decodedInt); err != nil {
-		t.Fatalf("failed to unmarshal content from DecodeTag: %v", err)
-	}
-	if decodedInt != originalInt {
-		t.Errorf("expected int value %d, got %d", originalInt, decodedInt)
-	}
-
-	// Test with data that does not start with a tag.
-	nonTagData, err := encMode.Marshal(originalInt)
-	if err != nil {
-		t.Fatalf("failed to marshal non-tag data: %v", err)
-	}
-	tag, content, err = DecodeTag(nonTagData)
-	if err != nil {
-		t.Fatalf("DecodeTag with non-tag data failed: %v", err)
-	}
-	if tag != 0 || content != nil {
-		t.Errorf("expected 0, nil for non-tag data, got %d, %v", tag, content)
-	}
-}
-
-// TestDecodeFromReader demonstrates the use of decMode.NewDecoder to decode from an io.Reader.
-// It encodes a Message with a specific tag and then decodes it using a bytes.Reader.
-func TestDecodeFromReader(t *testing.T) {
-	originalMsg := Message{Value: 999}
-	// Use tag 265 for this test.
-	data, err := encodeWithTag(265, originalMsg)
-	if err != nil {
-		t.Fatalf("encodeWithTag failed: %v", err)
-	}
-	reader := bytes.NewReader(data)
-	decoder := decMode.NewDecoder(reader)
-
 	var rawTag cbor.RawTag
-	if err := decoder.Decode(&rawTag); err != nil {
-		t.Fatalf("decoding raw tag from io.Reader failed: %v", err)
+	if err := c.dm.Unmarshal(data, &rawTag); err != nil {
+		return 0, nil, fmt.Errorf("failed to unmarshal tag: %w", err)
 	}
-	if int(rawTag.Number) != 265 {
-		t.Errorf("expected tag 265, got %d", rawTag.Number)
-	}
-
-	var msg Message
-	if err := decMode.Unmarshal(rawTag.Content, &msg); err != nil {
-		t.Fatalf("decoding Message content failed: %v", err)
-	}
-	if msg != originalMsg {
-		t.Errorf("expected Message %+v, got %+v", originalMsg, msg)
-	}
+	return rawTag.Number, rawTag.Content, nil
 }
 
-// TestDecodeVarious demonstrates the use of DecodeTag and DecodeRaw with multiple tagged values.
-func TestDecodeVarious(t *testing.T) {
-	// Define another struct for testing.
-	type Other struct {
-		Name string
-	}
+// DecodeRaw decodes a CBOR value from a byte slice into the provided output variable.
+func (c *Codec) DecodeRaw(data []byte, out interface{}) error {
+	return c.dm.Unmarshal(data, out)
+}
 
-	// Prepare a list of test cases with different tag numbers and corresponding values.
-	type testCase struct {
-		tag   uint64
-		value interface{}
+// StringToNum converts a string to a number, e.g. "grid" -> 0x67726964.
+func StringToNum(s string) (n uint64) {
+	for _, r := range s {
+		n = (n << 8) + uint64(r)
 	}
-	testCases := []testCase{
-		{tag: 300, value: Message{Value: 111}},
-		{tag: 301, value: 222},
-		{tag: 302, value: Other{Name: "Test"}},
-	}
+	return n
+}
 
-	// Encode each test case.
-	var encodedData [][]byte
-	for _, tc := range testCases {
-		data, err := encodeWithTag(tc.tag, tc.value)
-		if err != nil {
-			t.Fatalf("failed to encode value with tag %d: %v", tc.tag, err)
-		}
-		encodedData = append(encodedData, data)
+// NumToString converts a number to a string, e.g. 0x67726964 -> "grid".
+func NumToString(n uint64) (s string) {
+	for n > 0 {
+		s = fmt.Sprintf("%c%s", n&0xff, s)
+		n >>= 8
 	}
+	return s
+}
 
-	// Iterate over the encoded data and decode based on tag.
-	for i, data := range encodedData {
-		tag, content, err := DecodeTag(data)
-		if err != nil {
-			t.Fatalf("DecodeTag failed for test case %d: %v", i, err)
-		}
-		switch tag {
-		case 300:
-			var msg Message
-			if err := DecodeRaw(content, &msg); err != nil {
-				t.Errorf("DecodeRaw failed for tag 300: %v", err)
-				continue
-			}
-			expected := testCases[i].value.(Message)
-			if msg != expected {
-				t.Errorf("for tag 300, expected Message %+v, got %+v", expected, msg)
-			}
-		case 301:
-			var number int
-			if err := DecodeRaw(content, &number); err != nil {
-				t.Errorf("DecodeRaw failed for tag 301: %v", err)
-				continue
-			}
-			expected := testCases[i].value.(int)
-			if number != expected {
-				t.Errorf("for tag 301, expected int %d, got %d", expected, number)
-			}
-		case 302:
-			var other struct {
-				Name string
-			}
-			if err := DecodeRaw(content, &other); err != nil {
-				t.Errorf("DecodeRaw failed for tag 302: %v", err)
-				continue
-			}
-			expected := testCases[i].value.(Other)
-			if other.Name != expected.Name {
-				t.Errorf("for tag 302, expected Other %+v, got %+v", expected, other)
-			}
-		default:
-			t.Errorf("unexpected tag %d in test case %d", tag, i)
-		}
-	}
+// The following payload types are referenced in tests.
+type GridPayload struct {
+	ID        []byte
+	Timestamp uint64
+}
+
+type ImagePayload struct {
+	Width  uint
+	Height uint
+	Format string
+}
+
+type SensorData struct {
+	SensorID  string
+	Temp      float64
+	Precision uint8
+}
+
+type TestPayload struct {
+	Value string
 }
 ```
-EOF_/home/stevegt/lab/grid-poc/x/cbor-decode/decode_test.go
+EOF_/home/stevegt/lab/grid-poc/x/cbor-codec/codec.go
+
+File: /home/stevegt/lab/grid-poc/x/cbor-codec/codec_test.go
+```go
+package codec_test
+
+import (
+	"encoding/hex"
+	"testing"
+
+	codec "github.com/stevegt/grid-poc/x/cbor-codec"
+
+	"github.com/fxamacker/cbor/v2"
+	. "github.com/stevegt/goadapt"
+	"github.com/stretchr/testify/assert"
+)
+
+// PrintDiag prints a human-readable diagnostic string for the given CBOR buffer.
+func PrintDiag(buf []byte) {
+	dm, err := cbor.DiagOptions{
+		ByteStringText:         true,
+		ByteStringEmbeddedCBOR: true,
+	}.DiagMode()
+	Ck(err)
+	diagnosis, err := dm.Diagnose(buf)
+	Ck(err)
+	Pl(diagnosis)
+}
+
+// Test payload types.
+type GridPayload struct {
+	ID        []byte
+	Timestamp uint64
+}
+
+type ImagePayload struct {
+	Width  uint
+	Height uint
+	Format string
+}
+
+type SensorData struct {
+	SensorID  string
+	Temp      float64
+	Precision uint8
+}
+
+type TestPayload struct {
+	Value string
+}
+
+const (
+	GridTag   = 1735551332
+	ImageTag  = 1735551333
+	SensorTag = 1735551334
+)
+
+func setupCodec(t *testing.T) *codec.Codec {
+	config := codec.CodecConfig{
+		EncOptions: cbor.CoreDetEncOptions(),
+		DecOptions: cbor.DecOptions{},
+	}
+	c, err := codec.NewCodec(config)
+	assert.NoError(t, err)
+	return c
+}
+
+func TestEncode(t *testing.T) {
+	c := setupCodec(t)
+
+	tests := []struct {
+		name    string
+		payload interface{}
+		wantHex string
+	}{
+		{
+			name: "GridPayload",
+			payload: GridPayload{
+				ID:        []byte{0x01, 0x02},
+				Timestamp: 1614124800,
+			},
+			wantHex: "da67726964a26249444201026954696d657374616d701a60359700",
+		},
+		{
+			name: "ImagePayload",
+			payload: ImagePayload{
+				Width:  800,
+				Height: 600,
+				Format: "JPEG",
+			},
+			wantHex: "da67726965a365576964746819032066466f726d6174644a50454766486569676874190258",
+		},
+		{
+			name: "SensorData",
+			payload: SensorData{
+				SensorID:  "temp-1",
+				Temp:      25.0,
+				Precision: 2,
+			},
+			wantHex: "da67726966a36454656d70f94e406853656e736f7249446674656d702d3169507265636973696f6e02",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Encode the payload.
+			encoded, err := c.Encode(tt.payload)
+			assert.NoError(t, err)
+			PrintDiag(encoded)
+			assert.Equal(t, tt.wantHex, hex.EncodeToString(encoded))
+
+			// Decode and verify round-trip.
+			decoded, err := c.Decode(encoded)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.payload, decoded)
+		})
+	}
+}
+
+func TestUnknownTag(t *testing.T) {
+	c := setupCodec(t)
+	// Create a raw tag with an unknown tag number.
+	unknownTag := uint64(9999)
+	dummy := map[string]interface{}{
+		"foo": "bar",
+	}
+	inner, err := c.(*codec.Codec).em.Marshal(dummy)
+	assert.NoError(t, err)
+	rawTag := cbor.RawTag{
+		Number:  unknownTag,
+		Content: inner,
+	}
+	data, err := c.(*codec.Codec).em.Marshal(rawTag)
+	assert.NoError(t, err)
+
+	obj, err := c.Decode(data)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown tag")
+	tagObj, ok := obj.(cbor.Tag)
+	assert.True(t, ok)
+	assert.Equal(t, unknownTag, tagObj.Number)
+	// Check that the decoded content is as expected.
+	content, ok := tagObj.Content.(map[interface{}]interface{})
+	assert.True(t, ok)
+	val, exists := content["foo"]
+	assert.True(t, exists)
+	assert.Equal(t, "bar", val)
+}
+
+func TestInvalidStructure(t *testing.T) {
+	c := setupCodec(t)
+	// Malformed CBOR data.
+	data := []byte{0xd9, 0xd9, 0xf7, 0xda, 0x67, 0x72, 0x69, 0x64} // truncated
+	_, err := c.Decode(data)
+	assert.Error(t, err)
+}
+
+func TestStringToNumAndNumToString(t *testing.T) {
+	tests := []struct {
+		input     string
+		expectNum uint64
+	}{
+		{
+			input:     "grid",
+			expectNum: 0x67726964,
+		},
+		{
+			input:     "hello",
+			expectNum: 0x68656c6c6f,
+		},
+		{
+			input:     "",
+			expectNum: 0,
+		},
+		{
+			input:     "GoLang",
+			expectNum: 0x476f4c616e67,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run("StringToNum_"+tt.input, func(t *testing.T) {
+			result := codec.StringToNum(tt.input)
+			assert.Equal(t, tt.expectNum, result, "StringToNum(%q) should be %x", tt.input, tt.expectNum)
+		})
+
+		t.Run("NumToString_"+tt.input, func(t *testing.T) {
+			result := codec.NumToString(tt.expectNum)
+			assert.Equal(t, tt.input, result, "NumToString(%x) should be %q", tt.expectNum, tt.input)
+		})
+	}
+
+	// Round-trip test.
+	stringsToTest := []string{"testing", "123abc", "CBOR", "Go", ""}
+	for _, s := range stringsToTest {
+		t.Run("RoundTrip_"+s, func(t *testing.T) {
+			num := codec.StringToNum(s)
+			str := codec.NumToString(num)
+			assert.Equal(t, s, str, "Round-trip conversion failed for %q", s)
+		})
+	}
+}
+
+func TestRegisterTagName(t *testing.T) {
+	c := setupCodec(t)
+	// Instead of explicit registration, TestPayload is handled by the type switch.
+	payload := TestPayload{Value: "hello"}
+	encoded, err := c.Encode(payload)
+	assert.NoError(t, err)
+	decoded, err := c.Decode(encoded)
+	assert.NoError(t, err)
+	// For TestPayload the decoded value is a pointer.
+	expected := &TestPayload{Value: "hello"}
+	assert.Equal(t, expected, decoded, "Decoded payload does not match the original")
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/cbor-codec/codec_test.go
