@@ -1,398 +1,150 @@
-File: /home/stevegt/lab/grid-poc/x/cbor-codec/codec.go
-```go
-package codec
+File: /home/stevegt/lab/grid-poc/x/atproto/slides.md
+```markdown
+# CWT, IPLD, and Promise Theory: A Comprehensive Overview
 
-import (
-	"fmt"
+---
 
-	"github.com/fxamacker/cbor/v2"
-)
+## CBOR Web Tokens (CWTs)
 
-// CodecConfig holds CBOR encoding/decoding options.
-type CodecConfig struct {
-	EncOptions cbor.EncOptions
-	DecOptions cbor.DecOptions
-}
+### Basic Concepts
+- CWTs are compact tokens for representing claims, encoded using CBOR.
+- Similar to JWTs but use binary encoding for efficiency.
+- Can be secured using CBOR Object Signing and Encryption (COSE).
 
-// Codec performs CBOR encoding and decoding with persistent configurations.
-type Codec struct {
-	config CodecConfig
-	em     cbor.EncMode
-	dm     cbor.DecMode
-}
+---
 
-// NewCodec creates a new Codec with the provided configuration.
-func NewCodec(config CodecConfig) (*Codec, error) {
-	em, err := config.EncOptions.EncMode()
-	if err != nil {
-		return nil, err
-	}
-	dm, err := config.DecOptions.DecMode()
-	if err != nil {
-		return nil, err
-	}
-	return &Codec{
-		config: config,
-		em:     em,
-		dm:     dm,
-	}, nil
-}
+## CBOR Web Tokens (CWTs)
 
-// getTagForPayload returns the CBOR tag number for known payload types.
-func getTagForPayload(payload interface{}) (uint64, error) {
-	switch payload.(type) {
-	case GridPayload, *GridPayload:
-		return 1735551332, nil // "grid" tag
-	case ImagePayload, *ImagePayload:
-		return 1735551333, nil // "griE" tag
-	case SensorData, *SensorData:
-		return 1735551334, nil // "grif" tag
-	case TestPayload, *TestPayload:
-		return StringToNum("example"), nil
-	default:
-		return 0, fmt.Errorf("no known tag for type %T", payload)
-	}
-}
+### Structure and Flexibility
+- Flexible claim structure allows representation of various data types.
+- Can include standard claims (e.g., "iss", "sub", "exp") and custom claims.
+- Supports nesting of CWTs for added security or combining claim sets.
 
-// Encode serializes the payload into a CBOR byte slice.
-// It first marshals the payload, then wraps the encoded content in a CBOR raw tag.
-func (c *Codec) Encode(payload interface{}) ([]byte, error) {
-	tagNumber, err := getTagForPayload(payload)
-	if err != nil {
-		return nil, err
-	}
-	innerEncoded, err := c.em.Marshal(payload)
-	if err != nil {
-		return nil, err
-	}
-	rawTag := cbor.RawTag{
-		Number:  tagNumber,
-		Content: innerEncoded,
-	}
-	return c.em.Marshal(rawTag)
-}
+---
 
-// Decode deserializes the CBOR data.
-// It uses DecodeTag to extract the tag and its raw content, and then decodes based on the tag.
-// For recognized tags, it decodes into the expected payload type:
-//   - For GridPayload, ImagePayload, SensorData the decoded value is returned (non-pointer).
-//   - For TestPayload (registered via a tag name) a pointer is returned.
-// For an unknown tag, the inner content is decoded into an interface{} and returned
-// wrapped in a cbor.Tag along with an error.
-func (c *Codec) Decode(data []byte) (interface{}, error) {
-	tag, content, err := c.DecodeTag(data)
-	if err != nil {
-		return nil, err
-	}
-	switch tag {
-	case 1735551332: // GridPayload
-		var payload GridPayload
-		if err := c.DecodeRaw(content, &payload); err != nil {
-			return nil, err
-		}
-		return payload, nil
-	case 1735551333: // ImagePayload
-		var payload ImagePayload
-		if err := c.DecodeRaw(content, &payload); err != nil {
-			return nil, err
-		}
-		return payload, nil
-	case 1735551334: // SensorData
-		var payload SensorData
-		if err := c.DecodeRaw(content, &payload); err != nil {
-			return nil, err
-		}
-		return payload, nil
-	case StringToNum("example"):
-		var payload TestPayload
-		if err := c.DecodeRaw(content, &payload); err != nil {
-			return nil, err
-		}
-		return &payload, nil
-	default:
-		var unknown interface{}
-		if err := c.DecodeRaw(content, &unknown); err != nil {
-			return nil, err
-		}
-		return cbor.Tag{Number: tag, Content: unknown}, fmt.Errorf("unknown tag %d", tag)
-	}
-}
+## CBOR Web Tokens (CWTs)
 
-// DecodeTag decodes a CBOR tag from a byte slice.
-// It returns the tag number and the raw encoded content.
-func (c *Codec) DecodeTag(data []byte) (uint64, []byte, error) {
-	if len(data) == 0 {
-		return 0, nil, nil
-	}
-	// Major type 6 indicates a CBOR tag.
-	if (data[0] >> 5) != 6 {
-		return 0, nil, nil
-	}
-	var rawTag cbor.RawTag
-	if err := c.dm.Unmarshal(data, &rawTag); err != nil {
-		return 0, nil, fmt.Errorf("failed to unmarshal tag: %w", err)
-	}
-	return rawTag.Number, rawTag.Content, nil
-}
+### Encoding and Key Ordering
+- Uses CBOR encoding, which is inherently deterministic.
+- Key ordering in CWTs is not mandated by RFC 8392.
+- Deterministic encoding rules, including key sorting, are defined in RFC 8949 (CBOR specification).
+- RFC-compliant CWTs can have unsorted keys, though sorting is recommended for interoperability.
 
-// DecodeRaw decodes a CBOR value from a byte slice into the provided output variable.
-func (c *Codec) DecodeRaw(data []byte, out interface{}) error {
-	return c.dm.Unmarshal(data, out)
-}
+---
 
-// StringToNum converts a string to a number, e.g. "grid" -> 0x67726964.
-func StringToNum(s string) (n uint64) {
-	for _, r := range s {
-		n = (n << 8) + uint64(r)
-	}
-	return n
-}
+## CBOR Web Tokens (CWTs)
 
-// NumToString converts a number to a string, e.g. 0x67726964 -> "grid".
-func NumToString(n uint64) (s string) {
-	for n > 0 {
-		s = fmt.Sprintf("%c%s", n&0xff, s)
-		n >>= 8
-	}
-	return s
-}
+### Use Cases
+- Authentication and authorization in constrained environments (e.g., IoT).
+- Potential use as capability tokens (explored by IETF ACE working group).
+- Possible representation of promises in Promise Theory context (theoretical).
 
-// The following payload types are referenced in tests.
-type GridPayload struct {
-	ID        []byte
-	Timestamp uint64
-}
+---
 
-type ImagePayload struct {
-	Width  uint
-	Height uint
-	Format string
-}
+## IPLD (InterPlanetary Linked Data)
 
-type SensorData struct {
-	SensorID  string
-	Temp      float64
-	Precision uint8
-}
+### Relationship with CWTs
+- No direct relationship between IPLD and CWTs/JWTs.
+- IPLD is a data model for content-addressable systems.
+- CWTs/JWTs are token formats for representing claims.
 
-type TestPayload struct {
-	Value string
-}
+---
+
+## IPLD (InterPlanetary Linked Data)
+
+### Use in atproto
+- Atproto uses a variant of IPLD for its underlying data model.
+- Custom JSON encoding used instead of standard DAG-JSON.
+- CBOR used for cryptographic operations in atproto.
+
+---
+
+## Promise Theory and CWTs
+
+### Potential Representation
+- CWTs could theoretically represent promises from Promise Theory.
+- Flexible claim structure allows encoding of promise-related information.
+- No inherent support for Mark Burgess' graphical promise notation.
+
+---
+
+## Promise Theory and CWTs
+
+### Considerations
+- Promising agent should be represented as the issuer (iss) in CWT.
+- Subject (sub) claim could represent the entity about which the promise is made.
+- No known widespread use of CWTs/JWTs for Promise Theory representation.
+
+---
+
+## Post-Quantum Cryptography
+
+### Signatures and Hashes
+- Hash-based signatures: XMSS, LMS, SPHINCS+.
+- Lattice-based signatures: CRYSTALS-Dilithium (ML-DSA), FALCON.
+- Multivariate-based signatures: Rainbow (no longer recommended).
+- Code-based cryptography.
+- Hash functions: SHA-2 and SHA-3 families (with increased output sizes).
+
+---
+
+## IETF ACE and CWTs for Capability Tokens
+
+### Overview
+- Authentication and Authorization for Constrained Environments (ACE) working group.
+- Exploring CWTs for authorization in IoT scenarios.
+
+---
+
+## IETF ACE and CWTs for Capability Tokens
+
+### Key Features
+- Use of CWTs as Proof-of-Possession (PoP) tokens.
+- Flexible representation of capabilities and access rights.
+- Secured using COSE for integrity and optional encryption.
+
+---
+
+## Addressing Hash Collisions in Decentralized Systems
+
+### Challenges
+- Hash collisions are a concern, especially for long-term systems.
+- Quantum computing poses potential threats to current cryptographic methods.
+
+---
+
+## Addressing Hash Collisions in Decentralized Systems
+
+### Proposed Solutions
+- Multi-hash approach using multiple algorithms simultaneously.
+- Hash agility mechanism for algorithm upgrades.
+- Merkle trees with multiple hash algorithms.
+- Challenge-response verification with metadata CWTs.
+- Post-quantum cryptographic signatures.
+- Distributed consensus for content verification.
+- Regular content validation and migration.
+
+---
+
+## CWTs in Decentralized Computing Systems
+
+### Potential Use
+- Could serve as a message format for decentralized systems with message-passing IPC.
+- Offers compact representation and cryptographic protections.
+
+---
+
+## CWTs in Decentralized Computing Systems
+
+### Considerations
+- Performance overhead for encoding/decoding and cryptographic operations.
+- Fixed structure might limit flexibility for complex IPC scenarios.
+- Trust model may not align perfectly with all IPC security requirements.
+
+---
+
+## Conclusion
+
+CWTs offer a flexible and efficient token format with potential applications in various domains, from IoT authorization to theoretical representations of promises. While they present interesting possibilities for decentralized systems and long-term data integrity, careful consideration of performance, security, and interoperability is necessary when implementing CWT-based solutions.
 ```
-EOF_/home/stevegt/lab/grid-poc/x/cbor-codec/codec.go
-
-File: /home/stevegt/lab/grid-poc/x/cbor-codec/codec_test.go
-```go
-package codec_test
-
-import (
-	"encoding/hex"
-	"testing"
-
-	codec "github.com/stevegt/grid-poc/x/cbor-codec"
-
-	"github.com/fxamacker/cbor/v2"
-	. "github.com/stevegt/goadapt"
-	"github.com/stretchr/testify/assert"
-)
-
-// PrintDiag prints a human-readable diagnostic string for the given CBOR buffer.
-func PrintDiag(buf []byte) {
-	dm, err := cbor.DiagOptions{
-		ByteStringText:         true,
-		ByteStringEmbeddedCBOR: true,
-	}.DiagMode()
-	Ck(err)
-	diagnosis, err := dm.Diagnose(buf)
-	Ck(err)
-	Pl(diagnosis)
-}
-
-// Test payload types.
-type GridPayload struct {
-	ID        []byte
-	Timestamp uint64
-}
-
-type ImagePayload struct {
-	Width  uint
-	Height uint
-	Format string
-}
-
-type SensorData struct {
-	SensorID  string
-	Temp      float64
-	Precision uint8
-}
-
-type TestPayload struct {
-	Value string
-}
-
-const (
-	GridTag   = 1735551332
-	ImageTag  = 1735551333
-	SensorTag = 1735551334
-)
-
-func setupCodec(t *testing.T) *codec.Codec {
-	config := codec.CodecConfig{
-		EncOptions: cbor.CoreDetEncOptions(),
-		DecOptions: cbor.DecOptions{},
-	}
-	c, err := codec.NewCodec(config)
-	assert.NoError(t, err)
-	return c
-}
-
-func TestEncode(t *testing.T) {
-	c := setupCodec(t)
-
-	tests := []struct {
-		name    string
-		payload interface{}
-		wantHex string
-	}{
-		{
-			name: "GridPayload",
-			payload: GridPayload{
-				ID:        []byte{0x01, 0x02},
-				Timestamp: 1614124800,
-			},
-			wantHex: "da67726964a26249444201026954696d657374616d701a60359700",
-		},
-		{
-			name: "ImagePayload",
-			payload: ImagePayload{
-				Width:  800,
-				Height: 600,
-				Format: "JPEG",
-			},
-			wantHex: "da67726965a365576964746819032066466f726d6174644a50454766486569676874190258",
-		},
-		{
-			name: "SensorData",
-			payload: SensorData{
-				SensorID:  "temp-1",
-				Temp:      25.0,
-				Precision: 2,
-			},
-			wantHex: "da67726966a36454656d70f94e406853656e736f7249446674656d702d3169507265636973696f6e02",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Encode the payload.
-			encoded, err := c.Encode(tt.payload)
-			assert.NoError(t, err)
-			PrintDiag(encoded)
-			assert.Equal(t, tt.wantHex, hex.EncodeToString(encoded))
-
-			// Decode and verify round-trip.
-			decoded, err := c.Decode(encoded)
-			assert.NoError(t, err)
-			assert.Equal(t, tt.payload, decoded)
-		})
-	}
-}
-
-func TestUnknownTag(t *testing.T) {
-	c := setupCodec(t)
-	// Create a raw tag with an unknown tag number.
-	unknownTag := uint64(9999)
-	dummy := map[string]interface{}{
-		"foo": "bar",
-	}
-	inner, err := c.(*codec.Codec).em.Marshal(dummy)
-	assert.NoError(t, err)
-	rawTag := cbor.RawTag{
-		Number:  unknownTag,
-		Content: inner,
-	}
-	data, err := c.(*codec.Codec).em.Marshal(rawTag)
-	assert.NoError(t, err)
-
-	obj, err := c.Decode(data)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown tag")
-	tagObj, ok := obj.(cbor.Tag)
-	assert.True(t, ok)
-	assert.Equal(t, unknownTag, tagObj.Number)
-	// Check that the decoded content is as expected.
-	content, ok := tagObj.Content.(map[interface{}]interface{})
-	assert.True(t, ok)
-	val, exists := content["foo"]
-	assert.True(t, exists)
-	assert.Equal(t, "bar", val)
-}
-
-func TestInvalidStructure(t *testing.T) {
-	c := setupCodec(t)
-	// Malformed CBOR data.
-	data := []byte{0xd9, 0xd9, 0xf7, 0xda, 0x67, 0x72, 0x69, 0x64} // truncated
-	_, err := c.Decode(data)
-	assert.Error(t, err)
-}
-
-func TestStringToNumAndNumToString(t *testing.T) {
-	tests := []struct {
-		input     string
-		expectNum uint64
-	}{
-		{
-			input:     "grid",
-			expectNum: 0x67726964,
-		},
-		{
-			input:     "hello",
-			expectNum: 0x68656c6c6f,
-		},
-		{
-			input:     "",
-			expectNum: 0,
-		},
-		{
-			input:     "GoLang",
-			expectNum: 0x476f4c616e67,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run("StringToNum_"+tt.input, func(t *testing.T) {
-			result := codec.StringToNum(tt.input)
-			assert.Equal(t, tt.expectNum, result, "StringToNum(%q) should be %x", tt.input, tt.expectNum)
-		})
-
-		t.Run("NumToString_"+tt.input, func(t *testing.T) {
-			result := codec.NumToString(tt.expectNum)
-			assert.Equal(t, tt.input, result, "NumToString(%x) should be %q", tt.expectNum, tt.input)
-		})
-	}
-
-	// Round-trip test.
-	stringsToTest := []string{"testing", "123abc", "CBOR", "Go", ""}
-	for _, s := range stringsToTest {
-		t.Run("RoundTrip_"+s, func(t *testing.T) {
-			num := codec.StringToNum(s)
-			str := codec.NumToString(num)
-			assert.Equal(t, s, str, "Round-trip conversion failed for %q", s)
-		})
-	}
-}
-
-func TestRegisterTagName(t *testing.T) {
-	c := setupCodec(t)
-	// Instead of explicit registration, TestPayload is handled by the type switch.
-	payload := TestPayload{Value: "hello"}
-	encoded, err := c.Encode(payload)
-	assert.NoError(t, err)
-	decoded, err := c.Decode(encoded)
-	assert.NoError(t, err)
-	// For TestPayload the decoded value is a pointer.
-	expected := &TestPayload{Value: "hello"}
-	assert.Equal(t, expected, decoded, "Decoded payload does not match the original")
-}
-```
-EOF_/home/stevegt/lab/grid-poc/x/cbor-codec/codec_test.go
+EOF_/home/stevegt/lab/grid-poc/x/atproto/slides.md
