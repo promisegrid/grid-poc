@@ -8,9 +8,8 @@ File: /home/stevegt/lab/grid-poc/x/atproto/slides.md
 ## CBOR Web Tokens (CWTs)
 
 ### Basic Concepts
-- CWTs are compact tokens for representing claims, encoded using CBOR.
-- Similar to JWTs but use binary encoding for efficiency.
-- Can be secured using CBOR Object Signing and Encryption (COSE).
+- CWTs are compact tokens for representing claims, encoded using [CBOR](https://cbor.io).
+- Can be secured using [CBOR Object Signing and Encryption (COSE)](https://tools.ietf.org/html/rfc8152).
 
 ---
 
@@ -44,18 +43,11 @@ File: /home/stevegt/lab/grid-poc/x/atproto/slides.md
 
 ## IPLD (InterPlanetary Linked Data)
 
-XXX IPFS history
-
 ### Relationship between IPFS and IPLD
-- IPFS (InterPlanetary File System) is a distributed file storage system that uses content-addressing to uniquely identify files.
-- IPLD is the data model underlying IPFS; it defines a uniform way to link and reference data across different systems.
-- In IPFS, data is stored as nodes in a Merkle DAG that adheres to the IPLD specification, enabling interoperability and verification of content.
+- [IPFS](https://ipfs.io) (InterPlanetary File System) is a distributed file storage system that uses content-addressing to uniquely identify files.
+- [IPLD](https://ipld.io) is the data model underlying IPFS; it defines a uniform way to link and reference data across different systems.
+- In IPFS, data is stored as nodes in a [Merkle DAG](https://docs.ipfs.tech/concepts/merkle-dag/) that adheres to the IPLD specification, enabling interoperability and verification of content.
 - IPLD not only structures data within IPFS but also allows integration with other decentralized systems by providing a consistent addressing and linking mechanism.
-
-### Relationship with CWTs
-- No direct relationship between IPLD and CWTs/JWTs.
-- IPLD is a data model for content-addressable systems.
-- CWTs/JWTs are token formats for representing claims.
 
 ---
 
@@ -63,8 +55,10 @@ XXX IPFS history
 
 ### Use in atproto
 - Atproto uses a variant of IPLD for its underlying data model.
-- Custom JSON encoding used instead of standard DAG-JSON.
-- CBOR used for cryptographic operations in atproto.
+- Custom JSON encoding used instead of standard [DAG-JSON](https://github.com/ipld/dag-json).
+- [CBOR](https://cbor.io) is used for cryptographic operations in atproto.
+- Incorporates a variant of [DAG-CBOR](https://github.com/ipld/dag-cbor) for certain operations.
+- Leverages the principles of [ATProto](https://atproto.com) for protocol-specific implementations.
 
 ---
 
@@ -81,7 +75,7 @@ XXX IPFS history
 
 ### Considerations
 - Promising agent should be represented as the issuer (iss) in CWT.
-- Subject (sub) claim could represent the entity about which the promise is made.
+- The subject (sub) claim could represent the entity about which the promise is made.
 - No known widespread use of CWTs/JWTs for Promise Theory representation.
 
 ---
@@ -101,7 +95,7 @@ XXX IPFS history
 
 ### Overview
 - Authentication and Authorization for Constrained Environments (ACE) working group.
-- Exploring CWTs for authorization in IoT scenarios.
+- Exploring [CWTs](https://tools.ietf.org/html/rfc8392) for authorization in IoT scenarios.
 
 ---
 
@@ -110,7 +104,7 @@ XXX IPFS history
 ### Key Features
 - Use of CWTs as Proof-of-Possession (PoP) tokens.
 - Flexible representation of capabilities and access rights.
-- Secured using COSE for integrity and optional encryption.
+- Secured using [COSE](https://tools.ietf.org/html/rfc8152) for integrity and optional encryption.
 
 ---
 
