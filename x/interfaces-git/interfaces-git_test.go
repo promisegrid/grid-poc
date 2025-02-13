@@ -103,7 +103,7 @@ func NewMockBlob(content []byte) *MockBlob {
 
 // Type returns the type of the blob.
 func (b *MockBlob) Type() string {
-	return "blob"
+	return BlobTagName
 }
 
 // GetSize returns the size of the blob in bytes.
@@ -192,13 +192,11 @@ func (store *MockStore) Get(hash string) (obj Object, err error) {
 		err = c.DecodeRaw(inner, &decoded)
 		Ck(err)
 		return &decoded, nil
-		/*
-			case CommitTagName:
-				var decoded MockCommit
-				err = c.DecodeRaw(inner, &decoded)
-				Ck(err)
-				return &decoded, nil
-		*/
+	case CommitTagName:
+		var decoded MockCommit
+		err = c.DecodeRaw(inner, &decoded)
+		Ck(err)
+		return &decoded, nil
 	default:
 		return nil, fmt.Errorf("Unknown tag name: %s", tagName)
 	}
@@ -265,7 +263,7 @@ func NewMockTree() *MockTree {
 
 // Type returns the type of the tree.
 func (tree *MockTree) Type() string {
-	return "tree"
+	return TreeTagName
 }
 
 // AddEntry adds an entry to the tree.
@@ -367,8 +365,8 @@ func TestTree(t *testing.T) {
 	hash1, err := store.Put(tree)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
 	tree2intf, err := store.Get(hash1)
-	tree2 := tree2intf.(*MockTree)
 	Tassert(t, err == nil, "Expected nil, got %v", err)
+	tree2 := tree2intf.(*MockTree)
 	hash2, ok := verify(tree2, hash1, c)
 	if hash1 != hash2 {
 		// show the difference
@@ -380,11 +378,76 @@ func TestTree(t *testing.T) {
 	}
 }
 
-// Commit is an interface for a commit object in a Git repository.
-type Commit interface {
-	Object
-	GetTree() string
-	GetParents() []string
-	GetAuthor() string
-	GetMessage() string
+// MockCommit is a test implementation of the Commit interface.
+type MockCommit struct {
+	Tree    string
+	Parents []string
+	Author  string
+	Message string
+}
+
+// NewMockCommit creates a new MockCommit with the given tree, parents, author, and message.
+func NewMockCommit(tree string, parents []string, author, message string) *MockCommit {
+	return &MockCommit{
+		Tree:    tree,
+		Parents: parents,
+		Author:  author,
+		Message: message,
+	}
+}
+
+// Type returns the type of the commit.
+func (commit *MockCommit) Type() string {
+	return CommitTagName
+}
+
+// TestCommit tests the Commit interface.
+func TestCommit(t *testing.T) {
+	// Create some blobs
+	blob1 := NewMockBlob([]byte("Hello, World!"))
+	blob2 := NewMockBlob([]byte("Hi again, World!"))
+	// Store the blobs
+	c := setupCodecForGit()
+	store := NewMockStore("/tmp/mockstore", c)
+	blob1Hash, err := store.Put(blob1)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	blob2Hash, err := store.Put(blob2)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	// Create a tree
+	tree := NewMockTree()
+	// create some entries
+	entry1 := NewMockEntry("blob1.txt", blob1Hash, "100644")
+	entry2 := NewMockEntry("blob2.txt", blob2Hash, "100644")
+	// add the entries to the tree
+	tree.AddEntry(entry1)
+	tree.AddEntry(entry2)
+	// Store the tree
+	treeHash, err := store.Put(tree)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	// Create a commit
+	commit := NewMockCommit(treeHash, []string{}, "Steve", "Initial commit.")
+	// Store the commit
+	commitHash, err := store.Put(commit)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	// Retrieve the commit
+	commit2intf, err := store.Get(commitHash)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	commit2 := commit2intf.(*MockCommit)
+	// Verify the commit
+	hash2, ok := verify(commit2, commitHash, c)
+	if !ok {
+		t.Errorf("Expected %s, got %s", commitHash, hash2)
+	}
+	// get one of the blobs from the tree and verify the content
+	tree2, err := store.Get(treeHash)
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	entry := tree2.(*MockTree).Entries[1]
+	// get the blob
+	gotBlob2intf, err := store.Get(entry.GetHash())
+	Tassert(t, err == nil, "Expected nil, got %v", err)
+	gotBlob2 := gotBlob2intf.(*MockBlob)
+	// verify the content
+	wantBlob2Content := blob2.GetContent()
+	gotBlob2Content := gotBlob2.GetContent()
+	Tassert(t, string(wantBlob2Content) == string(gotBlob2Content), "Expected %s, got %s", string(wantBlob2Content), string(gotBlob2Content))
 }
