@@ -10,8 +10,8 @@ type Object interface {
 
 // Store is an interface for storing objects on disk.
 type Store interface {
-	// Put stores an object on disk.
+	// Put stores an object on disk and returns the hash of the object.
 	Put(Object) (string, error)
-	// Get retrieves an object from disk.
+	// Get retrieves an object from disk given its hash.
 	Get(string) (Object, error)
 }
