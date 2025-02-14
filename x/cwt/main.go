@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/cwt/main.go
-```go
 package main
 
 import (
@@ -127,5 +125,3 @@ func main() {
 
 	fmt.Printf("Decoded and verified CWT claims: %+v\n", decodedClaims)
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/cwt/main.go

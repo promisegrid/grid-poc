@@ -1,10 +1,10 @@
-first draft for presentation
+add CWT demo code
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
-  x/atproto/slides.md
+  x/cwt/main.go
 Out:
-  x/atproto/slides.md
+  x/cwt/main.go
 
 .stop
 
