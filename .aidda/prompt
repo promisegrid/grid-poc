@@ -1,10 +1,17 @@
-add CWT demo code
+add GopherJS demo
+
+Write a simple GopherJS demo that uses the DOM API to create a button
+that when clicked, adds a paragraph to the page that says "Hello,
+GopherJS!".
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
-  x/cwt/main.go
 Out:
-  x/cwt/main.go
+  x/gopherjs/hello/hello.go
+  x/gopherjs/hello/hello.js
+  x/gopherjs/hello/hello.html
+  x/gopherjs/hello/Makefile
+
 
 .stop
 
