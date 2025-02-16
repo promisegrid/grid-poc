@@ -8,21 +8,6 @@
   <h1>Go WASM Demo</h1>
   <!-- The button and paragraphs will be appended by the WebAssembly module -->
   <script src="wasm_exec.js"></script>
-  <script>
-    const go = new Go();
-    if (WebAssembly.instantiateStreaming) {
-      WebAssembly.instantiateStreaming(fetch("hello.wasm"), go.importObject).then((result) => {
-        go.run(result.instance);
-      });
-    } else {
-      fetch("hello.wasm").then(response =>
-        response.arrayBuffer()
-      ).then(bytes =>
-        WebAssembly.instantiate(bytes, go.importObject)
-      ).then((result) => {
-        go.run(result.instance);
-      });
-    }
-  </script>
+  <script src="main.js"></script>
 </body>
 </html>

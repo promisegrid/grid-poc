@@ -1,18 +1,17 @@
-first draft of hello-wasm 
+migrate javascript into main.js
 
-- Add a Makefile stanza that builds hello.wasm from hello.go.
-- Add a Makefile stanza that copies wasm_exec.js from the Go distribution to the current directory.
+migrate the javascript code from hello.html into main.js
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
-  x/gopherjs/hello/hello.go
-  x/gopherjs/hello/hello.js
-  x/gopherjs/hello/hello.html
-  x/gopherjs/hello/Makefile
   x/gopherjs/hello-wasm/README.md
+  x/gopherjs/hello-wasm/hello.go
+  x/gopherjs/hello-wasm/hello.html
+  x/gopherjs/hello-wasm/Makefile
 Out:
   x/gopherjs/hello-wasm/hello.go
   x/gopherjs/hello-wasm/hello.html
+  x/gopherjs/hello-wasm/main.js
   x/gopherjs/hello-wasm/Makefile
  
 .stop

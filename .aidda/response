@@ -1,5 +1,6 @@
 File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.go
 ```go
+//go:build js && wasm
 // +build js,wasm
 
 package main
@@ -22,7 +23,7 @@ func main() {
 	// Define the click event handler.
 	clickHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		p := document.Call("createElement", "p")
-		p.Set("innerHTML", "Hello, big world!")
+		p.Set("innerHTML", "Hello, WASM world!")
 		document.Get("body").Call("appendChild", p)
 		return nil
 	})
@@ -44,33 +45,35 @@ File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.html
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>WASM Demo</title>
-  <script src="wasm_exec.js"></script>
-  <script>
-    // Instantiate and run the WebAssembly module.
-    const go = new Go();
-    if (WebAssembly.instantiateStreaming) {
-      WebAssembly.instantiateStreaming(fetch("hello.wasm"), go.importObject).then((result) => {
-        go.run(result.instance);
-      });
-    } else {
-      fetch("hello.wasm").then(response =>
-        response.arrayBuffer()
-      ).then(bytes =>
-        WebAssembly.instantiate(bytes, go.importObject)
-      ).then((result) => {
-        go.run(result.instance);
-      });
-    }
-  </script>
+  <title>Go WASM Demo</title>
 </head>
 <body>
-  <!-- The button and paragraphs will be created by the WebAssembly module -->
-  <h1>WebAssembly Hello Demo</h1>
+  <h1>Go WASM Demo</h1>
+  <!-- The button and paragraphs will be appended by the WebAssembly module -->
+  <script src="wasm_exec.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>
 ```
 EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.html
+
+File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/main.js
+```js
+const go = new Go();
+if (WebAssembly.instantiateStreaming) {
+  WebAssembly.instantiateStreaming(fetch("hello.wasm"), go.importObject).then((result) => {
+    go.run(result.instance);
+  });
+} else {
+  fetch("hello.wasm")
+    .then(response => response.arrayBuffer())
+    .then(bytes => WebAssembly.instantiate(bytes, go.importObject))
+    .then((result) => {
+      go.run(result.instance);
+    });
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/main.js
 
 File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/Makefile
 ```
@@ -79,27 +82,29 @@ File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/Makefile
 # Set GOOS and GOARCH for WebAssembly
 WASM_GOOS=js
 WASM_GOARCH=wasm
-GO=go
 
 # Update GOROOT if necessary; otherwise, it is picked up from the environment
-export GOROOT ?= $(shell go env GOROOT)
+GOROOT ?= $(shell go env GOROOT)
 
 # Default target builds the wasm binary and copies the wasm_exec.js file.
-all: build copy-wasm_exec
+all: build wasm_exec.js
 
 # Build hello.wasm from hello.go
 build: hello.wasm
 
 hello.wasm: hello.go
-	GOOS=$(WASM_GOOS) GOARCH=$(WASM_GOARCH) $(GO) build -o hello.wasm hello.go
+	GOOS=$(WASM_GOOS) GOARCH=$(WASM_GOARCH) go build -o hello.wasm hello.go
 
 # Copy wasm_exec.js from the Go distribution to the current directory.
-copy-wasm_exec:
-	cp "$(GOROOT)/misc/wasm/wasm_exec.js" .
+wasm_exec.js: $(GOROOT)/misc/wasm/wasm_exec.js
+	cp $< $@
+
+run: all
+	go run ../server.go .
 
 clean:
 	rm -f hello.wasm wasm_exec.js
 
-.PHONY: all build copy-wasm_exec clean
+.PHONY: all build clean
 ```
 EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/Makefile
