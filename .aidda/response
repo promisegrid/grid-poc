@@ -1,95 +1,143 @@
-Below is one way to write main.go using GopherJS (i.e. using Go’s js package, which is supported by GopherJS) that does what main.js did in JavaScript. In this example the Go code creates a new instance of Go (defined in wasm_exec.js), then fetches and instantiates the hello.wasm module—using instantiateStreaming if available—and finally runs the Go WASM module by calling go.run(instance). (Remember that you still must build hello.go as WASM and copy wasm_exec.js in the proper location.) 
+Below is one way to modify the demo so that—in addition to appending “Hello, WASM world!” on a button click—it also writes a string to a file in the browser’s Origin Private File System (OPFS) and then reads it back. (Note that OPFS is available only in browsers that support the File System Access API in a secure context.) One common solution is to write small helper functions in JavaScript (called from Go via syscall/js) that perform the asynchronous OPFS operations.
 
-For example, you might add this new file alongside hello.go:
+In the example below we make two changes:
 
-------------------------------------------------------------
-File: main.go
-------------------------------------------------------------
+1. In hello.go we add a new button (“Write and Read OPFS File”) whose click handler calls a new Go helper function storeAndReadFile. That function calls the JavaScript functions writeOpfsFile and readOpfsFile, whose return Promises are chained via then‑callbacks. When the file is read back, its contents are logged to the browser console.
+
+2. In main.js we add implementations for writeOpfsFile and readOpfsFile. These async functions use the File System Access API’s methods (navigator.storage.getDirectory(), getFileHandle(), createWritable(), etc.) to write a file and then read it back.
+
+────────────────────────────
+Updated File: hello.go
+────────────────────────────
+  
+//go:build js && wasm
+// +build js,wasm
+
 package main
 
 import (
 	"syscall/js"
 )
 
+// storeAndReadFile writes a string to an OPFS file and then reads it back.
+func storeAndReadFile() {
+	// The string to write.
+	data := "Hello, Origin Private File System!"
+
+	// Call the JS function "writeOpfsFile" to write the string.
+	// It returns a Promise.
+	writePromise := js.Global().Call("writeOpfsFile", "hello.txt", data)
+
+	// Define a then‑callback when the write Promise resolves.
+	thenWrite := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		// After writing, call the JS function "readOpfsFile" to read the file.
+		readPromise := js.Global().Call("readOpfsFile", "hello.txt")
+		thenRead := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			// The resolved value is the file content.
+			fileContent := args[0].String()
+			js.Global().Get("console").Call("log", "OPFS file content:", fileContent)
+			return nil
+		})
+		// Chain the then‑callback to the read Promise.
+		readPromise.Call("then", thenRead)
+		return nil
+	})
+	writePromise.Call("then", thenWrite)
+}
+
 func main() {
-	// Create a new instance of Go by calling the Go constructor defined in wasm_exec.js.
-	goInstance := js.Global().Get("Go").New()
+	// Get the global document.
+	document := js.Global().Get("document")
 
-	wasm := js.Global().Get("WebAssembly")
-	fetchWasm := js.Global().Get("fetch").Invoke("hello.wasm")
+	// Create the original "Click me" button.
+	button := document.Call("createElement", "button")
+	button.Set("innerHTML", "Click me to say Hello")
+	document.Get("body").Call("appendChild", button)
 
-	// We need to branch based on whether instantiateStreaming is available.
-	if wasm.Get("instantiateStreaming").Truthy() {
-		// If supported, use instantiateStreaming.
-		thenFetch := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-			// args[0] is the Response object.
-			instPromise := wasm.Call("instantiateStreaming", args[0], goInstance.Get("importObject"))
+	// Event handler for appending a simple paragraph.
+	clickHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		p := document.Call("createElement", "p")
+		p.Set("innerHTML", "Hello, WASM world!")
+		document.Get("body").Call("appendChild", p)
+		return nil
+	})
+	// Note: release when handler is no longer needed.
+	defer clickHandler.Release()
+	button.Call("addEventListener", "click", clickHandler)
 
-			thenInst := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-				// Once the instantiation is complete, call goInstance.run with the instance.
-				goInstance.Call("run", args[0].Get("instance"))
-				// Optionally release the function once used.
-				thenInst.Release()
-				return nil
-			})
-			instPromise.Call("then", thenInst)
-			// Optionally release the fetch callback here.
-			thenFetch.Release()
-			return nil
-		})
-		fetchWasm.Call("then", thenFetch)
-	} else {
-		// Fallback path for browsers that do not support instantiateStreaming.
-		thenFetch := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-			response := args[0]
-			arrayBufPromise := response.Call("arrayBuffer")
-			thenArray := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-				bytes := args[0]
-				instPromise := wasm.Call("instantiate", bytes, goInstance.Get("importObject"))
-				thenInst := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-					goInstance.Call("run", args[0].Get("instance"))
-					thenInst.Release()
-					return nil
-				})
-				instPromise.Call("then", thenInst)
-				thenArray.Release()
-				return nil
-			})
-			arrayBufPromise.Call("then", thenArray)
-			thenFetch.Release()
-			return nil
-		})
-		fetchWasm.Call("then", thenFetch)
-	}
+	// Create a new button to run the OPFS demo.
+	opfsButton := document.Call("createElement", "button")
+	opfsButton.Set("innerHTML", "Write and Read OPFS File")
+	document.Get("body").Call("appendChild", opfsButton)
 
-	// Prevent the GopherJS program from exiting.
+	// Event handler that triggers file writing then reading.
+	opfsHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		storeAndReadFile()
+		return nil
+	})
+	defer opfsHandler.Release()
+	opfsButton.Call("addEventListener", "click", opfsHandler)
+
+	// Prevent the Go program from exiting.
 	select {}
 }
 
-------------------------------------------------------------
+────────────────────────────
+Updated File: main.js
+────────────────────────────
 
-How this works:
+/*
+  The following functions implement the OPFS operations using the File System Access API.
+  They are defined as async functions and then attached to the global (window) so that they
+  can be called from Go via syscall/js.
+*/
 
-1. The code fetches "hello.wasm" using the JavaScript fetch API via js.Global().Get("fetch") (wrapped in js package calls).
+async function writeOpfsFile(filename, content) {
+  // Get the origin-private root directory.
+  const rootDir = await navigator.storage.getDirectory();
+  // Open (or create) a file with the given filename.
+  const fileHandle = await rootDir.getFileHandle(filename, { create: true });
+  // Create a writable stream.
+  const writable = await fileHandle.createWritable();
+  // Write the content and close the file.
+  await writable.write(content);
+  await writable.close();
+  return "File written";
+}
 
-2. It checks whether WebAssembly.instantiateStreaming is available by testing if wasm.Get("instantiateStreaming") is truthy.
+async function readOpfsFile(filename) {
+  // Get the root directory.
+  const rootDir = await navigator.storage.getDirectory();
+  // Open the file.
+  const fileHandle = await rootDir.getFileHandle(filename);
+  const file = await fileHandle.getFile();
+  const content = await file.text();
+  return content;
+}
 
-3. If available, it uses instantiateStreaming to directly compile the WASM module from the Response; otherwise it falls back to fetching the ArrayBuffer and then calling WebAssembly.instantiate.
+// Expose the functions so that they are accessible from Go.
+window.writeOpfsFile = writeOpfsFile;
+window.readOpfsFile = readOpfsFile;
 
-4. Once the instantiation promise resolves, it calls goInstance.run(instance) to run the WASM module (just like main.js did).
+if (WebAssembly.instantiateStreaming) {
+  WebAssembly.instantiateStreaming(fetch("hello.wasm"), go.importObject).then((result) => {
+    go.run(result.instance);
+  });
+} else {
+  fetch("hello.wasm")
+    .then(response => response.arrayBuffer())
+    .then(bytes => WebAssembly.instantiate(bytes, go.importObject))
+    .then((result) => {
+      go.run(result.instance);
+    });
+}
 
-5. The call to select {} at the end keeps the main() function running indefinitely.
+────────────────────────────
+Notes
+────────────────────────────
+• To test this demo, you may need to host the files via HTTPS (or on localhost) because the File System Access API requires a secure context.
+• Not all browsers support OPFS yet. At the time of writing, this API is available in recent versions of Chrome and Edge.
+• The Go code uses js.FuncOf to wrap callback functions for Promises. In a production application you might want to handle error cases (for example by chaining .catch on the Promises) and release any allocated js.Func objects when no longer needed.
+• Make sure your Makefile builds hello.wasm using GOOS=js and GOARCH=wasm as before.
 
-To compile this file to JavaScript using GopherJS, run (assuming GopherJS is installed):
-
-   gopherjs build -o main.js main.go
-
-Then your project will consist of:
-
- • hello.go (compiled to hello.wasm)
- • wasm_exec.js (copied from $GOROOT/misc/wasm/wasm_exec.js)
- • hello.html (loads wasm_exec.js and main.js)
- • main.js (compiled from main.go via GopherJS)
- • Makefile (which you might update to invoke gopherjs build on main.go)
-
-Happy coding with Go, GopherJS, and WebAssembly!
+This example demonstrates one approach to combining Go’s WebAssembly support with the browser’s new file system APIs through JavaScript interop. Happy coding!

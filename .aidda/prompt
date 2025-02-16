@@ -1,10 +1,7 @@
-consider GopherJS
+consider WASM function that interacts with OPFS 
 
-How might the code look if we were to write main.js in Go instead of
-JavaScript, and then compile it to JavaScript using GopherJS, while
-keeping hello.go in WASM?  In other words, main.go would be
-responsible for instantiating the WASM module build from the Go code
-in hello.go and calling its functions.
+How might the code look if hello.go stored a string in a file in OPFS
+and then read it back?  
 
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
