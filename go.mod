@@ -5,8 +5,6 @@ go 1.22.1
 replace github.com/stevegt/grid-poc => /home/stevegt/lab/grid-poc
 
 require (
-	cbor-codec v0.0.0-00010101000000-000000000000
-	github.com/davecgh/go-spew v1.1.1
 	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/multiformats/go-multihash v0.2.3
 	github.com/stevegt/goadapt v0.7.0

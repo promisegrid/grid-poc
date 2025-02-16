@@ -18,7 +18,7 @@ func main() {
 	// Add a click event listener that creates and appends a paragraph.
 	button.Call("addEventListener", "click", func() {
 		p := document.Call("createElement", "p")
-		p.Set("innerHTML", "Hello, GopherJS!")
+		p.Set("innerHTML", "Hello, big world!")
 		document.Get("body").Call("appendChild", p)
 	})
 }
