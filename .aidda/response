@@ -1,100 +1,95 @@
-Below is one way you might “convert” the demo from using the Go-specific js glue (wasm_exec.js in a browser) to a WASI-style demo. Note that WASI (the WebAssembly System Interface) does not supply a browser API (for example, there is no DOM), so interaction is normally done via standard I/O or files. In this revised demo the Go program simply writes a greeting to stdout, and you’d run it with a WASI-compliant runtime (such as Wasmtime or Wasmer).
+Below is one way to write main.go using GopherJS (i.e. using Go’s js package, which is supported by GopherJS) that does what main.js did in JavaScript. In this example the Go code creates a new instance of Go (defined in wasm_exec.js), then fetches and instantiates the hello.wasm module—using instantiateStreaming if available—and finally runs the Go WASM module by calling go.run(instance). (Remember that you still must build hello.go as WASM and copy wasm_exec.js in the proper location.) 
 
-Below are the updated files:
+For example, you might add this new file alongside hello.go:
 
-─────────────────────────────  
-File: README.md  
-─────────────────────────────
-
-  WASI Hello Demo
-  ===============
-  
-  This demo runs a simple “Hello” example in a WASI runtime. Instead of using Go’s js+wasm support along with wasm_exec.js, the Go program is compiled for the WASI target and writes to stdout (which you can capture via your WASI tool of choice such as Wasmtime).
-  
-  The following files make up the demo:
-  
-  • hello.go – Go source code that simply prints “Hello, WASI world!” to standard output.
-  • wasi.wasm – Compiled WebAssembly binary built with GOOS=wasi and GOARCH=wasm.
-  • Makefile – Build script that compiles the Go source code for the WASI target.
-  
-  ## Building the Demo
-  
-  1. Ensure you have Go installed (and that experimental support for WASI is available in your toolchain).  
-  2. Run:
-  
-     make
-     
-     The Makefile uses:
-     
-         GOOS=wasi GOARCH=wasm go build -o wasi.wasm hello.go
-     
-     to compile the source code.
-  
-  ## Running the Demo
-  
-  Use any WASI-compliant WebAssembly runtime. For example, if you have Wasmtime installed, run:
-  
-      wasmtime wasi.wasm
-  
-  This will execute the demo and print “Hello, WASI world!” to your terminal.
-  
-  Happy coding!
-
-─────────────────────────────  
-File: hello.go  
-─────────────────────────────
-
-//go:build wasi && wasm
-// +build wasi,wasm
-
-// Note: Since WASI does not provide a DOM or JavaScript host,
-// this demo simply prints to stdout.
+------------------------------------------------------------
+File: main.go
+------------------------------------------------------------
 package main
 
-import "fmt"
+import (
+	"syscall/js"
+)
 
 func main() {
-    fmt.Println("Hello, WASI world!")
+	// Create a new instance of Go by calling the Go constructor defined in wasm_exec.js.
+	goInstance := js.Global().Get("Go").New()
+
+	wasm := js.Global().Get("WebAssembly")
+	fetchWasm := js.Global().Get("fetch").Invoke("hello.wasm")
+
+	// We need to branch based on whether instantiateStreaming is available.
+	if wasm.Get("instantiateStreaming").Truthy() {
+		// If supported, use instantiateStreaming.
+		thenFetch := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			// args[0] is the Response object.
+			instPromise := wasm.Call("instantiateStreaming", args[0], goInstance.Get("importObject"))
+
+			thenInst := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+				// Once the instantiation is complete, call goInstance.run with the instance.
+				goInstance.Call("run", args[0].Get("instance"))
+				// Optionally release the function once used.
+				thenInst.Release()
+				return nil
+			})
+			instPromise.Call("then", thenInst)
+			// Optionally release the fetch callback here.
+			thenFetch.Release()
+			return nil
+		})
+		fetchWasm.Call("then", thenFetch)
+	} else {
+		// Fallback path for browsers that do not support instantiateStreaming.
+		thenFetch := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			response := args[0]
+			arrayBufPromise := response.Call("arrayBuffer")
+			thenArray := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+				bytes := args[0]
+				instPromise := wasm.Call("instantiate", bytes, goInstance.Get("importObject"))
+				thenInst := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+					goInstance.Call("run", args[0].Get("instance"))
+					thenInst.Release()
+					return nil
+				})
+				instPromise.Call("then", thenInst)
+				thenArray.Release()
+				return nil
+			})
+			arrayBufPromise.Call("then", thenArray)
+			thenFetch.Release()
+			return nil
+		})
+		fetchWasm.Call("then", thenFetch)
+	}
+
+	// Prevent the GopherJS program from exiting.
+	select {}
 }
 
-─────────────────────────────  
-File: hello.html  
-─────────────────────────────
+------------------------------------------------------------
 
-/*
-  When targeting WASI, you typically do not run your code in the browser.
-  Therefore this file is no longer needed. (If you previously hosted the demo
-  in a browser using wasm_exec.js, you can remove the HTML file or repurpose it.)
-*/
+How this works:
 
-─────────────────────────────  
-File: Makefile  
-─────────────────────────────
-  
-# Makefile for building the WASI demo
+1. The code fetches "hello.wasm" using the JavaScript fetch API via js.Global().Get("fetch") (wrapped in js package calls).
 
-# Set the target OS and architecture for WASI:
-WASI_GOOS=wasi
-WASI_GOARCH=wasm
+2. It checks whether WebAssembly.instantiateStreaming is available by testing if wasm.Get("instantiateStreaming") is truthy.
 
-# Default target builds the wasm binary.
-all: wasi.wasm
+3. If available, it uses instantiateStreaming to directly compile the WASM module from the Response; otherwise it falls back to fetching the ArrayBuffer and then calling WebAssembly.instantiate.
 
-# Build wasi.wasm from hello.go using the WASI target.
-wasi.wasm: hello.go
-	GOOS=$(WASI_GOOS) GOARCH=$(WASI_GOARCH) go build -o wasi.wasm hello.go
+4. Once the instantiation promise resolves, it calls goInstance.run(instance) to run the WASM module (just like main.js did).
 
-clean:
-	rm -f wasi.wasm
+5. The call to select {} at the end keeps the main() function running indefinitely.
 
-.PHONY: all clean
+To compile this file to JavaScript using GopherJS, run (assuming GopherJS is installed):
 
-─────────────────────────────
+   gopherjs build -o main.js main.go
 
-Notes:
+Then your project will consist of:
 
-1. Since Go’s support for WASI is still experimental (and is not yet as mature as the js/wasm target), you may need to adjust your environment or use a custom build of Go. (Some users have had success with TinyGo when targeting WASI, too.)
-2. Unlike the browser-based demo which relies on wasm_exec.js to bootstrap the Go runtime, running with WASI means that the Go runtime is initialized using the standard WASI host calls.
-3. The demo has also been simplified so that instead of manipulating a DOM (which WASI does not support), it simply prints a message to stdout.
+ • hello.go (compiled to hello.wasm)
+ • wasm_exec.js (copied from $GOROOT/misc/wasm/wasm_exec.js)
+ • hello.html (loads wasm_exec.js and main.js)
+ • main.js (compiled from main.go via GopherJS)
+ • Makefile (which you might update to invoke gopherjs build on main.go)
 
-This example shows one way to “port” your demonstration from a browser environment to WASI. Depending on your goals, you might need to adjust the code and build process further.
+Happy coding with Go, GopherJS, and WebAssembly!

@@ -1,17 +1,15 @@
-consider WASI
+consider GopherJS
 
-How might the code look if we were to use WASI instead of wasm_exec.js?
+How might the code look if we were to write main.js in Go instead of
+JavaScript, and then compile it to JavaScript using GopherJS, while
+keeping hello.go in WASM?  In other words, main.go would be
+responsible for instantiating the WASM module build from the Go code
+in hello.go and calling its functions.
+
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
   x/gopherjs/hello-wasm/README.md
-  x/gopherjs/hello-wasm/hello.go
-  x/gopherjs/hello-wasm/hello.html
-  x/gopherjs/hello-wasm/Makefile
-
-.stop
-
-Out:
   x/gopherjs/hello-wasm/hello.go
   x/gopherjs/hello-wasm/hello.html
   x/gopherjs/hello-wasm/main.js
