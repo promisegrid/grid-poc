@@ -1,11 +1,18 @@
-add GopherJS demo
+add GopherJS demo server
 
-Write a simple GopherJS demo that uses the DOM API to create a button
-that when clicked, adds a paragraph to the page that says "Hello,
-GopherJS!".
+Write a simple HTTP server that serves the GopherJS demo.
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
+  x/gopherjs/hello/hello.go
+  x/gopherjs/hello/hello.js
+  x/gopherjs/hello/hello.html
+  x/gopherjs/hello/Makefile
+Out:
+  x/gopherjs/hello/server.go
+ 
+.stop
+
 Out:
   x/gopherjs/hello/hello.go
   x/gopherjs/hello/hello.js

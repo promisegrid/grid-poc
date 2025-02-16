@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/gopherjs/hello/server.go
-```go
 package main
 
 import (
@@ -10,7 +8,7 @@ import (
 
 func main() {
 	// Define the address flag to allow setting the listening address.
-	addr := flag.String("addr", "127.0.0.1:8080", "HTTP network address")
+	addr := flag.String("addr", "127.0.0.1:8736", "HTTP network address")
 	flag.Parse()
 
 	// Create a file server handler to serve files from the current directory.
@@ -24,5 +22,3 @@ func main() {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello/server.go
