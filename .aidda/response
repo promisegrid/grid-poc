@@ -1,143 +1,119 @@
-Below is one way to modify the demo so that—in addition to appending “Hello, WASM world!” on a button click—it also writes a string to a file in the browser’s Origin Private File System (OPFS) and then reads it back. (Note that OPFS is available only in browsers that support the File System Access API in a secure context.) One common solution is to write small helper functions in JavaScript (called from Go via syscall/js) that perform the asynchronous OPFS operations.
+Below is one way to update hello.go so that when you click the button the WebAssembly code opens (or creates) an IndexedDB database, writes a string value to an object store, and then retrieves that same value to display it on the page. (In a real application you would add proper error handling and perhaps “upgrade” logic for subsequent database versions.) 
 
-In the example below we make two changes:
+Below is the updated hello.go file:
 
-1. In hello.go we add a new button (“Write and Read OPFS File”) whose click handler calls a new Go helper function storeAndReadFile. That function calls the JavaScript functions writeOpfsFile and readOpfsFile, whose return Promises are chained via then‑callbacks. When the file is read back, its contents are logged to the browser console.
-
-2. In main.js we add implementations for writeOpfsFile and readOpfsFile. These async functions use the File System Access API’s methods (navigator.storage.getDirectory(), getFileHandle(), createWritable(), etc.) to write a file and then read it back.
-
-────────────────────────────
-Updated File: hello.go
-────────────────────────────
-  
-//go:build js && wasm
-// +build js,wasm
-
+--------------------------------------------------
 package main
 
 import (
 	"syscall/js"
 )
 
-// storeAndReadFile writes a string to an OPFS file and then reads it back.
-func storeAndReadFile() {
-	// The string to write.
-	data := "Hello, Origin Private File System!"
-
-	// Call the JS function "writeOpfsFile" to write the string.
-	// It returns a Promise.
-	writePromise := js.Global().Call("writeOpfsFile", "hello.txt", data)
-
-	// Define a then‑callback when the write Promise resolves.
-	thenWrite := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		// After writing, call the JS function "readOpfsFile" to read the file.
-		readPromise := js.Global().Call("readOpfsFile", "hello.txt")
-		thenRead := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-			// The resolved value is the file content.
-			fileContent := args[0].String()
-			js.Global().Get("console").Call("log", "OPFS file content:", fileContent)
-			return nil
-		})
-		// Chain the then‑callback to the read Promise.
-		readPromise.Call("then", thenRead)
-		return nil
-	})
-	writePromise.Call("then", thenWrite)
-}
-
 func main() {
-	// Get the global document.
+	// Get the global document object.
 	document := js.Global().Get("document")
 
-	// Create the original "Click me" button.
+	// Create a button element.
 	button := document.Call("createElement", "button")
-	button.Set("innerHTML", "Click me to say Hello")
+	button.Set("innerHTML", "Store & Retrieve from IndexedDB")
+
+	// Append the button to the body.
 	document.Get("body").Call("appendChild", button)
 
-	// Event handler for appending a simple paragraph.
+	// Define the click event handler.
 	clickHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		p := document.Call("createElement", "p")
-		p.Set("innerHTML", "Hello, WASM world!")
-		document.Get("body").Call("appendChild", p)
+		// Get IndexedDB from the global object.
+		indexedDB := js.Global().Get("indexedDB")
+		if indexedDB.IsUndefined() {
+			p := document.Call("createElement", "p")
+			p.Set("innerHTML", "IndexedDB is not supported in this browser.")
+			document.Get("body").Call("appendChild", p)
+			return nil
+		}
+
+		// Open (or create) a database called "MyDatabase" with version 1.
+		request := indexedDB.Call("open", "MyDatabase", 1)
+
+		// onupgradeneeded event handler to create the object store.
+		var onUpgrade js.Func
+		onUpgrade = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			// Get the database from the request.
+			db := request.Get("result")
+			// Create an object store named "greetings".
+			// (In a production app you might want to check if it already exists.)
+			db.Call("createObjectStore", "greetings")
+			// Clean up: remove the upgrade handler.
+			request.Set("onupgradeneeded", js.Undefined())
+			onUpgrade.Release()
+			return nil
+		})
+		request.Set("onupgradeneeded", onUpgrade)
+
+		// onsuccess event handler when the database is opened.
+		var onSuccess js.Func
+		onSuccess = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			db := request.Get("result")
+			// Start a read-write transaction on the "greetings" object store.
+			tx := db.Call("transaction", "greetings", "readwrite")
+			store := tx.Call("objectStore", "greetings")
+
+			// Store a value "Hello, IndexedDB" with key "hello".
+			putReq := store.Call("put", "Hello, IndexedDB", "hello")
+
+			// Handler to be called when the put request succeeds.
+			var onPutSuccess js.Func
+			onPutSuccess = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+				// Now get the stored value back.
+				getReq := store.Call("get", "hello")
+				var onGetSuccess js.Func
+				onGetSuccess = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+					val := getReq.Get("result").String()
+					// Append the retrieved value to the document as a paragraph.
+					p := document.Call("createElement", "p")
+					p.Set("innerHTML", "IndexedDB Value: "+val)
+					document.Get("body").Call("appendChild", p)
+					// Cleanup the get-success handler.
+					getReq.Set("onsuccess", js.Undefined())
+					onGetSuccess.Release()
+					return nil
+				})
+				getReq.Set("onsuccess", onGetSuccess)
+				// Cleanup the put-success handler.
+				putReq.Set("onsuccess", js.Undefined())
+				onPutSuccess.Release()
+				return nil
+			})
+			putReq.Set("onsuccess", onPutSuccess)
+			// Cleanup the onsuccess handler for the open request.
+			request.Set("onsuccess", js.Undefined())
+			onSuccess.Release()
+			return nil
+		})
+		request.Set("onsuccess", onSuccess)
+
+		// (Optional) You could also define onerror handlers, etc.
+
 		return nil
 	})
-	// Note: release when handler is no longer needed.
-	defer clickHandler.Release()
+	// Add the click event listener to the button.
 	button.Call("addEventListener", "click", clickHandler)
-
-	// Create a new button to run the OPFS demo.
-	opfsButton := document.Call("createElement", "button")
-	opfsButton.Set("innerHTML", "Write and Read OPFS File")
-	document.Get("body").Call("appendChild", opfsButton)
-
-	// Event handler that triggers file writing then reading.
-	opfsHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		storeAndReadFile()
-		return nil
-	})
-	defer opfsHandler.Release()
-	opfsButton.Call("addEventListener", "click", opfsHandler)
+	// We do not release clickHandler here since we want it to be live throughout the app.
 
 	// Prevent the Go program from exiting.
 	select {}
 }
 
-────────────────────────────
-Updated File: main.js
-────────────────────────────
+--------------------------------------------------
 
-/*
-  The following functions implement the OPFS operations using the File System Access API.
-  They are defined as async functions and then attached to the global (window) so that they
-  can be called from Go via syscall/js.
-*/
+How It Works:
 
-async function writeOpfsFile(filename, content) {
-  // Get the origin-private root directory.
-  const rootDir = await navigator.storage.getDirectory();
-  // Open (or create) a file with the given filename.
-  const fileHandle = await rootDir.getFileHandle(filename, { create: true });
-  // Create a writable stream.
-  const writable = await fileHandle.createWritable();
-  // Write the content and close the file.
-  await writable.write(content);
-  await writable.close();
-  return "File written";
-}
+1. When the button is clicked, the click handler is invoked.
+2. The handler uses js.Global() to access the IndexedDB interface and calls open("MyDatabase", 1) to open or create a database.
+3. In the onupgradeneeded callback the code creates a new object store named "greetings" if needed.
+4. In the onsuccess callback the code starts a transaction on "greetings", writes the string "Hello, IndexedDB" with key "hello" (using put), and then immediately issues a get request for the same key.
+5. Once the value is retrieved (via the get request’s onsuccess handler), it is appended to the document as a new paragraph.
 
-async function readOpfsFile(filename) {
-  // Get the root directory.
-  const rootDir = await navigator.storage.getDirectory();
-  // Open the file.
-  const fileHandle = await rootDir.getFileHandle(filename);
-  const file = await fileHandle.getFile();
-  const content = await file.text();
-  return content;
-}
+This example should be compiled using:
+  GOOS=js GOARCH=wasm go build -o hello.wasm hello.go
 
-// Expose the functions so that they are accessible from Go.
-window.writeOpfsFile = writeOpfsFile;
-window.readOpfsFile = readOpfsFile;
-
-if (WebAssembly.instantiateStreaming) {
-  WebAssembly.instantiateStreaming(fetch("hello.wasm"), go.importObject).then((result) => {
-    go.run(result.instance);
-  });
-} else {
-  fetch("hello.wasm")
-    .then(response => response.arrayBuffer())
-    .then(bytes => WebAssembly.instantiate(bytes, go.importObject))
-    .then((result) => {
-      go.run(result.instance);
-    });
-}
-
-────────────────────────────
-Notes
-────────────────────────────
-• To test this demo, you may need to host the files via HTTPS (or on localhost) because the File System Access API requires a secure context.
-• Not all browsers support OPFS yet. At the time of writing, this API is available in recent versions of Chrome and Edge.
-• The Go code uses js.FuncOf to wrap callback functions for Promises. In a production application you might want to handle error cases (for example by chaining .catch on the Promises) and release any allocated js.Func objects when no longer needed.
-• Make sure your Makefile builds hello.wasm using GOOS=js and GOARCH=wasm as before.
-
-This example demonstrates one approach to combining Go’s WebAssembly support with the browser’s new file system APIs through JavaScript interop. Happy coding!
+and run within your existing HTML/JS setup as described in the README. Enjoy exploring IndexedDB with WebAssembly and Go!

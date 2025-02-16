@@ -1,7 +1,7 @@
-consider WASM function that interacts with OPFS 
+consider WASM function that interacts with IndexedDB 
 
-How might the code look if hello.go stored a string in a file in OPFS
-and then read it back?  
+How might the code look if hello.go stored a string in IndexedDB and
+then read it back?
 
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
