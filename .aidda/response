@@ -1,110 +1,100 @@
-File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.go
-```go
-//go:build js && wasm
-// +build js,wasm
+Below is one way you might “convert” the demo from using the Go-specific js glue (wasm_exec.js in a browser) to a WASI-style demo. Note that WASI (the WebAssembly System Interface) does not supply a browser API (for example, there is no DOM), so interaction is normally done via standard I/O or files. In this revised demo the Go program simply writes a greeting to stdout, and you’d run it with a WASI-compliant runtime (such as Wasmtime or Wasmer).
 
+Below are the updated files:
+
+─────────────────────────────  
+File: README.md  
+─────────────────────────────
+
+  WASI Hello Demo
+  ===============
+  
+  This demo runs a simple “Hello” example in a WASI runtime. Instead of using Go’s js+wasm support along with wasm_exec.js, the Go program is compiled for the WASI target and writes to stdout (which you can capture via your WASI tool of choice such as Wasmtime).
+  
+  The following files make up the demo:
+  
+  • hello.go – Go source code that simply prints “Hello, WASI world!” to standard output.
+  • wasi.wasm – Compiled WebAssembly binary built with GOOS=wasi and GOARCH=wasm.
+  • Makefile – Build script that compiles the Go source code for the WASI target.
+  
+  ## Building the Demo
+  
+  1. Ensure you have Go installed (and that experimental support for WASI is available in your toolchain).  
+  2. Run:
+  
+     make
+     
+     The Makefile uses:
+     
+         GOOS=wasi GOARCH=wasm go build -o wasi.wasm hello.go
+     
+     to compile the source code.
+  
+  ## Running the Demo
+  
+  Use any WASI-compliant WebAssembly runtime. For example, if you have Wasmtime installed, run:
+  
+      wasmtime wasi.wasm
+  
+  This will execute the demo and print “Hello, WASI world!” to your terminal.
+  
+  Happy coding!
+
+─────────────────────────────  
+File: hello.go  
+─────────────────────────────
+
+//go:build wasi && wasm
+// +build wasi,wasm
+
+// Note: Since WASI does not provide a DOM or JavaScript host,
+// this demo simply prints to stdout.
 package main
 
-import (
-	"syscall/js"
-)
+import "fmt"
 
 func main() {
-	// Get the global document object.
-	document := js.Global().Get("document")
-
-	// Create a button element.
-	button := document.Call("createElement", "button")
-	button.Set("innerHTML", "Click me")
-
-	// Append the button to the body.
-	document.Get("body").Call("appendChild", button)
-
-	// Define the click event handler.
-	clickHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		p := document.Call("createElement", "p")
-		p.Set("innerHTML", "Hello, WASM world!")
-		document.Get("body").Call("appendChild", p)
-		return nil
-	})
-	// It's important to release the function when not used.
-	defer clickHandler.Release()
-
-	// Add the click event listener to the button.
-	button.Call("addEventListener", "click", clickHandler)
-
-	// Prevent the Go program from exiting.
-	select {}
+    fmt.Println("Hello, WASI world!")
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.go
 
-File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.html
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>Go WASM Demo</title>
-</head>
-<body>
-  <h1>Go WASM Demo</h1>
-  <!-- The button and paragraphs will be appended by the WebAssembly module -->
-  <script src="wasm_exec.js"></script>
-  <script src="main.js"></script>
-</body>
-</html>
-```
-EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.html
+─────────────────────────────  
+File: hello.html  
+─────────────────────────────
 
-File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/main.js
-```js
-const go = new Go();
-if (WebAssembly.instantiateStreaming) {
-  WebAssembly.instantiateStreaming(fetch("hello.wasm"), go.importObject).then((result) => {
-    go.run(result.instance);
-  });
-} else {
-  fetch("hello.wasm")
-    .then(response => response.arrayBuffer())
-    .then(bytes => WebAssembly.instantiate(bytes, go.importObject))
-    .then((result) => {
-      go.run(result.instance);
-    });
-}
-```
-EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/main.js
+/*
+  When targeting WASI, you typically do not run your code in the browser.
+  Therefore this file is no longer needed. (If you previously hosted the demo
+  in a browser using wasm_exec.js, you can remove the HTML file or repurpose it.)
+*/
 
-File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/Makefile
-```
-# Makefile for building the WebAssembly demo
+─────────────────────────────  
+File: Makefile  
+─────────────────────────────
+  
+# Makefile for building the WASI demo
 
-# Set GOOS and GOARCH for WebAssembly
-WASM_GOOS=js
-WASM_GOARCH=wasm
+# Set the target OS and architecture for WASI:
+WASI_GOOS=wasi
+WASI_GOARCH=wasm
 
-# Update GOROOT if necessary; otherwise, it is picked up from the environment
-GOROOT ?= $(shell go env GOROOT)
+# Default target builds the wasm binary.
+all: wasi.wasm
 
-# Default target builds the wasm binary and copies the wasm_exec.js file.
-all: build wasm_exec.js
-
-# Build hello.wasm from hello.go
-build: hello.wasm
-
-hello.wasm: hello.go
-	GOOS=$(WASM_GOOS) GOARCH=$(WASM_GOARCH) go build -o hello.wasm hello.go
-
-# Copy wasm_exec.js from the Go distribution to the current directory.
-wasm_exec.js: $(GOROOT)/misc/wasm/wasm_exec.js
-	cp $< $@
-
-run: all
-	go run ../server.go .
+# Build wasi.wasm from hello.go using the WASI target.
+wasi.wasm: hello.go
+	GOOS=$(WASI_GOOS) GOARCH=$(WASI_GOARCH) go build -o wasi.wasm hello.go
 
 clean:
-	rm -f hello.wasm wasm_exec.js
+	rm -f wasi.wasm
 
-.PHONY: all build clean
-```
-EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/Makefile
+.PHONY: all clean
+
+─────────────────────────────
+
+Notes:
+
+1. Since Go’s support for WASI is still experimental (and is not yet as mature as the js/wasm target), you may need to adjust your environment or use a custom build of Go. (Some users have had success with TinyGo when targeting WASI, too.)
+2. Unlike the browser-based demo which relies on wasm_exec.js to bootstrap the Go runtime, running with WASI means that the Go runtime is initialized using the standard WASI host calls.
+3. The demo has also been simplified so that instead of manipulating a DOM (which WASI does not support), it simply prints a message to stdout.
+
+This example shows one way to “port” your demonstration from a browser environment to WASI. Depending on your goals, you might need to adjust the code and build process further.

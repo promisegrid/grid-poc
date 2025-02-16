@@ -1,6 +1,6 @@
-migrate javascript into main.js
+consider WASI
 
-migrate the javascript code from hello.html into main.js
+How might the code look if we were to use WASI instead of wasm_exec.js?
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
@@ -8,6 +8,9 @@ In:
   x/gopherjs/hello-wasm/hello.go
   x/gopherjs/hello-wasm/hello.html
   x/gopherjs/hello-wasm/Makefile
+
+.stop
+
 Out:
   x/gopherjs/hello-wasm/hello.go
   x/gopherjs/hello-wasm/hello.html
