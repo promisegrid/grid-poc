@@ -1,6 +1,9 @@
-add GopherJS demo server
+describe a WASM version of the hello demo
 
-Write a simple HTTP server that serves the GopherJS demo.
+Write a README.md file that lists the files needed for a version of
+the hello demo that runs in a web browser using WASM. The file list
+should include all files needed to build and run the demo. The file
+list should consist of the name of each file and a one-line description.
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
@@ -9,7 +12,13 @@ In:
   x/gopherjs/hello/hello.html
   x/gopherjs/hello/Makefile
 Out:
-  x/gopherjs/hello/server.go
+  x/gopherjs/hello-wasm/README.md
+
+.stop
+
+  x/gopherjs/hello-wasm/hello.go
+  x/gopherjs/hello-wasm/hello.html
+  x/gopherjs/hello-wasm/Makefile
  
 .stop
 

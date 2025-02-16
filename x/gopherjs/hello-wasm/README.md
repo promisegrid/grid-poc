@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/README.md
-```markdown
 # WebAssembly Hello Demo
 
 This demo runs a simple "Hello" example in a web browser using Go’s native WebAssembly support. The demo creates a button that, when clicked, appends a paragraph to the document. Below is the list of files needed to build and run the demo:
@@ -26,5 +24,3 @@ This demo runs a simple "Hello" example in a web browser using Go’s native Web
    Open `hello.html` in any modern web browser that supports WebAssembly. The HTML file loads `wasm_exec.js` and the WebAssembly module, and then executes the demo.
 
 Happy coding!
-```
-EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/README.md
