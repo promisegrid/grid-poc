@@ -1,8 +1,8 @@
-Below is one way to update hello.go so that when you click the button the WebAssembly code opens (or creates) an IndexedDB database, writes a string value to an object store, and then retrieves that same value to display it on the page. (In a real application you would add proper error handling and perhaps “upgrade” logic for subsequent database versions.) 
+File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.go
+```go
+//go:build js && wasm
+// +build js,wasm
 
-Below is the updated hello.go file:
-
---------------------------------------------------
 package main
 
 import (
@@ -40,7 +40,6 @@ func main() {
 			// Get the database from the request.
 			db := request.Get("result")
 			// Create an object store named "greetings".
-			// (In a production app you might want to check if it already exists.)
 			db.Call("createObjectStore", "greetings")
 			// Clean up: remove the upgrade handler.
 			request.Set("onupgradeneeded", js.Undefined())
@@ -91,29 +90,12 @@ func main() {
 		})
 		request.Set("onsuccess", onSuccess)
 
-		// (Optional) You could also define onerror handlers, etc.
-
 		return nil
 	})
 	// Add the click event listener to the button.
 	button.Call("addEventListener", "click", clickHandler)
-	// We do not release clickHandler here since we want it to be live throughout the app.
-
-	// Prevent the Go program from exiting.
+	// Keep the Go program running.
 	select {}
 }
-
---------------------------------------------------
-
-How It Works:
-
-1. When the button is clicked, the click handler is invoked.
-2. The handler uses js.Global() to access the IndexedDB interface and calls open("MyDatabase", 1) to open or create a database.
-3. In the onupgradeneeded callback the code creates a new object store named "greetings" if needed.
-4. In the onsuccess callback the code starts a transaction on "greetings", writes the string "Hello, IndexedDB" with key "hello" (using put), and then immediately issues a get request for the same key.
-5. Once the value is retrieved (via the get request’s onsuccess handler), it is appended to the document as a new paragraph.
-
-This example should be compiled using:
-  GOOS=js GOARCH=wasm go build -o hello.wasm hello.go
-
-and run within your existing HTML/JS setup as described in the README. Enjoy exploring IndexedDB with WebAssembly and Go!
+```
+EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.go
