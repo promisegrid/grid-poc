@@ -1,7 +1,7 @@
 first draft of hello-wasm 
 
-Write a version of the hello demo that moves the application login
-into WASM.
+- Add a Makefile stanza that builds hello.wasm from hello.go.
+- Add a Makefile stanza that copies wasm_exec.js from the Go distribution to the current directory.
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:

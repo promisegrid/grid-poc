@@ -1,3 +1,6 @@
+//go:build js && wasm
+// +build js,wasm
+
 package main
 
 import (
@@ -5,31 +8,29 @@ import (
 )
 
 func main() {
-	// Create a channel to prevent the function from exiting.
-	done := make(chan struct{}, 0)
-
 	// Get the global document object.
 	document := js.Global().Get("document")
 
 	// Create a button element.
 	button := document.Call("createElement", "button")
 	button.Set("innerHTML", "Click me")
+
+	// Append the button to the body.
 	document.Get("body").Call("appendChild", button)
 
-	// Define the callback function for the "click" event.
-	clickCallback := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		// Create a paragraph element.
+	// Define the click event handler.
+	clickHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
 		p := document.Call("createElement", "p")
-		p.Set("innerHTML", "Hello, big world!")
+		p.Set("innerHTML", "Hello, WASM world!")
 		document.Get("body").Call("appendChild", p)
 		return nil
 	})
-	// Ensure the callback is released when not needed.
-	defer clickCallback.Release()
+	// It's important to release the function when not used.
+	defer clickHandler.Release()
 
 	// Add the click event listener to the button.
-	button.Call("addEventListener", "click", clickCallback)
+	button.Call("addEventListener", "click", clickHandler)
 
-	// Block forever so that the WASM module stays alive.
-	<-done
+	// Prevent the Go program from exiting.
+	select {}
 }
