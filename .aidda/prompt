@@ -2,7 +2,6 @@ update WASM function to interact with IndexedDB
 
 Modify the code in hello.go to store a string in IndexedDB and then read it back.
 
-
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
   x/gopherjs/hello-wasm/README.md

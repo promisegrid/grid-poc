@@ -1,5 +1,26 @@
 # WebAssembly Hello Demo
 
+## GopherJS not needed for DOM interaction
+
+We can bypass the need for writing helper functions in javascript to
+interact with the DOM. We can use the `syscall/js` package to interact
+with the browser's DOM directly from Go.  See the IndexedDB bits in
+hello.go for an example.
+
+## Mixed Go versions and wasm_exec.js
+
+The `wasm_exec.js` file as shipped with Go is specific to the version
+of Go that it ships with.  If you are using different versions of Go
+to build your WebAssembly modules and they use the same `wasm_exec.js`
+file, you may run into issues.  I wrote a possible fix for this in
+[github.com/stevetgt/x/wasm/mixed-go-versions](http://github.com/stevegt/x/wasm/mixed-go-versions).
+This required a small change to the `wasm_exec.js` file for each Go
+version.  The change gets rid of the global `Go` variable that
+prevents multiple versions of wasm_exec.js from being used on the same
+page.  See mixed-go-versions/index.js for how that would work.
+
+## Demo Description
+
 This demo runs a simple "Hello" example in a web browser using Go’s native WebAssembly support. The demo creates a button that, when clicked, appends a paragraph to the document. Below is the list of files needed to build and run the demo:
 
 - **hello.go**: Go source code that uses the `syscall/js` package to interact with the browser’s DOM.
