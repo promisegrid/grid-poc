@@ -1,9 +1,7 @@
-describe a WASM version of the hello demo
+first draft of hello-wasm 
 
-Write a README.md file that lists the files needed for a version of
-the hello demo that runs in a web browser using WASM. The file list
-should include all files needed to build and run the demo. The file
-list should consist of the name of each file and a one-line description.
+Write a version of the hello demo that moves the application login
+into WASM.
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
@@ -11,11 +9,8 @@ In:
   x/gopherjs/hello/hello.js
   x/gopherjs/hello/hello.html
   x/gopherjs/hello/Makefile
-Out:
   x/gopherjs/hello-wasm/README.md
-
-.stop
-
+Out:
   x/gopherjs/hello-wasm/hello.go
   x/gopherjs/hello-wasm/hello.html
   x/gopherjs/hello-wasm/Makefile

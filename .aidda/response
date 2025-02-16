@@ -1,30 +1,93 @@
-File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/README.md
-```markdown
-# WebAssembly Hello Demo
+File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.go
+```go
+package main
 
-This demo runs a simple "Hello" example in a web browser using Go’s native WebAssembly support. The demo creates a button that, when clicked, appends a paragraph to the document. Below is the list of files needed to build and run the demo:
+import (
+	"syscall/js"
+)
 
-- **hello.go**: Go source code that uses the `syscall/js` package to interact with the browser’s DOM.
-- **wasm_exec.js**: JavaScript support file provided by Go (found in `$GOROOT/misc/wasm/`) to bootstrap the WebAssembly runtime.
-- **hello.wasm**: Compiled WebAssembly binary generated from `hello.go`.
-- **hello.html**: HTML file that loads `wasm_exec.js` and `hello.wasm` to execute the demo in the browser.
-- **Makefile**: Build script that sets the necessary environment variables (e.g., `GOOS=js`, `GOARCH=wasm`) and compiles the Go source into the WebAssembly binary.
+func main() {
+	// Create a channel to prevent the function from exiting.
+	done := make(chan struct{}, 0)
 
-## Building and Running the Demo
+	// Get the global document object.
+	document := js.Global().Get("document")
 
-1. **Prepare the Environment**:  
-   Ensure you have Go installed with WebAssembly support. Copy `wasm_exec.js` from your Go installation (typically at `$GOROOT/misc/wasm/wasm_exec.js`) into this project directory.
+	// Create a button element.
+	button := document.Call("createElement", "button")
+	button.Set("innerHTML", "Click me")
+	document.Get("body").Call("appendChild", button)
 
-2. **Build the Demo**:  
-   Run `make` in the project directory. The Makefile uses the commands:
-   ```
-   GOOS=js GOARCH=wasm go build -o hello.wasm hello.go
-   ```
-   to compile the source code into `hello.wasm`.
+	// Define the callback function for the "click" event.
+	clickCallback := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		// Create a paragraph element.
+		p := document.Call("createElement", "p")
+		p.Set("innerHTML", "Hello, big world!")
+		document.Get("body").Call("appendChild", p)
+		return nil
+	})
+	// Ensure the callback is released when not needed.
+	defer clickCallback.Release()
 
-3. **Run the Demo**:  
-   Open `hello.html` in any modern web browser that supports WebAssembly. The HTML file loads `wasm_exec.js` and the WebAssembly module, and then executes the demo.
+	// Add the click event listener to the button.
+	button.Call("addEventListener", "click", clickCallback)
 
-Happy coding!
+	// Block forever so that the WASM module stays alive.
+	<-done
+}
 ```
-EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/README.md
+EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.go
+
+File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.html
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Go WASM Demo</title>
+</head>
+<body>
+  <h1>Go WASM Demo</h1>
+  <!-- The button and paragraphs will be appended by the WebAssembly module -->
+  <script src="wasm_exec.js"></script>
+  <script>
+    const go = new Go();
+    if (WebAssembly.instantiateStreaming) {
+      WebAssembly.instantiateStreaming(fetch("hello.wasm"), go.importObject).then((result) => {
+        go.run(result.instance);
+      });
+    } else {
+      fetch("hello.wasm").then(response =>
+        response.arrayBuffer()
+      ).then(bytes =>
+        WebAssembly.instantiate(bytes, go.importObject)
+      ).then((result) => {
+        go.run(result.instance);
+      });
+    }
+  </script>
+</body>
+</html>
+```
+EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/hello.html
+
+File: /home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/Makefile
+```
+# Makefile for building the WebAssembly demo
+
+GOOS=js
+GOARCH=wasm
+GOCMD=go
+OUTPUT=hello.wasm
+
+all: build
+
+build:
+	$(GOCMD) build -o $(OUTPUT) hello.go
+
+clean:
+	rm -f $(OUTPUT)
+
+.PHONY: all build clean
+```
+EOF_/home/stevegt/lab/grid-poc/x/gopherjs/hello-wasm/Makefile
