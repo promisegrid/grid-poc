@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/wasm-components/README.md
-```markdown
 # WASM Component Model Hello Demo
 
 This project demonstrates a version of the traditional "Hello" demo that leverages the WASM component model. It uses WebAssembly Interface Types (WIT) to explicitly define the component interfaces and a componentization workflow to transform the standard WASM binary into a component model module.
@@ -32,5 +30,3 @@ Below is a list of all files needed for the build and run process, along with on
    Serve the directory (e.g., via a local HTTP server) and open `hello.html` in a modern web browser that supports WebAssembly and the component model.
 
 Happy coding with WASM components!
-```
-EOF_/home/stevegt/lab/grid-poc/x/wasm-components/README.md

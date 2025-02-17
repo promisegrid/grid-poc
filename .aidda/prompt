@@ -1,6 +1,13 @@
-update WASM function to interact with IndexedDB 
+describe a WASM component model version of the hello demo
 
-Modify the code in hello.go to store a string in IndexedDB and then read it back.
+Write a README.md file that lists the files needed for a version of
+the hello demo that makes use of the WASM component model. The README.md
+should include all files needed to build and run the demo. The file
+list should consist of the name of each file and a one-line description.
+
+Include the pieces of workflow and intermediate files that normally
+make up a WASM component model project, including WIT and other
+component-specific files.
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
@@ -9,9 +16,8 @@ In:
   x/gopherjs/hello-wasm/hello.html
   x/gopherjs/hello-wasm/main.js
   x/gopherjs/hello-wasm/Makefile
-  .aidda/response
 Out:
-  x/gopherjs/hello-wasm/hello.go
+  x/wasm-components/README.md
  
 .stop
 
