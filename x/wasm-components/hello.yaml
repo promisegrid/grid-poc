@@ -1,0 +1,14 @@
+# Component manifest for the WASM Component Model Hello Demo
+
+name: hello_component
+version: "0.1.0"
+
+component:
+  # The path to the WIT interface file.
+  wit: hello.wit
+  # The original WASM binary generated from hello.go.
+  wasm: hello.wasm
+  # The output componentized WASM binary.
+  output: main.wasm
+
+# Additional metadata or configuration can be added here as needed.

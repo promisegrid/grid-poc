@@ -1,4 +1,7 @@
-describe a WASM component model version of the hello demo
+first draft of a WASM component model version of the hello demo
+
+Not yet functional; pausing work on WASM, likely until after both
+grid-poc and grid-cli are working.
 
 Write a README.md file that lists the files needed for a version of
 the hello demo that makes use of the WASM component model. The README.md
@@ -16,8 +19,15 @@ In:
   x/gopherjs/hello-wasm/hello.html
   x/gopherjs/hello-wasm/main.js
   x/gopherjs/hello-wasm/Makefile
+  x/wasm-components/README.md
 Out:
   x/wasm-components/README.md
+  x/wasm-components/hello.go
+  x/wasm-components/hello.html
+  x/wasm-components/hello.wit
+  x/wasm-components/hello.yaml
+  x/wasm-components/main.js
+  x/wasm-components/Makefile
  
 .stop
 

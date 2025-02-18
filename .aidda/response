@@ -2,35 +2,243 @@ File: /home/stevegt/lab/grid-poc/x/wasm-components/README.md
 ```markdown
 # WASM Component Model Hello Demo
 
-This project demonstrates a version of the traditional "Hello" demo that leverages the WASM component model. It uses WebAssembly Interface Types (WIT) to explicitly define the component interfaces and a componentization workflow to transform the standard WASM binary into a component model module.
+This project demonstrates a first draft of a "Hello" demo that leverages the WebAssembly Component Model. The demo defines a well‐structured component interface using WebAssembly Interface Types (WIT) and a component manifest to drive the transformation of a traditional Go WASM binary into a component module.
 
-Below is a list of all files needed for the build and run process, along with one-line descriptions:
+Below is the list of all files needed to build and run the demo:
 
-- **hello.go**: Go source code implementing the demo logic using syscall/js and structured for component model integration.
-- **component.wit**: WIT file defining the component interface (functions, types, and contracts) exposed by the demo.
-- **component.yaml**: Manifest file for component customization and configuration; used by the toolchain to produce a WASM component.
-- **main.wasm**: The resulting WebAssembly binary after compiling hello.go and applying component model transformations.
-- **hello.html**: HTML file that loads the WASM component and provides the UI for triggering the demo.
-- **main.js**: JavaScript bootstrap script that instantiates and runs the WASM component in the browser.
-- **Makefile**: Build script with targets to compile the Go code, transform the WASM binary into a component using the component model toolchain (e.g., wit-bindgen or wasm-tools), and copy necessary files for running the demo.
+- **hello.go**: Go source code that implements the demo logic using syscall/js and exposes a component function (runDemo) to initialize the UI and IndexedDB workflow.
+- **hello.wit**: WIT file defining the interface for the component. It declares the exported function that the host can call.
+- **hello.yaml**: YAML manifest providing configuration for componentization; used by the WASM component toolchain to transform the WASM binary.
+- **main.wasm**: The resulting componentized WebAssembly binary generated from hello.go via the component toolchain.
+- **hello.html**: HTML file that loads the WASM component via the JavaScript bootstrap and provides the user interface.
+- **main.js**: JavaScript bootstrap script that instantiates the componentized WebAssembly module and invokes the exported function.
+- **Makefile**: Build script that compiles the Go source to a WASM binary and then uses a component model tool (e.g. wasm-tools) to produce the componentized main.wasm.
 
 ## Build and Run Workflow
 
 1. **Compile the Go Source:**  
-   Set the environment for WebAssembly and compile `hello.go` into `hello.wasm`:
+   The Makefile compiles `hello.go` into a standard WASM binary:
    ```
    GOOS=js GOARCH=wasm go build -o hello.wasm hello.go
    ```
 
 2. **Componentize the WASM Binary:**  
-   Use the WASM component model toolchain in conjunction with `component.wit` and `component.yaml` to generate a componentized version of the module. This process transforms `hello.wasm` into a compliant component according to your project’s interface definitions.
+   Using the provided `hello.wit` and `hello.yaml`, the toolchain converts `hello.wasm` into a component model compliant module (`main.wasm`):
+   ```
+   wasm-tools component new hello.wasm -c hello.yaml -o main.wasm
+   ```
 
 3. **Prepare the Web Assets:**  
-   Ensure that `hello.html` and `main.js` are set up to load and instantiate the componentized `main.wasm`.
+   The HTML and JavaScript files are set up to load and instantiate the WASM component. The JS bootstrap calls the exported `runDemo` function to kick off the demo.
 
 4. **Run the Demo:**  
-   Serve the directory (e.g., via a local HTTP server) and open `hello.html` in a modern web browser that supports WebAssembly and the component model.
+   Serve the project directory (e.g. via a local HTTP server) and navigate to `hello.html` in your browser. The demo will display a button that, when clicked, interacts with IndexedDB and displays a message on the page.
 
 Happy coding with WASM components!
 ```
 EOF_/home/stevegt/lab/grid-poc/x/wasm-components/README.md
+
+File: /home/stevegt/lab/grid-poc/x/wasm-components/hello.go
+```go
+//go:build js && wasm
+// +build js,wasm
+
+package main
+
+import (
+	"syscall/js"
+)
+
+// runDemo is the exported function that initializes the demo.
+// It creates a button in the DOM and sets up an IndexedDB demonstration.
+func runDemo(this js.Value, args []js.Value) interface{} {
+	document := js.Global().Get("document")
+
+	// Create a button element.
+	button := document.Call("createElement", "button")
+	button.Set("innerHTML", "Store & Retrieve from IndexedDB (Component Model)")
+
+	// Append the button to the body.
+	document.Get("body").Call("appendChild", button)
+
+	// Define the click event handler.
+	clickHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+		indexedDB := js.Global().Get("indexedDB")
+		if indexedDB.IsUndefined() {
+			p := document.Call("createElement", "p")
+			p.Set("innerHTML", "IndexedDB is not supported in this browser.")
+			document.Get("body").Call("appendChild", p)
+			return nil
+		}
+
+		// Open (or create) a database named "MyDatabase" with version 1.
+		request := indexedDB.Call("open", "MyDatabase", 1)
+
+		// onupgradeneeded event handler to create an object store.
+		var onUpgrade js.Func
+		onUpgrade = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			db := request.Get("result")
+			db.Call("createObjectStore", "greetings")
+			request.Set("onupgradeneeded", js.Undefined())
+			onUpgrade.Release()
+			return nil
+		})
+		request.Set("onupgradeneeded", onUpgrade)
+
+		// onsuccess event handler for database open.
+		var onSuccess js.Func
+		onSuccess = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+			db := request.Get("result")
+			tx := db.Call("transaction", "greetings", "readwrite")
+			store := tx.Call("objectStore", "greetings")
+
+			// Store a value with key "hello".
+			putReq := store.Call("put", "Hello, IndexedDB (Component Model)!", "hello")
+
+			// on success for put request.
+			var onPutSuccess js.Func
+			onPutSuccess = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+				getReq := store.Call("get", "hello")
+				var onGetSuccess js.Func
+				onGetSuccess = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
+					val := getReq.Get("result").String()
+					p := document.Call("createElement", "p")
+					p.Set("innerHTML", "IndexedDB Value: "+val)
+					document.Get("body").Call("appendChild", p)
+					getReq.Set("onsuccess", js.Undefined())
+					onGetSuccess.Release()
+					return nil
+				})
+				getReq.Set("onsuccess", onGetSuccess)
+				putReq.Set("onsuccess", js.Undefined())
+				onPutSuccess.Release()
+				return nil
+			})
+			putReq.Set("onsuccess", onPutSuccess)
+			request.Set("onsuccess", js.Undefined())
+			onSuccess.Release()
+			return nil
+		})
+		request.Set("onsuccess", onSuccess)
+
+		return nil
+	})
+	button.Call("addEventListener", "click", clickHandler)
+
+	return nil
+}
+
+func main() {
+	// Expose the runDemo function to be callable from JavaScript.
+	js.Global().Set("runDemo", js.FuncOf(runDemo))
+	// Keep the Go program running.
+	select {}
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/wasm-components/hello.go
+
+File: /home/stevegt/lab/grid-poc/x/wasm-components/hello.html
+```html
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>WASM Component Model Hello Demo</title>
+</head>
+<body>
+  <h1>WASM Component Model Hello Demo</h1>
+  <!-- The button and output paragraphs will be appended by the WASM component -->
+  <script src="main.js"></script>
+</body>
+</html>
+```
+EOF_/home/stevegt/lab/grid-poc/x/wasm-components/hello.html
+
+File: /home/stevegt/lab/grid-poc/x/wasm-components/hello.wit
+```wit
+// This WIT file defines the interface for the WASM component hello demo.
+
+package hello
+
+// runDemo initializes the demo by attaching a button to the DOM and setting up IndexedDB interactions.
+func runDemo()
+```
+EOF_/home/stevegt/lab/grid-poc/x/wasm-components/hello.wit
+
+File: /home/stevegt/lab/grid-poc/x/wasm-components/hello.yaml
+```yaml
+# Component manifest for the WASM Component Model Hello Demo
+
+name: hello_component
+version: "0.1.0"
+
+component:
+  # The path to the WIT interface file.
+  wit: hello.wit
+  # The original WASM binary generated from hello.go.
+  wasm: hello.wasm
+  # The output componentized WASM binary.
+  output: main.wasm
+
+# Additional metadata or configuration can be added here as needed.
+```
+EOF_/home/stevegt/lab/grid-poc/x/wasm-components/hello.yaml
+
+File: /home/stevegt/lab/grid-poc/x/wasm-components/main.js
+```js
+const go = new Go();
+
+// Instantiate the componentized WASM module (main.wasm) and then invoke the exported runDemo function.
+if (WebAssembly.instantiateStreaming) {
+  WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
+    go.run(result.instance);
+    // Call the exported function to set up the demo.
+    if (typeof runDemo === "function") {
+      runDemo();
+    }
+  });
+} else {
+  fetch("main.wasm")
+    .then(response => response.arrayBuffer())
+    .then(bytes => WebAssembly.instantiate(bytes, go.importObject))
+    .then((result) => {
+      go.run(result.instance);
+      if (typeof runDemo === "function") {
+        runDemo();
+      }
+    });
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/wasm-components/main.js
+
+File: /home/stevegt/lab/grid-poc/x/wasm-components/Makefile
+```
+# Makefile for building the WASM Component Model Hello Demo
+
+# Set environment variables for WebAssembly builds.
+WASM_GOOS=js
+WASM_GOARCH=wasm
+
+# Default target: build and componentize.
+all: component
+
+# Build the standard WASM binary from hello.go.
+hello.wasm: hello.go
+	GOOS=$(WASM_GOOS) GOARCH=$(WASM_GOARCH) go build -o hello.wasm hello.go
+
+# Componentize the WASM binary using wasm-tools.
+# Note: Ensure that 'wasm-tools' is installed and available in your PATH.
+component: hello.wasm hello.yaml hello.wit
+	wasm-tools component new hello.wasm -c hello.yaml -o main.wasm
+
+# Run a local HTTP server to serve the files (requires Python3).
+run: all
+	python3 -m http.server
+
+# Clean build artifacts.
+clean:
+	rm -f hello.wasm main.wasm
+
+.PHONY: all component run clean
+```
+EOF_/home/stevegt/lab/grid-poc/x/wasm-components/Makefile

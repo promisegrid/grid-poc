@@ -1,0 +1,6 @@
+// This WIT file defines the interface for the WASM component hello demo.
+
+package hello
+
+// runDemo initializes the demo by attaching a button to the DOM and setting up IndexedDB interactions.
+func runDemo()

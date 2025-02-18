@@ -1,32 +1,35 @@
 # WASM Component Model Hello Demo
 
-This project demonstrates a version of the traditional "Hello" demo that leverages the WASM component model. It uses WebAssembly Interface Types (WIT) to explicitly define the component interfaces and a componentization workflow to transform the standard WASM binary into a component model module.
+This project demonstrates a first draft of a "Hello" demo that leverages the WebAssembly Component Model. The demo defines a well‐structured component interface using WebAssembly Interface Types (WIT) and a component manifest to drive the transformation of a traditional Go WASM binary into a component module.
 
-Below is a list of all files needed for the build and run process, along with one-line descriptions:
+Below is the list of all files needed to build and run the demo:
 
-- **hello.go**: Go source code implementing the demo logic using syscall/js and structured for component model integration.
-- **component.wit**: WIT file defining the component interface (functions, types, and contracts) exposed by the demo.
-- **component.yaml**: Manifest file for component customization and configuration; used by the toolchain to produce a WASM component.
-- **main.wasm**: The resulting WebAssembly binary after compiling hello.go and applying component model transformations.
-- **hello.html**: HTML file that loads the WASM component and provides the UI for triggering the demo.
-- **main.js**: JavaScript bootstrap script that instantiates and runs the WASM component in the browser.
-- **Makefile**: Build script with targets to compile the Go code, transform the WASM binary into a component using the component model toolchain (e.g., wit-bindgen or wasm-tools), and copy necessary files for running the demo.
+- **hello.go**: Go source code that implements the demo logic using syscall/js and exposes a component function (runDemo) to initialize the UI and IndexedDB workflow.
+- **hello.wit**: WIT file defining the interface for the component. It declares the exported function that the host can call.
+- **hello.yaml**: YAML manifest providing configuration for componentization; used by the WASM component toolchain to transform the WASM binary.
+- **main.wasm**: The resulting componentized WebAssembly binary generated from hello.go via the component toolchain.
+- **hello.html**: HTML file that loads the WASM component via the JavaScript bootstrap and provides the user interface.
+- **main.js**: JavaScript bootstrap script that instantiates the componentized WebAssembly module and invokes the exported function.
+- **Makefile**: Build script that compiles the Go source to a WASM binary and then uses a component model tool (e.g. wasm-tools) to produce the componentized main.wasm.
 
 ## Build and Run Workflow
 
 1. **Compile the Go Source:**  
-   Set the environment for WebAssembly and compile `hello.go` into `hello.wasm`:
+   The Makefile compiles `hello.go` into a standard WASM binary:
    ```
    GOOS=js GOARCH=wasm go build -o hello.wasm hello.go
    ```
 
 2. **Componentize the WASM Binary:**  
-   Use the WASM component model toolchain in conjunction with `component.wit` and `component.yaml` to generate a componentized version of the module. This process transforms `hello.wasm` into a compliant component according to your project’s interface definitions.
+   Using the provided `hello.wit` and `hello.yaml`, the toolchain converts `hello.wasm` into a component model compliant module (`main.wasm`):
+   ```
+   wasm-tools component new hello.wasm -c hello.yaml -o main.wasm
+   ```
 
 3. **Prepare the Web Assets:**  
-   Ensure that `hello.html` and `main.js` are set up to load and instantiate the componentized `main.wasm`.
+   The HTML and JavaScript files are set up to load and instantiate the WASM component. The JS bootstrap calls the exported `runDemo` function to kick off the demo.
 
 4. **Run the Demo:**  
-   Serve the directory (e.g., via a local HTTP server) and open `hello.html` in a modern web browser that supports WebAssembly and the component model.
+   Serve the project directory (e.g. via a local HTTP server) and navigate to `hello.html` in your browser. The demo will display a button that, when clicked, interacts with IndexedDB and displays a message on the page.
 
 Happy coding with WASM components!
