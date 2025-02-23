@@ -1,19 +1,18 @@
-discuss the pros and cons of AgentByte vs AgentMsg
+discuss subscriptions
 
-Write messages.md to explain the pros and cons of AgentByte vs
-AgentMsg.  Assume that agents may be either local to the same process,
-or remote, including across the internet.  Assume that agents may be
-written in any language, and that the only common interface between
-agents is the ability to send and receive messages. Assume that agents
-may be written by different people, and that agents may have different
-levels of trustworthiness.  Assume that agents may be running on
-different platforms, including different operating systems and
-different hardware architectures.  
+Write subscriptions.md to explain the pros and cons of using a
+subscription model for a messaging system.  Discuss what a
+subscription data structure might look like and how it might be
+implemented.  Discuss the pros and cons of using a subscription model
+that is prefix-based versus one that uses a more complex query
+language.  Discuss the pros and cons of using other subscription
+models, such as a worldline completion model.
 
 In: 
   x/dispatcher/dispatcher.go
-Out:
   x/dispatcher/messages.md
+Out:
+  x/dispatcher/subscriptions.md
 
 .stop
 
