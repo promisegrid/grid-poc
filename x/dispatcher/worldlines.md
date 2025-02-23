@@ -1,110 +1,91 @@
 # Worldline Completion Model in Messaging Systems
 
-The worldline completion model is a novel approach in messaging
-systems where the focus is on reconstructing the complete "worldline"
-or history of events rather than simply processing individual messages
-as they arrive. This model emphasizes both real-time updates and
-historical context, which can be particularly useful for agents that
-may go offline temporarily or need to rebuild state from past events.
+The worldline completion model offers a unique approach to handling events (or messages) within a messaging system by emphasizing the reconstruction of a full history (or “worldline”) of events. Instead of managing isolated messages, this model focuses on creating an ordered, editable, and verifiable record of all events that have occurred, using a structure inspired by Merkle DAGs.
+
+This model emphasizes both real-time updates and historical context, which can be particularly useful for agents that may go offline temporarily or need to rebuild state from past events.
 
 ## What is a Worldline?
 
-In the context of messaging systems, a worldline represents a
-complete, ordered sequence of events or messages. Think of it as an
-append-only log where every event is recorded together with metadata
-(such as timestamps, event types, and originating agents). The notion
-of "completion" refers to reconstructing the full timeline up to a
-given point, ensuring that all relevant events are considered when
-processing the state.
+A worldline represents the entire history of events for a particular entity or conversation. In contrast to a simple append-only log with sequence numbers, worldlines in this model are:
+
+- **Branchable and Mergeable:** Multiple worldlines can exist concurrently. They may branch (diverging histories) and merge (reconciling different branches), enabling flexible conversation flows and state revisions.
+- **Event-Centric:** Every message is a claim of one or more events on a worldline.  
+- **DAG-Based:** Events are organized in a Merkle DAG, ensuring integrity and enabling efficient verification and editing. Every message is an edit of a worldline's DAG.
+- **Multi-world**  A message can appear in multiple worldline DAGs, allowing for multiple perspectives on the same event.
 
 ## Worldline Data Structure
 
-A basic worldline data structure might be implemented as an
-append-only log. Key properties include:
+Instead of relying on simple sequence numbers, events in this model are arranged within a Merkle Directed Acyclic Graph (DAG) with the following characteristics:
 
-- **Immutable History:** Once an event is recorded, it is never
-  removed or changed. This ensures that subscribers can always replay
-  the timeline to arrive at the same state.
-- **Ordering Information:** Each event is timestamped or assigned a
-  sequence number to maintain the causality of events.
-- **Metadata Storage:** Along with the raw event data, supporting
-  metadata (e.g., agent identifier, event type) is stored to
-  facilitate filtering or reconstruction.
+- **Merkle DAG:** 
+  - **Integrity and Verification:** The DAG’s internal nodes store hashes of their children, ensuring that any alteration in the event history is detectable.
+  - **Ordered Children:** While the events (the DAG leaves) do not contain the hash of the previous event, internal nodes link the children in the order they appear on the worldline, preserving causality.
+  
+- **Editable History:**
+  - **Insertion, Deletion, and Reordering:** The DAG is modified as events are recorded. This editing capability is provided by a unified language that is the same as the query/subscription language. This language is expressive enough to handle complex editing operations.  A message is defined a set of Burgess-style promises (CWT claims) that specify the intended state changes.
+  - **Agent Timestamps:** Each event includes a timestamp from the perspective of the creating agent. 
 
-### Example Structure
+### Example Go-Style Structure
 
-A simplified Go-style pseudocode for a worldline event might look like:
+Below is a simplified pseudocode to illustrate a possible structure for a worldline event:
 
 ```go
 type WorldlineEvent struct {
-    Sequence   int       // Unique and ordered sequence number.
-    Timestamp  time.Time // When the event occurred.
-    Agent      string    // Identifier of the agent producing the event (e.g., "Alice", "Bob").
-    EventType  string    // Type of the event (e.g., "message_sent", "state_update").
-    Payload    []byte    // Serialized event data.
+    // No hash to previous event: integrity is managed by DAG internal nodes.
+    Timestamp time.Time // Time when the event was created, from the agent's perspective.
+    Agent     string    // Identifier of the event creator (e.g., "Alice", "Bob").
+    // Payload is a set of PT-style promises, serving as the core content.
+    Payload   []byte    
+    // Additional metadata can be included for filtering or versioning as needed.
 }
 ```
 
-Underneath, the events might be stored in a slice or a more complex
-data store that supports efficient querying (e.g., time series
-databases, log-structured storage).
+While individual events (or messages) are stored as leaves, internal nodes in the Merkle DAG contain the hashes of their children, organized in worldline order. This enables efficient integrity checks and supports branch and merge operations inherent to the worldline model.
 
 ## Pros and Cons of the Worldline Completion Model
 
 ### Pros
 
-- **Historical Context and Consistency:** Subscribers have access to a
-  complete record of events. This helps in reconstructing the system
-  state even after periods of disconnection, providing consistency in
-  the system state.
-- **Resilience:** By maintaining a full history, the system can
-  recover from failures by replaying events, ensuring a more robust
-  state rebuild.
-- **Auditability:** Every event is stored permanently, which aids in
-  auditing and debugging, making it easier to trace issues or analyze
-  the progression of events.
-- **Flexibility in Subscriptions:** Agents can subscribe to specific
-  segments of the worldline (e.g., events from a certain time period
-  or specific event types), enabling both real-time and historical
-  analysis.
+- **Historical Integrity and Consistency:**  
+  By maintaining a complete history, agents can always replay events to reconstruct the exact state at any given moment. This is especially important when agents reconnect after being offline.
+  
+- **Resilience and Recovery:**  
+  If an agent misses a subset of events, it can request a replay of its worldline from the last known state, ensuring that no event is permanently lost.
+  
+- **Auditability:**  
+  A verifiable Merkle DAG provides robust audit trails for every transaction or event, aiding debugging and ensuring accountability.
+  
+- **Flexibility in Handling Edits:**  
+  The integrated DAG editing language allows complex operations like insertion, deletion, or reordering. This flexibility supports scenarios like message retractions, corrections, or restructured conversations.
 
 ### Cons
 
-- **Storage Overhead:** Maintaining a complete log of events can be
-  resource-intensive, especially in high-volume systems where the log
-  grows quickly.
-- **Latency in Reconstruction:** Replaying a long history to
-  reconstruct current state can introduce latency, potentially
-  impacting performance in real-time applications.
-- **Complexity in Data Management:** Ensuring the integrity, efficient
-  indexing, and querying of a vast event log requires sophisticated
-  storage solutions and careful design.
-- **Potential Redundancy:** If many subscribers are interested in only
-  the latest state rather than the entire history, the overhead of
-  sending the full worldline might be unnecessary.
-
+- **Storage and Computation Overhead:**  
+  Maintaining a complete, editable history may require significant storage, and verifying the integrity of a large DAG can demand substantial computational resources.
+  
+- **Latency in Synchronization:**  
+  Reconstructing the full worldline from a vast history—especially when branches and merges are involved—might introduce latency in real-time systems.
+  
+- **Complexity in Design:**  
+  Implementing a Merkle DAG with branch/merge capabilities and a unified edit/query language adds to system complexity. The additional design and maintenance cost might be challenging compared to simpler, sequential logs.
+  
 ## Worldline Completion in Practice: An Example
 
-Imagine a messaging system involving two agents, Alice and Bob. Here
-is how a worldline completion model might work in an interaction:
+Consider a simple messaging scenario between two agents, Alice and Bob:
 
-### Scenario: Chat Replay and State Reconstruction
-
-XXX these must be PT-style promises
-
-1. **Initial Message Exchange:**
-   - **Alice** sends a "Hello" message. This event is appended to the worldline.
-   - **Bob** sends a "Hi" message shortly afterward. His event is recorded immediately after Alice’s in the log.
-
-2. **Offline Scenario and Recovery:**
-   - At some point, **Bob** goes offline. During this time, **Alice** continues to send messages (e.g., "Are you there?", "Let's meet later.").
-   - When **Bob** comes back online, instead of merely processing new incoming messages, his client requests the complete worldline of events since his last known sequence number.  XXX how?
-   - Bob’s client replays the appended events and reconstructs the full conversation context, maintaining order and consistency.
-
-3. **Real-Time Updates with Completion:**
-   - In a more dynamic example, a client could request a full replay to sync its state and then switch to real-time updates. For instance, after a period of disconnection, **Alice**’s client might first download the complete worldline and then subscribe to ongoing updates, ensuring no gaps in the conversation.
+1. **Initial Interaction:**
+  XXX what is Alice promising?
+   - **Alice** sends a "Hello" message. This promise (and corresponding event) is appended to her worldline.
+   - **Bob** replies with "Hi". His event is recorded on his worldline.
+   
+2. **Diverging Histories and Merging:**
+   - During a network partition, both agents continue generating events independently. Their worldlines branch.
+   - Once connectivity is restored, a reconciliation process merges these branches. The internal nodes of the resulting DAG record children hashes reflecting the original order of events.
+   
+3. **Recovery and Edit:**
+   - **Bob** had been offline for a while. Upon reconnecting, his client requests the updated worldline starting from his last seen event. The client replays the DAG (applying any insertions, deletions, or reorder operations as defined by the DAG editing language) to reconstruct the conversation accurately.
+   - This replay leverages Burgess Promise Theory-style promises embedded in the payloads and the verified structure of the Merkle DAG.
 
 ## Conclusion
 
-The worldline completion model offers a robust framework for messaging systems that require historical context, auditability, and resilience in state reconstruction. While it introduces challenges such as increased storage requirements and potential latency issues, its ability to provide a complete view of events makes it ideal for applications where consistency and recovery are paramount. This model is particularly useful in systems where agents like "Alice" and "Bob" interact over potentially unreliable networks, ensuring that no interaction is lost and the full history of events remains available.
-
+The worldline completion model provides a compelling framework for messaging systems that require a full audit trail, resilience against failures, and the ability to handle dynamic editing of events. Although it introduces challenges such as increased overhead and complexity, its merits in ensuring both historical consistency and flexible state management make it particularly well-suited for systems where agents like "Alice" and "Bob" need to maintain a coherent and verifiable conversation history, even in the face of network disruptions or changes in state.

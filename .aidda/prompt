@@ -7,14 +7,7 @@ implemented.  Discuss how the worldline completion model look in one
 or more examples.  Provide examples using "Alice", "Bob", etc. as
 agents in the system.  
 
-In: 
-  x/dispatcher/dispatcher.go
-  x/dispatcher/messages.md
-  x/dispatcher/subscriptions.md
-Out:
-  x/dispatcher/worldlines.md
-
-.stop
+Considerations/corrections:
 
 - there are multiple worldlines -- they can branch and merge
 - a message is an event on a worldline
@@ -31,6 +24,16 @@ Out:
 - a message is a promise that the event exists at that point on the worldline
 - discuss the use of "message" and "event" as synonyms, and recommend a
   consistent usage
+
+In: 
+  x/dispatcher/dispatcher.go
+  x/dispatcher/messages.md
+  x/dispatcher/subscriptions.md
+  x/dispatcher/worldlines.md
+Out:
+  x/dispatcher/worldlines.md
+
+.stop
 
 .stop
 
