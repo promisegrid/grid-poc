@@ -1,6 +1,6 @@
 discuss worldlines
 
-Write worldlines.md to explain the worldline completion model for a
+Edit worldlines.md to describe the worldline completion model for a
 messaging system.  Discuss what a worldline data structure might look
 like and how it might be implemented.  Discuss how the worldline
 completion model look in one or more examples.  Provide examples using
@@ -32,10 +32,18 @@ Ensure that the following points are addressed:
   consistent usage
 - a single message might edit multiple worldlines
 - replay ability is a key feature of the system
-- a message (edit operation) includes the hashes of the old and new
+- a message (edit operation) includes the hashes of the old 
   merkle DAG nodes for the event(s) being edited
 - a single event might appear in multiple worldlines
-- a DAG node is a log of the messages the edited it 
+- a DAG node is a log of the messages that edited it 
+- ensure that low-level claims are in fact promises rather than
+  requests
+
+A thought:  An individual DAG node is like a git repo, with its own
+history of edits, branches, and merges, all tied together via hashes.
+An entire DAG can be re-created as of any point in time by replaying
+the messages that created it, and those mesages are stored in the individual
+DAG nodes.
 
 In: 
   x/dispatcher/dispatcher.go
