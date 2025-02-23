@@ -1,18 +1,36 @@
-discuss subscriptions
+discuss worldlines
 
-Write subscriptions.md to explain the pros and cons of using a
-subscription model for a messaging system.  Discuss what a
-subscription data structure might look like and how it might be
-implemented.  Discuss the pros and cons of using a subscription model
-that is prefix-based versus one that uses a more complex query
-language.  Discuss the pros and cons of using other subscription
-models, such as a worldline completion model.
+Write worldlines.md to explain the pros and cons of using a
+worldline completion model for a messaging system.  Discuss what a
+worldline data structure might look like and how it might be
+implemented.  Discuss how the worldline completion model look in one
+or more examples.  Provide examples using "Alice", "Bob", etc. as
+agents in the system.  
 
 In: 
   x/dispatcher/dispatcher.go
   x/dispatcher/messages.md
-Out:
   x/dispatcher/subscriptions.md
+Out:
+  x/dispatcher/worldlines.md
+
+.stop
+
+- there are multiple worldlines -- they can branch and merge
+- a message is an event on a worldline
+- events are organized in a merkle DAG instead of using sequence numbers
+- events (DAG leaves) themselves do not contain the hash of the previous event
+- DAG internal nodes contain the hashes of their children in worldline order
+- editing the DAG allows for inserting, deleting, and reordering events
+- the DAG editing language is the same as the DAG query or subscription language
+- the DAG edit/query language is expressible as CWT claims (promises)
+- timestamps are from the perspective of the agent that created the event
+- events are signed by the agent that created the event
+- EventType is not a field in the event
+- Payload is a set of one or more PT-style promises
+- a message is a promise that the event exists at that point on the worldline
+- discuss the use of "message" and "event" as synonyms, and recommend a
+  consistent usage
 
 .stop
 

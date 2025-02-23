@@ -1,0 +1,110 @@
+# Worldline Completion Model in Messaging Systems
+
+The worldline completion model is a novel approach in messaging
+systems where the focus is on reconstructing the complete "worldline"
+or history of events rather than simply processing individual messages
+as they arrive. This model emphasizes both real-time updates and
+historical context, which can be particularly useful for agents that
+may go offline temporarily or need to rebuild state from past events.
+
+## What is a Worldline?
+
+In the context of messaging systems, a worldline represents a
+complete, ordered sequence of events or messages. Think of it as an
+append-only log where every event is recorded together with metadata
+(such as timestamps, event types, and originating agents). The notion
+of "completion" refers to reconstructing the full timeline up to a
+given point, ensuring that all relevant events are considered when
+processing the state.
+
+## Worldline Data Structure
+
+A basic worldline data structure might be implemented as an
+append-only log. Key properties include:
+
+- **Immutable History:** Once an event is recorded, it is never
+  removed or changed. This ensures that subscribers can always replay
+  the timeline to arrive at the same state.
+- **Ordering Information:** Each event is timestamped or assigned a
+  sequence number to maintain the causality of events.
+- **Metadata Storage:** Along with the raw event data, supporting
+  metadata (e.g., agent identifier, event type) is stored to
+  facilitate filtering or reconstruction.
+
+### Example Structure
+
+A simplified Go-style pseudocode for a worldline event might look like:
+
+```go
+type WorldlineEvent struct {
+    Sequence   int       // Unique and ordered sequence number.
+    Timestamp  time.Time // When the event occurred.
+    Agent      string    // Identifier of the agent producing the event (e.g., "Alice", "Bob").
+    EventType  string    // Type of the event (e.g., "message_sent", "state_update").
+    Payload    []byte    // Serialized event data.
+}
+```
+
+Underneath, the events might be stored in a slice or a more complex
+data store that supports efficient querying (e.g., time series
+databases, log-structured storage).
+
+## Pros and Cons of the Worldline Completion Model
+
+### Pros
+
+- **Historical Context and Consistency:** Subscribers have access to a
+  complete record of events. This helps in reconstructing the system
+  state even after periods of disconnection, providing consistency in
+  the system state.
+- **Resilience:** By maintaining a full history, the system can
+  recover from failures by replaying events, ensuring a more robust
+  state rebuild.
+- **Auditability:** Every event is stored permanently, which aids in
+  auditing and debugging, making it easier to trace issues or analyze
+  the progression of events.
+- **Flexibility in Subscriptions:** Agents can subscribe to specific
+  segments of the worldline (e.g., events from a certain time period
+  or specific event types), enabling both real-time and historical
+  analysis.
+
+### Cons
+
+- **Storage Overhead:** Maintaining a complete log of events can be
+  resource-intensive, especially in high-volume systems where the log
+  grows quickly.
+- **Latency in Reconstruction:** Replaying a long history to
+  reconstruct current state can introduce latency, potentially
+  impacting performance in real-time applications.
+- **Complexity in Data Management:** Ensuring the integrity, efficient
+  indexing, and querying of a vast event log requires sophisticated
+  storage solutions and careful design.
+- **Potential Redundancy:** If many subscribers are interested in only
+  the latest state rather than the entire history, the overhead of
+  sending the full worldline might be unnecessary.
+
+## Worldline Completion in Practice: An Example
+
+Imagine a messaging system involving two agents, Alice and Bob. Here
+is how a worldline completion model might work in an interaction:
+
+### Scenario: Chat Replay and State Reconstruction
+
+XXX these must be PT-style promises
+
+1. **Initial Message Exchange:**
+   - **Alice** sends a "Hello" message. This event is appended to the worldline.
+   - **Bob** sends a "Hi" message shortly afterward. His event is recorded immediately after Alice’s in the log.
+
+2. **Offline Scenario and Recovery:**
+   - At some point, **Bob** goes offline. During this time, **Alice** continues to send messages (e.g., "Are you there?", "Let's meet later.").
+   - When **Bob** comes back online, instead of merely processing new incoming messages, his client requests the complete worldline of events since his last known sequence number.  XXX how?
+   - Bob’s client replays the appended events and reconstructs the full conversation context, maintaining order and consistency.
+
+3. **Real-Time Updates with Completion:**
+   - In a more dynamic example, a client could request a full replay to sync its state and then switch to real-time updates. For instance, after a period of disconnection, **Alice**’s client might first download the complete worldline and then subscribe to ongoing updates, ensuring no gaps in the conversation.
+
+## Conclusion
+
+The worldline completion model offers a robust framework for messaging systems that require historical context, auditability, and resilience in state reconstruction. While it introduces challenges such as increased storage requirements and potential latency issues, its ability to provide a complete view of events makes it ideal for applications where consistency and recovery are paramount. This model is particularly useful in systems where agents like "Alice" and "Bob" interact over potentially unreliable networks, ensuring that no interaction is lost and the full history of events remains available.
+
