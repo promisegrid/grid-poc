@@ -1,3 +1,22 @@
+discuss the pros and cons of AgentByte vs AgentMsg
+
+Write messages.md to explain the pros and cons of AgentByte vs
+AgentMsg.  Assume that agents may be either local to the same process,
+or remote, including across the internet.  Assume that agents may be
+written in any language, and that the only common interface between
+agents is the ability to send and receive messages. Assume that agents
+may be written by different people, and that agents may have different
+levels of trustworthiness.  Assume that agents may be running on
+different platforms, including different operating systems and
+different hardware architectures.  
+
+In: 
+  x/dispatcher/dispatcher.go
+Out:
+  x/dispatcher/messages.md
+
+.stop
+
 first draft of a WASM component model version of the hello demo
 
 Not yet functional; pausing work on WASM, likely until after both

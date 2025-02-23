@@ -1,244 +1,72 @@
-File: /home/stevegt/lab/grid-poc/x/wasm-components/README.md
-```markdown
-# WASM Component Model Hello Demo
-
-This project demonstrates a first draft of a "Hello" demo that leverages the WebAssembly Component Model. The demo defines a well‐structured component interface using WebAssembly Interface Types (WIT) and a component manifest to drive the transformation of a traditional Go WASM binary into a component module.
-
-Below is the list of all files needed to build and run the demo:
-
-- **hello.go**: Go source code that implements the demo logic using syscall/js and exposes a component function (runDemo) to initialize the UI and IndexedDB workflow.
-- **hello.wit**: WIT file defining the interface for the component. It declares the exported function that the host can call.
-- **hello.yaml**: YAML manifest providing configuration for componentization; used by the WASM component toolchain to transform the WASM binary.
-- **main.wasm**: The resulting componentized WebAssembly binary generated from hello.go via the component toolchain.
-- **hello.html**: HTML file that loads the WASM component via the JavaScript bootstrap and provides the user interface.
-- **main.js**: JavaScript bootstrap script that instantiates the componentized WebAssembly module and invokes the exported function.
-- **Makefile**: Build script that compiles the Go source to a WASM binary and then uses a component model tool (e.g. wasm-tools) to produce the componentized main.wasm.
-
-## Build and Run Workflow
-
-1. **Compile the Go Source:**  
-   The Makefile compiles `hello.go` into a standard WASM binary:
-   ```
-   GOOS=js GOARCH=wasm go build -o hello.wasm hello.go
-   ```
-
-2. **Componentize the WASM Binary:**  
-   Using the provided `hello.wit` and `hello.yaml`, the toolchain converts `hello.wasm` into a component model compliant module (`main.wasm`):
-   ```
-   wasm-tools component new hello.wasm -c hello.yaml -o main.wasm
-   ```
-
-3. **Prepare the Web Assets:**  
-   The HTML and JavaScript files are set up to load and instantiate the WASM component. The JS bootstrap calls the exported `runDemo` function to kick off the demo.
-
-4. **Run the Demo:**  
-   Serve the project directory (e.g. via a local HTTP server) and navigate to `hello.html` in your browser. The demo will display a button that, when clicked, interacts with IndexedDB and displays a message on the page.
-
-Happy coding with WASM components!
-```
-EOF_/home/stevegt/lab/grid-poc/x/wasm-components/README.md
-
-File: /home/stevegt/lab/grid-poc/x/wasm-components/hello.go
+File: /home/stevegt/lab/grid-poc/x/dispatcher/dispatcher.go
 ```go
-//go:build js && wasm
-// +build js,wasm
-
 package main
 
-import (
-	"syscall/js"
-)
-
-// runDemo is the exported function that initializes the demo.
-// It creates a button in the DOM and sets up an IndexedDB demonstration.
-func runDemo(this js.Value, args []js.Value) interface{} {
-	document := js.Global().Get("document")
-
-	// Create a button element.
-	button := document.Call("createElement", "button")
-	button.Set("innerHTML", "Store & Retrieve from IndexedDB (Component Model)")
-
-	// Append the button to the body.
-	document.Get("body").Call("appendChild", button)
-
-	// Define the click event handler.
-	clickHandler := js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-		indexedDB := js.Global().Get("indexedDB")
-		if indexedDB.IsUndefined() {
-			p := document.Call("createElement", "p")
-			p.Set("innerHTML", "IndexedDB is not supported in this browser.")
-			document.Get("body").Call("appendChild", p)
-			return nil
-		}
-
-		// Open (or create) a database named "MyDatabase" with version 1.
-		request := indexedDB.Call("open", "MyDatabase", 1)
-
-		// onupgradeneeded event handler to create an object store.
-		var onUpgrade js.Func
-		onUpgrade = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-			db := request.Get("result")
-			db.Call("createObjectStore", "greetings")
-			request.Set("onupgradeneeded", js.Undefined())
-			onUpgrade.Release()
-			return nil
-		})
-		request.Set("onupgradeneeded", onUpgrade)
-
-		// onsuccess event handler for database open.
-		var onSuccess js.Func
-		onSuccess = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-			db := request.Get("result")
-			tx := db.Call("transaction", "greetings", "readwrite")
-			store := tx.Call("objectStore", "greetings")
-
-			// Store a value with key "hello".
-			putReq := store.Call("put", "Hello, IndexedDB (Component Model)!", "hello")
-
-			// on success for put request.
-			var onPutSuccess js.Func
-			onPutSuccess = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-				getReq := store.Call("get", "hello")
-				var onGetSuccess js.Func
-				onGetSuccess = js.FuncOf(func(this js.Value, args []js.Value) interface{} {
-					val := getReq.Get("result").String()
-					p := document.Call("createElement", "p")
-					p.Set("innerHTML", "IndexedDB Value: "+val)
-					document.Get("body").Call("appendChild", p)
-					getReq.Set("onsuccess", js.Undefined())
-					onGetSuccess.Release()
-					return nil
-				})
-				getReq.Set("onsuccess", onGetSuccess)
-				putReq.Set("onsuccess", js.Undefined())
-				onPutSuccess.Release()
-				return nil
-			})
-			putReq.Set("onsuccess", onPutSuccess)
-			request.Set("onsuccess", js.Undefined())
-			onSuccess.Release()
-			return nil
-		})
-		request.Set("onsuccess", onSuccess)
-
-		return nil
-	})
-	button.Call("addEventListener", "click", clickHandler)
-
-	return nil
+// Market interface represents a trading market with capabilities to fetch quotes and execute orders.
+// It uses raw []byte for symbols and denominations which may be beneficial for low-level manipulations.
+type Market interface {
+	Quote(symbol, denomination []byte) (price float64, err error)
+	Order(symbol, denomination []byte, amount float64) (OrderId []byte, err error)
 }
 
-func main() {
-	// Expose the runDemo function to be callable from JavaScript.
-	js.Global().Set("runDemo", js.FuncOf(runDemo))
-	// Keep the Go program running.
-	select {}
+// ---------------------------------------------------------------------------
+// Discussion: Pros and Cons of AgentByte vs AgentMsg
+//
+// Considering that agents may be local or remote (including across the internet), written
+// in any language, and operating with different trust levels, platforms, and hardware architectures,
+// we need to carefully weigh the trade-offs between AgentByte and AgentMsg.
+//
+// AgentByte Interface:
+//   Pros:
+//     - Simplicity: Uses raw byte slices, offering great flexibility as no structured format is enforced.
+//       This is beneficial when agents are written in different languages or must support dynamic message formats.
+//     - Platform Agnostic: Byte slices are a universal data representation, easing interoperability
+//       among agents running on different operating systems or hardware architectures.
+//     - Lower Overhead (Pre-Processing): There is no need to serialize/deserialize complex structures before messaging,
+//       which can be advantageous when latency is critical, provided that the message format is self-explanatory.
+//   Cons:
+//     - Parsing Overhead: Every agent must implement its own logic to interpret raw bytes, potentially leading to duplicated code and
+//       inconsistencies in how data is parsed and validated.
+//     - Ambiguity: The lack of a defined schema can result in ambiguous interpretations of the data.
+//       This risk is especially increased when agents are written by different parties or when message integrity is crucial.
+//     - Security Concerns: Without strict type guarantees, maliciously crafted messages can more easily exploit parsing vulnerabilities.
+//
+// AgentMsg Interface:
+//   Pros:
+//     - Efficiency in Processing: By transmitting messages that are already structured (pre-parsed), the receiver can avoid
+//       the cost of runtime parsing and validation, resulting in faster message processing in trusted environments.
+//     - Type Safety: The use of a structured message type (Msg) allows for compile-time checks where possible,
+//       reducing the risk of runtime errors due to misinterpreted data.
+//     - Clear Contract: A well-defined message format establishes a strict contract between agents, which is crucial in multi-language,
+//       cross-platform environments where consistency is key.
+//   Cons:
+//     - Complexity: Pre-parsing messages require that senders reliably validate and structure the message content before transmission,
+//       which increases system complexity.
+//     - Reduced Flexibility: The enforced structure may limit the ability to quickly adapt the message format to new requirements,
+//       particularly in heterogeneous environments where different agents might expect different data schemas.
+//     - Trust Dependency: It assumes that the sender is fully trusted to generate correctly structured messages,
+//       which might be problematic in scenarios where agents are built by different, potentially untrusted entities.
+// ---------------------------------------------------------------------------
+
+// AgentByte interface represents an event-based model where the message content is handled as raw bytes.
+// This offers flexibility and universal compatibility but comes with the challenges of ambiguity, security, and duplicated parsing logic.
+type AgentByte interface {
+	Subscribe(prefix []byte) (subId []byte, msgbuf chan []byte, err error)
+	Unsubscribe(subId []byte) (err error)
+}
+
+// Msg type is intended to represent a structured message, such as a COSE-signed CWT.
+// This structure is a placeholder and should be expanded to include actual message fields and validations.
+type Msg struct {
+	// Msg is a COSE-signed CWT
+	// XXX this is a placeholder
+}
+
+// AgentMsg interface uses a pre-parsed message type (Msg) for subscriptions.
+// It enables efficient, type-safe communications at the expense of greater initial complexity and stricter contract enforcement.
+type AgentMsg interface {
+	Subscribe(prefix []Msg) (subId []byte, msgbuf chan Msg, err error)
+	Unsubscribe(subId []byte) (err error)
 }
 ```
-EOF_/home/stevegt/lab/grid-poc/x/wasm-components/hello.go
-
-File: /home/stevegt/lab/grid-poc/x/wasm-components/hello.html
-```html
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>WASM Component Model Hello Demo</title>
-</head>
-<body>
-  <h1>WASM Component Model Hello Demo</h1>
-  <!-- The button and output paragraphs will be appended by the WASM component -->
-  <script src="main.js"></script>
-</body>
-</html>
-```
-EOF_/home/stevegt/lab/grid-poc/x/wasm-components/hello.html
-
-File: /home/stevegt/lab/grid-poc/x/wasm-components/hello.wit
-```wit
-// This WIT file defines the interface for the WASM component hello demo.
-
-package hello
-
-// runDemo initializes the demo by attaching a button to the DOM and setting up IndexedDB interactions.
-func runDemo()
-```
-EOF_/home/stevegt/lab/grid-poc/x/wasm-components/hello.wit
-
-File: /home/stevegt/lab/grid-poc/x/wasm-components/hello.yaml
-```yaml
-# Component manifest for the WASM Component Model Hello Demo
-
-name: hello_component
-version: "0.1.0"
-
-component:
-  # The path to the WIT interface file.
-  wit: hello.wit
-  # The original WASM binary generated from hello.go.
-  wasm: hello.wasm
-  # The output componentized WASM binary.
-  output: main.wasm
-
-# Additional metadata or configuration can be added here as needed.
-```
-EOF_/home/stevegt/lab/grid-poc/x/wasm-components/hello.yaml
-
-File: /home/stevegt/lab/grid-poc/x/wasm-components/main.js
-```js
-const go = new Go();
-
-// Instantiate the componentized WASM module (main.wasm) and then invoke the exported runDemo function.
-if (WebAssembly.instantiateStreaming) {
-  WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
-    go.run(result.instance);
-    // Call the exported function to set up the demo.
-    if (typeof runDemo === "function") {
-      runDemo();
-    }
-  });
-} else {
-  fetch("main.wasm")
-    .then(response => response.arrayBuffer())
-    .then(bytes => WebAssembly.instantiate(bytes, go.importObject))
-    .then((result) => {
-      go.run(result.instance);
-      if (typeof runDemo === "function") {
-        runDemo();
-      }
-    });
-}
-```
-EOF_/home/stevegt/lab/grid-poc/x/wasm-components/main.js
-
-File: /home/stevegt/lab/grid-poc/x/wasm-components/Makefile
-```
-# Makefile for building the WASM Component Model Hello Demo
-
-# Set environment variables for WebAssembly builds.
-WASM_GOOS=js
-WASM_GOARCH=wasm
-
-# Default target: build and componentize.
-all: component
-
-# Build the standard WASM binary from hello.go.
-hello.wasm: hello.go
-	GOOS=$(WASM_GOOS) GOARCH=$(WASM_GOARCH) go build -o hello.wasm hello.go
-
-# Componentize the WASM binary using wasm-tools.
-# Note: Ensure that 'wasm-tools' is installed and available in your PATH.
-component: hello.wasm hello.yaml hello.wit
-	wasm-tools component new hello.wasm -c hello.yaml -o main.wasm
-
-# Run a local HTTP server to serve the files (requires Python3).
-run: all
-	python3 -m http.server
-
-# Clean build artifacts.
-clean:
-	rm -f hello.wasm main.wasm
-
-.PHONY: all component run clean
-```
-EOF_/home/stevegt/lab/grid-poc/x/wasm-components/Makefile
+EOF_/home/stevegt/lab/grid-poc/x/dispatcher/dispatcher.go
