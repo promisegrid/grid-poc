@@ -1,16 +1,22 @@
 discuss worldlines
 
-Write worldlines.md to explain the pros and cons of using a
-worldline completion model for a messaging system.  Discuss what a
-worldline data structure might look like and how it might be
-implemented.  Discuss how the worldline completion model look in one
-or more examples.  Provide examples using "Alice", "Bob", etc. as
-agents in the system.  
+Write worldlines.md to explain the worldline completion model for a
+messaging system.  Discuss what a worldline data structure might look
+like and how it might be implemented.  Discuss how the worldline
+completion model look in one or more examples.  Provide examples using
+"Alice", "Bob", etc. as agents in the system.  Show one or more
+examples of a DAG edit message, including insert, delete, and reorder
+operations.  Show one or more examples of a DAG query message.  Show
+one or more examples of a DAG subscription message.  Discuss how the
+DAG edit message, DAG query message, and DAG subscription message
+might be expressed as CWT claims.  Finally, review the entire document
+for consistency, calling out any inconsistencies that exist.
 
-Considerations/corrections:
+Ensure that the following points are addressed:
 
 - there are multiple worldlines -- they can branch and merge
-- a message is an event on a worldline
+- a message is a DAG edit operation that inserts, deletes, or reorders
+  events and is a promise that the resulting worldline(s) are valid
 - events are organized in a merkle DAG instead of using sequence numbers
 - events (DAG leaves) themselves do not contain the hash of the previous event
 - DAG internal nodes contain the hashes of their children in worldline order
@@ -24,6 +30,12 @@ Considerations/corrections:
 - a message is a promise that the event exists at that point on the worldline
 - discuss the use of "message" and "event" as synonyms, and recommend a
   consistent usage
+- a single message might edit multiple worldlines
+- replay ability is a key feature of the system
+- a message (edit operation) includes the hashes of the old and new
+  merkle DAG nodes for the event(s) being edited
+- a single event might appear in multiple worldlines
+- a DAG node is a log of the messages the edited it 
 
 In: 
   x/dispatcher/dispatcher.go
