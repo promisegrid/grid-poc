@@ -1,3 +1,35 @@
+understand message, DAG node, promise, and event relationships
+
+Understand the relationships between messages, DAG nodes, promises, and
+events, and how each are structured.  In particular, we want to:
+
+- Understand that these promises are Burgess-style promises according
+  to Promise Theory:  An agent can only make promises about its own
+  behavior, not the behavior of other agents. 
+- Promises are not requests for action.
+- A promise is an agent's assertion that the promised DAG edit
+  operation is valid.
+- Preserve the ability to replay messages to recreate the DAG.
+- Ensure that the DAG is a valid representation of the worldline(s) at
+  any point in time.  
+- Understand whether each worldline has its own DAG, or if there is a
+  single DAG that represents all known worldlines.
+- Understand how the DAG works when not all referenced leaves or inner
+  nodes are accessible.
+- Understand whether a CWT is a promise itself, or if it is a
+  container for one or more promises expressed as claims.
+
+
+In: 
+  x/dispatcher/dispatcher.go
+  x/dispatcher/messages.md
+  x/dispatcher/subscriptions.md
+  x/dispatcher/worldlines.md
+Out:
+  x/dispatcher/worldlines.md
+
+.stop
+
 discuss worldlines
 
 Edit worldlines.md to describe the worldline completion model for a
