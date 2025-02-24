@@ -45,6 +45,21 @@ An entire DAG can be re-created as of any point in time by replaying
 the messages that created it, and those mesages are stored in the individual
 DAG nodes.
 
+A clarification:  When we say "promise", we mean Promise Theory-style
+promises as described by Mark Burgess, not a request for action.
+Please review all uses of the term "promise", including in the
+message examples, to ensure that we are using the term correctly.
+
+A correction:  The message examples given are not properly-structured
+CWT or JWT messages.  Please review the relevant RFCs and ensure that
+the example messages are properly-structured.
+
+A correction:  A message contains one or more promises expressed as
+JWT or CWT claims.  Each claim is an edit operation on the merkle DAG
+that represents a worldline.  Please ensure that the examples given
+show the correct structure for a message.
+
+
 In: 
   x/dispatcher/dispatcher.go
   x/dispatcher/messages.md
