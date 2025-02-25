@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/dispatcher/sally.md
-```markdown
 # Sally's Discussion Script: Crafting Testable User Stories
 
 Hello Team,
@@ -68,5 +66,3 @@ I believe these questions and proposed user stories help bridge our technical re
 
 Best regards,  
 Sally
-```
-EOF_/home/stevegt/lab/grid-poc/x/dispatcher/sally.md

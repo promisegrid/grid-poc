@@ -1,9 +1,13 @@
-add Ray to discussion script
+add Sally to discussion script
 
-Ray is trying to understand the requirements for the project so he can
-document them.  Write Ray's part of the discussion script, gleaning requirements
-from the available documents and asking questions where necessary.
-
+Sally is trying to write user stories for the system.  She has a list
+of requirements that she's trying to turn into user stories, but she's
+having trouble.  She's not sure how to write user stories that are
+both specific and general enough to be useful.  She's also not sure
+how to write user stories that are testable.  She's looking for help
+with this.  Write Sally's part of the discussion script, gleaning
+requirements from the available documents and asking questions where
+necessary.
 
 In: 
   x/dispatcher/messages.md
@@ -13,8 +17,9 @@ In:
   x/dispatcher/bob.md
   x/dispatcher/carol.md
   .aidda/prompt
-Out:
   x/dispatcher/ray.md
+Out:
+  x/dispatcher/sally.md
   
 
 .stop
