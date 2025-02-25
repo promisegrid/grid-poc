@@ -1,37 +1,21 @@
-start discussion script
+add Ray to discussion script
 
-Write position papers for three participants in a discussion about the
-design of a new data structure for a messaging system.  The papers
-should be written from the perspective of three different
-participants:  Alice, Bob, and Carol.  Their starting positions are
-as follows:
-
-Alice:  
-
-The set of all worldlines is a hypergraph.  Each hyperedge links one
-or more source states to one or more target states.  The source states
-are the states of the worldline(s) before the hyperedge, and the target
-states are the states of the worldline(s) after the hyperedge.  
-
-Bob:
-
-The set of all worldlines is a merkle DAG.  Each leaf node in the DAG
-is an event, and each internal node is a hash of its children.  
-
-Carol:
-
-The data structure is something like a git repo.  Each event is like a 
-file in the repo, and the files are named in chronological order.  
+Ray is trying to understand the requirements for the project so he can
+document them.  Write Ray's part of the discussion script, gleaning requirements
+from the available documents and asking questions where necessary.
 
 
 In: 
   x/dispatcher/messages.md
   x/dispatcher/subscriptions.md
   x/dispatcher/worldlines.md
-Out:
   x/dispatcher/alice.md
   x/dispatcher/bob.md
   x/dispatcher/carol.md
+  .aidda/prompt
+Out:
+  x/dispatcher/ray.md
+  
 
 .stop
 

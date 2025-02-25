@@ -1,8 +1,6 @@
-File: /home/stevegt/lab/grid-poc/x/dispatcher/ray.md
-```markdown
 # Ray's Discussion Script
 
-Hi team,
+Hi everyone,
 
 I’ve reviewed the available documentation and discussion papers for our messaging system, and I’d like to clarify several points to ensure that the requirements are correctly documented. Below are my observations and questions:
 
@@ -39,5 +37,3 @@ I appreciate all the detailed documentation provided so far. Clarifying these po
 
 Best regards,  
 Ray
-```
-EOF_/home/stevegt/lab/grid-poc/x/dispatcher/ray.md
