@@ -4,48 +4,81 @@ File: /home/stevegt/lab/grid-poc/x/dispatcher/alice.md
 
 ## Introduction
 
-In my view, the most natural way to conceptualize the set of all worldlines in our messaging system is to embrace the properties of a hypergraph. This approach allows us to represent complex relationships and parallel state transitions naturally, reflecting the multifaceted nature of real-world interactions.
+In my view, the most natural way to conceptualize the set of all worldlines
+in our messaging system is to embrace the properties of a hypergraph. This
+approach allows us to represent complex relationships and parallel state
+transitions naturally, reflecting the multifaceted nature of real-world
+interactions.
 
 ## The Hypergraph Worldline Model
 
-A hypergraph consists of nodes (states) and hyperedges that link one or more source states to one or more target states. In our case, each hyperedge signifies a transformative event affecting one or several worldlines simultaneously. The source states are the statuses of the worldline(s) *before* the event, while the target states represent the statuses *after* the event.
+A hypergraph consists of nodes (states) and hyperedges that link one or more
+source states to one or more target states. In our case, each hyperedge
+signifies a transformative event affecting one or several worldlines
+simultaneously. The source states are the statuses of the worldline(s) *before*
+the event, while the target states represent the statuses *after* the event.
 
 ### Key Characteristics
 
 - **Multi-State Transitions:**  
-  Hyperedges inherently support relationships that involve multiple input and output states. This is ideal for complex event transitions where a single action might branch into several concurrent outcomes or converge multiple historical states into a unified future state.
+  Hyperedges inherently support relationships that involve multiple
+  input and output states. This is ideal for complex event transitions where a
+  single action might branch into several concurrent outcomes or converge
+  multiple historical states into a unified future state.
 
 - **Interconnected State Network:**  
-  Representing worldlines as nodes and transitions as hyperedges creates a robust, interconnected structure. This model naturally accommodates scenarios where events influence numerous dependent processes.
+  Representing worldlines as nodes and transitions as hyperedges creates a
+  robust, interconnected structure. This model naturally accommodates
+  scenarios where events influence numerous dependent processes.
 
 - **Flexibility in Modeling Complex Events:**  
-  Unlike simple graphs or trees, hypergraphs allow for the representation of events that affect a collection of states simultaneously. This is particularly beneficial when events have ripple effects across several system components.
+  Unlike simple graphs or trees, hypergraphs allow for the representation of
+  events that affect a collection of states simultaneously. This is
+  particularly beneficial when events have ripple effects across several system
+  components.
 
 ## Advantages Over Alternative Models
 
 - **Expressiveness:**  
-  The hypergraph model expresses many-to-many relationships directly, providing a richer framework for modeling intricate event sequences and state transitions.
+  The hypergraph model expresses many-to-many relationships directly,
+  providing a richer framework for modeling intricate event sequences and
+  state transitions.
 
 - **Adaptability:**  
-  As our messaging system evolves, this model may grow more expressive without forcing a radical redesign. The inherent flexibility of hypergraphs means that adding new types of relationships or state-dependent rules can be achieved with minimal disruption.
+  As our messaging system evolves, this model may grow more expressive
+  without forcing a radical redesign. The inherent flexibility of hypergraphs
+  means that adding new types of relationships or state-dependent rules can be
+  achieved with minimal disruption.
 
 - **Intrinsic Multidimensionality:**  
-  In systems where events can trigger parallel evolutions or need synchronization across different contexts, hypergraphs provide a native structure to capture these complexities.
+  In systems where events can trigger parallel evolutions or need
+  synchronization across different contexts, hypergraphs provide a native
+  structure to capture these complexities.
 
 ## Challenges & Considerations
 
 - **Complexity Management:**  
-  While the model is theoretically elegant, translating hypergraph concepts into efficient, maintainable code can be challenging. We must design algorithms that effectively resolve multiple concurrent state changes.
+  While the model is theoretically elegant, translating hypergraph
+  concepts into efficient, maintainable code can be challenging. We must design
+  algorithms that effectively resolve multiple concurrent state changes.
 
 - **Visualization & Debugging:**  
-  The non-linear interconnections in a hypergraph can make debugging more complicated compared to linear or tree-based models. Robust tooling is necessary to visualize and manage these relationships effectively.
+  The non-linear interconnections in a hypergraph can make debugging more
+  complicated compared to linear or tree-based models. Robust tooling is
+  necessary to visualize and manage these relationships effectively.
 
 - **Performance Overheads:**  
-  Evaluating and maintaining hyperedges that link multiple states may introduce more computational overhead than simpler data structures. Balancing expressiveness with performance is key.
+  Evaluating and maintaining hyperedges that link multiple states may
+  introduce more computational overhead than simpler data structures. Balancing
+  expressiveness with performance is key.
 
 ## Conclusion
 
-Adopting a hypergraph-based model for our messaging system worldlines provides a powerful framework to capture the multidimensional nature of events. Through careful design and optimized algorithms, we can harness its flexibility to model complex state transitions while addressing performance and maintenance challenges.
+Adopting a hypergraph-based model for our messaging system worldlines provides
+a powerful framework to capture the multidimensional nature of events. Through
+careful design and optimized algorithms, we can harness its flexibility to
+model complex state transitions while addressing performance and maintenance
+challenges.
 ```
 EOF_/home/stevegt/lab/grid-poc/x/dispatcher/alice.md
 
@@ -55,48 +88,77 @@ File: /home/stevegt/lab/grid-poc/x/dispatcher/bob.md
 
 ## Introduction
 
-I propose that the structure of all worldlines in our messaging system be defined as a Merkle Directed Acyclic Graph (DAG). This model leverages the benefits of cryptographic integrity and efficient event verification, aligning well with the requirements for secure, traceable communication among distributed agents.
+I propose that the structure of all worldlines in our messaging system be defined
+as a Merkle Directed Acyclic Graph (DAG). This model leverages the benefits of
+cryptographic integrity and efficient event verification, aligning well with
+the requirements for secure, traceable communication among distributed agents.
 
 ## The Merkle DAG Worldline Model
 
-In our model, every event is recorded as a leaf node within a Merkle DAG. Internal nodes, on the other hand, are created by hashing their child nodes—effectively compressing the history of events into verifiable summaries. This structure not only provides a secure audit trail but also fosters trust through cryptographic proofs.
+In our model, every event is recorded as a leaf node within a Merkle DAG.
+Internal nodes, on the other hand, are created by hashing their child nodes—
+effectively compressing the history of events into verifiable summaries. This
+structure not only provides a secure audit trail but also fosters trust through
+cryptographic proofs.
 
 ### Key Characteristics
 
 - **Cryptographic Hashing:**  
-  Each internal node’s hash is derived from its children. This process ensures that any modification in the event sequence is immediately detectable, as it would alter the resulting hash hierarchy.
+  Each internal node’s hash is derived from its children. This process
+  ensures that any modification in the event sequence is immediately detectable,
+  as it would alter the resulting hash hierarchy.
 
 - **Immutability of Events:**  
-  Once an event (leaf) is recorded, it becomes an immutable part of the DAG. This immutability is critical for maintaining an authentic historical record of operations, essential for both debugging and security audits.
+  Once an event (leaf) is recorded, it becomes an immutable part of the DAG.
+  This immutability is critical for maintaining an authentic historical record
+  of operations, essential for both debugging and security audits.
 
 - **Efficient Verification:**  
-  The Merkle DAG allows us to verify the integrity of individual events and the entire sequence in an efficient, scalable manner. This efficiency is a core advantage when the number of events grows significantly over time.
+  The Merkle DAG allows us to verify the integrity of individual events and
+  the entire sequence in an efficient, scalable manner. This efficiency is a
+  core advantage when the number of events grows significantly over time.
 
 ## Advantages Over Alternative Models
 
 - **Trust and Security:**  
-  By embedding cryptographic proofs into the structure, the Merkle DAG guarantees that any tampering is easily detectable. This is particularly vital in environments where agents might not fully trust each other.
+  By embedding cryptographic proofs into the structure, the Merkle DAG
+  guarantees that any tampering is easily detectable. This is particularly
+  vital in environments where agents might not fully trust each other.
 
 - **Modularity and Scalability:**  
-  The clear separation between leaf events and internal verification nodes means that as the event log grows, we can still efficiently verify individual segments of the DAG without reprocessing the entire history.
+  The clear separation between leaf events and internal verification nodes
+  means that as the event log grows, we can still efficiently verify individual
+  segments of the DAG without reprocessing the entire history.
 
 - **Deterministic Event Ordering:**  
-  Each event is deterministically associated with a unique hash, ensuring a clear, verifiable order of operations. This property simplifies the process of tracking and replaying events.
+  Each event is deterministically associated with a unique hash, ensuring a
+  clear, verifiable order of operations. This property simplifies the process of
+  tracking and replaying events.
 
 ## Challenges & Considerations
 
 - **Complexity in DAG Management:**  
-  Although a Merkle DAG offers strong security guarantees, managing the DAG—especially when events need to be inserted, reordered, or deleted—can present performance challenges and require sophisticated handling.
+  Although a Merkle DAG offers strong security guarantees, managing the DAG—
+  especially when events need to be inserted, reordered, or deleted—can present
+  performance challenges and require sophisticated handling.
 
 - **Storage Overhead:**  
-  Maintaining both the leaf events and the intermediate hash nodes introduces additional storage requirements. Optimizations and pruning strategies may be necessary to ensure long-term scalability.
+  Maintaining both the leaf events and the intermediate hash nodes
+  introduces additional storage requirements. Optimizations and pruning
+  strategies may be necessary to ensure long-term scalability.
 
 - **Single Point of Verification:**  
-  While the structure is robust, the verification process must be diligently managed to ensure that the integrity of the hash chain is preserved across distributed nodes.
+  While the structure is robust, the verification process must be diligently
+  managed to ensure that the integrity of the hash chain is preserved across
+  distributed nodes.
 
 ## Conclusion
 
-Embracing a Merkle DAG as the underlying data structure for worldlines in our messaging system provides a resilient, verifiable, and scalable framework. By leveraging cryptographic integrity, we not only secure the history of events but also instill trust among distributed agents, thereby supporting a robust and transparent system architecture.
+Embracing a Merkle DAG as the underlying data structure for worldlines in our
+messaging system provides a resilient, verifiable, and scalable framework.
+By leveraging cryptographic integrity, we not only secure the history of events
+but also instill trust among distributed agents, thereby supporting a robust and
+transparent system architecture.
 ```
 EOF_/home/stevegt/lab/grid-poc/x/dispatcher/bob.md
 
@@ -106,48 +168,83 @@ File: /home/stevegt/lab/grid-poc/x/dispatcher/carol.md
 
 ## Introduction
 
-I advocate for a model where the messaging system’s worldlines are structured similarly to a Git repository. In this approach, each event is akin to a file within the repo, and the files are named or ordered chronologically. This design offers an intuitive and practical framework that aligns with established version control paradigms.
+I advocate for a model where the messaging system’s worldlines are structured
+similarly to a Git repository. In this approach, each event is akin to a file
+within the repo, and the files are named or ordered chronologically. This design
+offers an intuitive and practical framework that aligns with established version
+control paradigms.
 
 ## The Git-Repo-Like Model for Worldlines
 
-Under this paradigm, every event in our messaging system is recorded as an individual "file" within the repository. Each file’s name or its ordering reflects the chronological sequence of events. This model greatly simplifies operations such as event tracking, retrieval, and historical comparison.
+Under this paradigm, every event in our messaging system is recorded as an
+individual "file" within the repository. Each file’s name or its ordering
+reflects the chronological sequence of events. This model greatly simplifies
+operations such as event tracking, retrieval, and historical comparison.
 
 ### Key Characteristics
 
 - **Chronological File Ordering:**  
-  Each event is stored as a separate entity within the repository, following a strict chronological order. This transparent ordering makes it easy to review and trace event history without the need for complex verification mechanisms.
+  Each event is stored as a separate entity within the repository, following
+  a strict chronological order. This transparent ordering makes it easy to review
+  and trace event history without the need for complex verification mechanisms.
 
 - **Simplicity and Familiarity:**  
-  The Git repository metaphor is widely understood, even outside the realm of software engineering. Adopting this strategy harnesses well-known concepts such as commits, diffs, and branches, making it easier for developers and stakeholders to interact with the system.
+  The Git repository metaphor is widely understood, even outside the realm
+  of software engineering. Adopting this strategy harnesses well-known concepts
+  such as commits, diffs, and branches, making it easier for developers and
+  stakeholders to interact with the system.
 
 - **Versioning and History Management:**  
-  Similar to version control systems, the model inherently supports branching, merging, and diffing of events. This capability makes it straightforward to manage parallel event streams and resolve conflicts by comparing different event "files."
+  Similar to version control systems, the model inherently supports
+  branching, merging, and diffing of events. This capability makes it
+  straightforward to manage parallel event streams and resolve conflicts by
+  comparing different event "files."
 
 ## Advantages Over Alternative Models
 
 - **Ease of Implementation:**  
-  Leveraging a structure analogous to Git repositories means that many well-optimized tools and paradigms can be repurposed for our messaging system. Basic operations such as checkouts and commits have direct analogs in event creation and retrieval.
+  Leveraging a structure analogous to Git repositories means that many
+  well-optimized tools and paradigms can be repurposed for our messaging system.
+  Basic operations such as checkouts and commits have direct analogs in event
+  creation and retrieval.
 
 - **Transparency:**  
-  Just as in a Git repository where every change is recorded and can be reviewed, our model provides complete transparency over the historical record. This is invaluable for debugging, auditing, and understanding the evolution of state.
+  Just as in a Git repository where every change is recorded and can be
+  reviewed, our model provides complete transparency over the historical record.
+  This is invaluable for debugging, auditing, and understanding the evolution of
+  state.
 
 - **Intuitive User Experience:**  
-  Developers and system administrators are likely already familiar with version control workflows. This lowers the learning curve and encourages best practices in reviewing and managing the event stream.
+  Developers and system administrators are likely already familiar with
+  version control workflows. This lowers the learning curve and encourages best
+  practices in reviewing and managing the event stream.
 
 ## Challenges & Considerations
 
 - **Scalability Issues:**  
-  While the Git-like model is straightforward conceptually, scaling it to handle very high volumes of events may require techniques similar to those used in large-scale version control systems. Strategies like repository sharding or snapshotting might be necessary.
+  While the Git-like model is straightforward conceptually, scaling it to
+  handle very high volumes of events may require techniques similar to those
+  used in large-scale version control systems. Strategies like repository
+  sharding or snapshotting might be necessary.
 
 - **Complex Merging Logic:**  
-  Just as Git encounters non-trivial merge conflicts, our system must address scenarios where divergent event streams need reconciliation. Robust conflict resolution strategies will be essential.
+  Just as Git encounters non-trivial merge conflicts, our system must
+  address scenarios where divergent event streams need reconciliation. Robust
+  conflict resolution strategies will be essential.
 
 - **Event Granularity:**  
-  Defining the size and scope of each event "file" is critical. Over-fragmentation can lead to inefficiencies, while overly coarse granularity might reduce the fidelity of the historical record.
+  Defining the size and scope of each event "file" is critical. Over-
+  fragmentation can lead to inefficiencies, while overly coarse granularity
+  might reduce the fidelity of the historical record.
 
 ## Conclusion
 
-A Git-repository-inspired worldline model offers a balanced blend of simplicity, transparency, and efficiency. By treating each event as a file in an ordered repository, we create a system that is both easy to understand and capable of handling complex historical reconstructions. With thoughtful consideration around scalability and merging, this approach provides a solid foundation for our messaging system.
+A Git-repository-inspired worldline model offers a balanced blend of simplicity,
+transparency, and efficiency. By treating each event as a file in an ordered
+repository, we create a system that is both easy to understand and capable of
+handling complex historical reconstructions. With thoughtful consideration
+around scalability and merging, this approach provides a solid foundation for
+our messaging system.
 ```
 EOF_/home/stevegt/lab/grid-poc/x/dispatcher/carol.md
 
@@ -157,19 +254,32 @@ File: /home/stevegt/lab/grid-poc/x/dispatcher/dave.md
 
 Hello Team,
 
-I'm Dave, the software developer for PromiseGrid. As I've been reviewing all of the rich discussions—from the contrasting views of Alice’s hypergraph model, Bob’s Merkle DAG perspective, Carol’s Git-repo-like approach, Gail’s overarching project vision, and the detailed queries raised by Paul, Ray, and Sally—I find myself in a "too many cooks" situation. There is plenty to digest, and I have many questions before I can confidently start writing production code.
+I'm Dave, the software developer for PromiseGrid. As I've been reviewing
+all of the rich discussions—from the contrasting views of Alice’s hypergraph
+model, Bob’s Merkle DAG perspective, Carol’s Git-repo-like approach, Gail’s
+overarching project vision, and the detailed queries raised by Paul, Ray, and
+Sally—I find myself in a "too many cooks" situation. There is plenty to digest,
+and I have many questions before I can confidently start writing production
+code.
 
-Below, I share my current thoughts and a series of questions that I hope will help narrow our focus and clarify our technical priorities:
+Below, I share my current thoughts and a series of questions that I hope will
+help narrow our focus and clarify our technical priorities:
 
 ## Key Observations and Questions
 
 1. **Promise Semantics:**
-   - Every message, importantly, is a Burgess-style promise. I must ensure that our implementation reflects that promises are simply assertions about an agent's own behavior—not requests for action.
-   - **Question:** Do we have a clear, centralized definition of what constitutes a correctly structured promise (as a CWT claim) in our system?
+   - Every message, importantly, is a Burgess-style promise. I must ensure that
+     our implementation reflects that promises are simply assertions about an
+     agent's own behavior—not requests for action.
+   - **Question:** Do we have a clear, centralized definition of what constitutes
+     a correctly structured promise (as a CWT claim) in our system?
 
 2. **Worldline Structure and Replayability:**
-   - The worldline model should allow for multiple worldlines that can branch and merge. 
-   - **Question:** I see some dispute about whether the data structure is a DAG, a hypergraph, or a Git-like repo. Can we at least agree on a single model for our implementation?
+   - The worldline model should allow for multiple worldlines that can branch and
+     merge.
+   - **Question:** I see some dispute about whether the data structure is a DAG,
+     a hypergraph, or a Git-like repo. Can we at least agree on a single model for
+     our implementation?
 
 3. **CWT Claims and Message Structure:**
    - Our messages are to be expressed as CWT claims, right?
@@ -178,36 +288,68 @@ Below, I share my current thoughts and a series of questions that I hope will he
    - A single message may edit multiple worldlines. Right?
 
 5. **Terminology Consistency:**
-   - I noticed that our teams sometimes use the terms “message” and “event” interchangeably. For clarity in our code, we need a consistent model—perhaps using “message” exclusively to denote a promise that creates or modifies one or more events.
+   - I noticed that our teams sometimes use the terms “message” and “event”
+     interchangeably. For clarity in our code, we need a consistent model—perhaps
+     using “message” exclusively to denote a promise that creates or modifies one
+     or more events.
 
 ## Team Consensus and Next Steps
 
-After extensive discussions and review of the various perspectives, here are some clarifications that help move the discussion forward:
+After extensive discussions and review of the various perspectives, here are
+some clarifications that help move the discussion forward:
 
 - **Unified Promise Semantics:**  
-  Every message remains a Burgess-style promise—assertions of valid DAG edit operations. No message is a request for action.
+  Every message remains a Burgess-style promise—assertions of valid graph edit
+  operations. No message is a request for action.
 
 - **Worldline Representation:**  
-  We are leaning towards representing all known worldlines within a single unified Merkle DAG that supports branching and merging. This approach will preserve replayability and ensure that every event (although stored as a leaf and not carrying a prior hash) is verifiable through its corresponding internal nodes.
+  We are leaning towards representing all known worldlines within a single
+  unified hypergraph that supports branching and merging. This approach will
+  preserve replayability and ensure that every event (although stored as a leaf
+  and not carrying a prior hash) is verifiable through its corresponding internal
+  nodes.
 
 - **Message and CWT Claims:**  
-  Messages will be structured as containers of one or more CWT claims. Each claim is a promise about a DAG edit (insert, delete, or reorder), complete with agent-specific timestamps and digital signatures.
+  Messages will be structured as containers of one or more CWT claims. Each claim
+  is a promise about a graph edit (insert, delete, or reorder), complete with
+  agent-specific timestamps and digital signatures.
 
 - **Terminology Standardization:**  
-  Although "message" and "event" are currently used interchangeably, the team will adopt “message” as the consistent term to denote a promise that results in an event on the worldline.
+  Although "message" and "event" are currently used interchangeably, the team
+  will adopt “message” as the consistent term to denote a promise that results in
+  an event on the worldline.
 
 - **Clarified Developer Questions:**  
-  - The DAG editing language will be unified for edit, query, and subscription operations.
-  - A single message might indeed edit multiple worldlines, with the necessary previous node hashes included for verification.
+  - The graph editing language might be unified for edit, query, and subscription
+    operations.
+  - A single message might indeed edit multiple worldlines, with the necessary
+    previous node hashes included for verification.
 
 ## My Next Steps
 
-Before I start writing any new modules, I now better understand that:
-- The system will adopt a unified Merkle DAG structure.
-- Every CWT claim is to be interpreted as a promise, with strict adherence to Promise Theory.
-- We will standardize on the term "message" to mean a DAG edit operation that produces an event.
+Before I start writing any code, I now better understand that:
+- The system will adopt a unified graph structure.
+- We will standardize on the term "message" to mean a graph edit operation.
 
-With these clarifications from our team consensus, I will proceed to draft low-level modules and integrate the finalized design decisions into PromiseGrid.
+### Revised Consensus and Future Direction
+
+After reviewing input from all team members, I propose the following
+additions to our consensus:
+
+- We now agree that the unified hypergraph approach is favored for its
+  flexibility in representing multiple worldlines, including branching and
+  merging.
+- All messages will remain strictly as promises, and no message will be
+  interpreted as a request for action.
+- The replayability of the DAG is paramount, and every message must include
+  the hash chain of prior nodes to ensure full verifiability.
+- A common convention will be established to refer to messages and events
+  interchangeably, yet in documentation we will consistently use "message" to
+  denote the promise-based DAG edit operation.
+
+These clarifications provide a clear path forward as we transition to
+production code, ensuring that our implementation remains aligned with
+Promise Theory principles and the need for a robust decentralized system.
 
 Best regards,
 
@@ -221,27 +363,46 @@ File: /home/stevegt/lab/grid-poc/x/dispatcher/gail.md
 
 Hello everyone,
 
-I’d like to share my understanding of the overall goal of our project. Our vision is to build a decentralized, consensus-based messaging and governance system that leverages Promise Theory to ensure trust, audibility, and resilience across distributed agents. Here’s what that means in practical terms:
+I’d like to share my understanding of the overall goal of our project. Our vision is
+to build a decentralized, consensus-based messaging and governance system that
+leverages Promise Theory to ensure trust, audibility, and resilience across
+distributed agents. Here’s what that means in practical terms:
 
 ## Decentralized Trust and Governance
 
-Every agent operates autonomously, making Burgess-style promises solely about its own behavior. Each message acts like a DAG edit operation—a promise that asserts the validity of modifications to one or more worldlines. This approach moves us beyond mere requests for action, ensuring that every change is a verifiable commitment.
+Every agent operates autonomously, making Burgess-style promises solely about its
+own behavior. Each message acts like a DAG edit operation—a promise that asserts
+the validity of modifications to one or more worldlines. This approach moves us
+beyond mere requests for action, ensuring that every change is a verifiable
+commitment.
 
 ## Immutable and Replayable Worldlines
 
-Replaying the sequence of messages allows us to reconstruct the worldline(s) at any point in time. By maintaining a consistent history of events, we can ensure the integrity of the system and provide a transparent audit trail for all participants.
+Replaying the sequence of messages allows us to reconstruct the worldline(s) at any
+point in time. By maintaining a consistent history of events, we can ensure the
+integrity of the system and provide a transparent audit trail for all participants.
 
 ## Unified Communication and Computation
 
-PromiseGrid (our project) blends secure messaging with decentralized computing. The system is designed so that messages are not only data carriers but also functional promises. Each signed message increases confidence in governance, promoting a robust infrastructure for both collaborative work and decision-making.
+PromiseGrid (our project) blends secure messaging with decentralized computing.
+The system is designed so that messages are not only data carriers but also
+functional promises. Each signed message increases confidence in governance,
+promoting a robust infrastructure for both collaborative work and decision-
+making.
 
 ## Scalability, Resilience, and Collaborative Innovation
 
-The end goal is a system that not only scales to support a diverse range of agents but also provides transparent governance and a verifiable history of actions. This lays a strong foundation for collaborative environments, where decentralized decision-making and autonomous control are paramount.
+The end goal is a system that not only scales to support a diverse range of agents
+but also provides transparent governance and a verifiable history of actions.
+This lays a strong foundation for collaborative environments, where decentralized
+decision-making and autonomous control are paramount.
 
 ## Preventing Tragedy of the Commons
 
-By using a decentralized system, we can prevent the tragedy of the commons by ensuring that every agent is accountable for its actions. This approach promotes transparency and trust among all participants, reducing the risk of malicious behavior and ensuring that the system remains robust and secure.
+By using a decentralized system, we can prevent the tragedy of the commons by
+ensuring that every agent is accountable for its actions. This approach promotes
+transparency and trust among all participants, reducing the risk of malicious
+behavior and ensuring that the system remains robust and secure.
 
 ## Next Steps
 
@@ -256,25 +417,45 @@ File: /home/stevegt/lab/grid-poc/x/dispatcher/paul.md
 ```markdown
 # Paul’s Discussion Guide
 
-Below is a series of questions Paul can use to guide each participant toward the goals of the project. Each question is tailored to the perspective presented in the various documents.
+Below is a series of questions Paul can use to guide each participant toward the
+goals of the project. Each question is tailored to the perspective presented in the
+various documents.
 
 4. **Alice (x/dispatcher/alice.md):**  
-   Alice, how does your hypergraph-based perspective address the challenges of maintaining consistency and replayability in a decentralized messaging system, and how can your model support the autonomous promise-making required by Promise Theory?
+   Alice, how does your hypergraph-based perspective address the challenges of
+   maintaining consistency and replayability in a decentralized messaging system,
+   and how can your model support the autonomous promise-making required by Promise
+   Theory?
 
 5. **Bob (x/dispatcher/bob.md):**  
-   Bob, given your advocacy for a Merkle DAG-based model, what specific mechanisms would you propose to ensure that each message truly acts as a promise (with proper cryptographic signatures and timestamps) and that the entire event history remains verifiable and immutable?
+   Bob, given your advocacy for a Merkle DAG-based model, what specific mechanisms
+   would you propose to ensure that each message truly acts as a promise (with
+   proper cryptographic signatures and timestamps) and that the entire event history
+   remains verifiable and immutable?
 
 6. **Carol (x/dispatcher/carol.md):**  
-   Carol, your Git-repo-like approach emphasizes intuitive chronology and transparency; how would you reconcile potential scalability issues with the need to express DAG edit, query, and subscription operations as structured CWT claims in a system where a single message might edit multiple worldlines?
+   Carol, your Git-repo-like approach emphasizes intuitive chronology and
+   transparency; how would you reconcile potential scalability issues with the need
+   to express DAG edit, query, and subscription operations as structured CWT claims
+   in a system where a single message might edit multiple worldlines?
 
 7. **Gail (x/dispatcher/gail.md):**  
-   Gail, how can our decentralized governance and resource management framework ensure that every agent’s promise (as embodied in DAG edit operations) leads to a verifiable and replayable audit trail, and what improvements would you suggest for aligning these promises with our overall system integrity?
+   Gail, how can our decentralized governance and resource management framework
+   ensure that every agent’s promise (as embodied in DAG edit operations) leads to a
+   verifiable and replayable audit trail, and what improvements would you suggest for
+   aligning these promises with our overall system integrity?
 
 8. **Ray (x/dispatcher/ray.md):**  
-   Ray, you’ve raised points about the clarity and consistency of our message structures and cryptographic protocols; what adjustments do you believe are necessary to guarantee that our CWT claims unambiguously represent promises (not requests for action) and that our system can securely handle both unified and separate DAGs?
+   Ray, you’ve raised points about the clarity and consistency of our message
+   structures and cryptographic protocols; what adjustments do you believe are necessary
+   to guarantee that our CWT claims unambiguously represent promises (not requests for
+   action) and that our system can securely handle both unified and separate DAGs?
 
 9. **Sally (x/dispatcher/sally.md):**  
-   Sally, how do your proposed user stories capture the dual nature of messages as both functional DAG edits and promise assertions, and what additional clarifications or acceptance criteria should we incorporate to help bridge technical requirements with stakeholder expectations?
+   Sally, how do your proposed user stories capture the dual nature of messages as both
+   functional DAG edits and promise assertions, and what additional clarifications or
+   acceptance criteria should we incorporate to help bridge technical requirements with
+   stakeholder expectations?
 ```
 EOF_/home/stevegt/lab/grid-poc/x/dispatcher/paul.md
 
@@ -284,38 +465,66 @@ File: /home/stevegt/lab/grid-poc/x/dispatcher/ray.md
 
 Hi everyone,
 
-I’ve reviewed the available documentation and discussion papers for our messaging system, and I’d like to clarify several points to ensure that the requirements are correctly documented. Below are my observations and questions:
+I’ve reviewed the available documentation and discussion papers for our messaging
+system, and I’d like to clarify several points to ensure that the requirements are
+correctly documented. Below are my observations and questions:
 
 1. **Promise Semantics (Burgess-Style):**
-   - Each DAG edit message is a promise following Promise Theory—an agent can only promise about its own behavior, and these promises are assertions that the corresponding DAG edit operation is valid.
-   - **Question:** Can we confirm that every CWT claim included in a message is a promise (an assertion of validity) rather than a request for action?
+   - Each DAG edit message is a promise following Promise Theory—an agent can only
+     promise about its own behavior, and these promises are assertions that the
+     corresponding DAG edit operation is valid.
+   - **Question:** Can we confirm that every CWT claim included in a message is a
+     promise (an assertion of validity) rather than a request for action?
 
 2. **Replayability and DAG Integrity:**
-   - The system is designed so that messages (edit operations) can be replayed to reconstruct the Merkle DAG representing the worldline(s) at any given time.
-   - **Question:** Are we planning to maintain a separate DAG per worldline, or will there be a single unified DAG representing all known worldlines? Additionally, how should branching and merging be handled in either approach?
+   - The system is designed so that messages (edit operations) can be replayed to
+     reconstruct the Merkle DAG representing the worldline(s) at any given time.
+   - **Question:** Are we planning to maintain a separate DAG per worldline, or will
+     there be a single unified DAG representing all known worldlines? Additionally,
+     how should branching and merging be handled in either approach?
 
 3. **Message Structure and CWT Claims:**
-   - Messages, which are also referred to as events, are expressed as structured CWT (or JWT) claims. These messages include one or more promises that declare insert, delete, or reorder operations.
-   - **Question:** Could someone confirm whether the current message examples fully comply with the relevant RFCs for CWT/JWT? Any additional details regarding the proper structure would be helpful.
+   - Messages, which are also referred to as events, are expressed as structured
+     CWT (or JWT) claims. These messages include one or more promises that declare
+     insert, delete, or reorder operations.
+   - **Question:** Could someone confirm whether the current message examples fully
+     comply with the relevant RFCs for CWT/JWT? Any additional details regarding
+     the proper structure would be helpful.
 
 4. **Signature, Timestamps, and Security:**
-   - Each message is signed by the agent that created the event and includes a timestamp from that agent’s perspective.
-   - **Question:** Are there specific cryptographic algorithms or additional security protocols mandated for signature verification that we should incorporate in our documentation and reference implementations?
+   - Each message is signed by the agent that created the event and includes a
+     timestamp from that agent’s perspective.
+   - **Question:** Are there specific cryptographic algorithms or additional security
+     protocols mandated for signature verification that we should incorporate in our
+     documentation and reference implementations?
 
 5. **Payload Consistency and Terminology:**
-   - The payload of each message is a set of one or more PT-style promises. However, there’s been an interchange in terminology between “message” and “event.”
-   - **Observation:** I recommend that we standardize our terminology (for example, consistently use “message” to refer both to the DAG edit operation and the resulting event) to avoid confusion.
-   - **Question:** Should we explicitly document that a single message may edit multiple worldlines and how these edits are recorded within the Merkle DAG?
+   - The payload of each message is a set of one or more PT-style promises. However,
+     there’s been an interchange in terminology between “message” and “event.”
+   - **Observation:** I recommend that we standardize our terminology (for example,
+     consistently use “message” to refer both to the DAG edit operation and the
+     resulting event) to avoid confusion.
+   - **Question:** Should we explicitly document that a single message may edit multiple
+     worldlines and how these edits are recorded within the Merkle DAG?
 
 6. **Handling of Inaccessible Nodes:**
-   - Documentation indicates that not all referenced leaves or inner nodes are guaranteed to be accessible at runtime.
-   - **Question:** What should the expected behavior be when certain DAG nodes (or their hashes) are unavailable during replay? Do we log these separately, or is there a recovery strategy in mind?
+   - Documentation indicates that not all referenced leaves or inner nodes are
+     guaranteed to be accessible at runtime.
+   - **Question:** What should the expected behavior be when certain DAG nodes (or
+     their hashes) are unavailable during replay? Do we log these separately, or is
+     there a recovery strategy in mind?
 
 7. **Alternative Structures and Future Exploration:**
-   - While a conventional Merkle DAG is the current model, there’s also exploration into alternative structures that might provide improved flexibility or efficiency.
-   - **Question:** Are there any design alternatives already under consideration? If so, how do their advantages compare against the Merkle DAG approach, particularly in relation to auditability and replay ability?
+   - While a conventional Merkle DAG is the current model, there’s also exploration
+     into alternative structures that might provide improved flexibility or
+     efficiency.
+   - **Question:** Are there any design alternatives already under consideration? If so,
+     how do their advantages compare against the Merkle DAG approach, particularly in
+     relation to auditability and replay ability?
 
-I appreciate all the detailed documentation provided so far. Clarifying these points will help ensure that our requirements documentation accurately reflects the intended design and implementation strategies.
+I appreciate all the detailed documentation provided so far. Clarifying these points
+will help ensure that our requirements documentation accurately reflects the intended
+design and implementation strategies.
 
 Best regards,  
 Ray
@@ -328,67 +537,110 @@ File: /home/stevegt/lab/grid-poc/x/dispatcher/sally.md
 
 Hello Team,
 
-I'm Sally, and I'm working on translating our complex technical requirements into clear, testable user stories. I've reviewed the available documents—covering messaging, subscriptions, worldlines, and various position papers—and I'd like to share my observations, propose some user story drafts, and ask a few clarifying questions.
+I'm Sally, and I'm working on translating our complex technical requirements into
+clear, testable user stories. I've reviewed the available documents—covering messaging,
+subscriptions, worldlines, and various position papers—and I'd like to share my
+observations, propose some user story drafts, and ask a few clarifying questions.
 
 ## Key Insights Gathered
 
 1. **Promise as a Commitment (Burgess-Style):**
    - Each message in our system is a DAG edit operation that serves as a promise.
-   - According to Promise Theory, an agent can only make a promise about its own behavior; such promises are assertions of validity, not requests for action.
-   - *User Story Consideration:* Stories should capture this autonomy. For example, a story might state, “As an agent, I promise that the event I create is valid, verifiable, and replayable within the system.”
+   - According to Promise Theory, an agent can only make a promise about its own
+     behavior; such promises are assertions of validity, not requests for action.
+   - *User Story Consideration:* Stories should capture this autonomy. For example, a
+     story might state, “As an agent, I promise that the event I create is valid,
+     verifiable, and replayable within the system.”
 
 2. **Replayability and DAG Integrity:**
-   - Our design ensures that messages (or events) can be replayed to reconstruct the Merkle DAG, which in turn represents the state of one or more worldlines.
-   - The DAG allows for operations such as insertion, deletion, and reordering of events.
-   - *User Story Example:* “As a system operator, I want to replay the history of messages so that I can verify the integrity and evolution of the worldline over time.”
+   - Our design ensures that messages (or events) can be replayed to reconstruct the
+     Merkle DAG, which in turn represents the state of one or more worldlines.
+   - The DAG allows for operations such as insertion, deletion, and reordering of
+     events.
+   - *User Story Example:* “As a system operator, I want to replay the history of
+     messages so that I can verify the integrity and evolution of the worldline over
+     time.”
 
 3. **Message Structure and CWT Claims:**
-   - Each message is structured with one or more CWT (or JWT) claims, where each claim represents an edit (insert, delete, reorder) on the DAG.
-   - Messages include signatures, timestamps (from the agent’s perspective), and the hashes of previous internal DAG nodes to support validation and replay.
-   - There is some ambiguity between the terms “message” and “event” that we need to resolve.
-   - *User Story Example:* “As a developer, I need unambiguous terminology in our documentation to differentiate between a ‘message’ and an ‘event’ so that all edits and promises are consistently understood.”
+   - Each message is structured with one or more CWT (or JWT) claims, where each claim
+     represents an edit (insert, delete, reorder) on the DAG.
+   - Messages include signatures, timestamps (from the agent’s perspective), and the
+     hashes of previous internal DAG nodes to support validation and replay.
+   - There is some ambiguity between the terms “message” and “event” that we need to
+     resolve.
+   - *User Story Example:* “As a developer, I need unambiguous terminology in our
+     documentation to differentiate between a ‘message’ and an ‘event’ so that all edits
+     and promises are consistently understood.”
 
 4. **Worldline Structure and Branching/Merging:**
-   - The system supports multiple worldlines which can branch and merge, with messages potentially editing more than one worldline.
-   - The design choice of either a unified DAG versus separate DAGs for each worldline remains under discussion.
-   - *User Story Example:* “As an administrator, I want the ability to manage and verify edits in worldlines that branch and merge, ensuring all changes are reflected correctly in the Merkle DAG.”
+   - The system supports multiple worldlines which can branch and merge, with messages
+     potentially editing more than one worldline.
+   - The design choice of either a unified DAG versus separate DAGs for each worldline
+     remains under discussion.
+   - *User Story Example:* “As an administrator, I want the ability to manage and verify
+     edits in worldlines that branch and merge, ensuring all changes are reflected correctly
+     in the Merkle DAG.”
 
 5. **Security, Signatures, and Testability:**
-   - Every message/event is signed by its creating agent and marked with a timestamp, establishing a secure and verifiable history.
-   - Testable assertions should include verifying that the right cryptographic protocols are used and that each promise is truly an assertion (not a directive).
-   - *User Story Example:* “As a security auditor, I want each message’s signature and timestamp to be validated automatically, ensuring that only authenticated and authorized DAG edits are accepted.”
+   - Every message/event is signed by its creating agent and marked with a timestamp,
+     establishing a secure and verifiable history.
+   - Testable assertions should include verifying that the right cryptographic protocols
+     are used and that each promise is truly an assertion (not a directive).
+   - *User Story Example:* “As a security auditor, I want each message’s signature and
+     timestamp to be validated automatically, ensuring that only authenticated and
+     authorized DAG edits are accepted.”
 
 ## Clarifying Questions
 
 - **Promise vs. Request:**  
-  Should our user stories explicitly mention that all DAG edit operations are promises (assertions of their validity) and not requests for action? How do we best capture this nuance for non-technical stakeholders?
+  Should our user stories explicitly mention that all DAG edit operations are promises
+  (assertions of their validity) and not requests for action? How do we best capture this
+  nuance for non-technical stakeholders?
 
 - **Replay Mechanism:**  
-  What level of detail is expected in a user story regarding the replayability of the system? Do we need to outline acceptance criteria that include replaying entire DAGs or just verifying critical nodes?
+  What level of detail is expected in a user story regarding the replayability of the
+  system? Do we need to outline acceptance criteria that include replaying entire DAGs or
+  just verifying critical nodes?
 
 - **Unified vs. Multiple DAGs:**  
-  Is there a consensus on whether a single unified DAG represents all worldlines or if each worldline maintains its own DAG? This choice impacts user stories related to the management and verification of the data.
+  Is there a consensus on whether a single unified DAG represents all worldlines or if
+  each worldline maintains its own DAG? This choice impacts user stories related to the
+  management and verification of the data.
 
 - **Terminology Consistency:**  
-  How strict should we be in differentiating between “message” and “event” in user stories? Would establishing a glossary as part of our documentation be beneficial for ensuring consistency?
+  How strict should we be in differentiating between “message” and “event” in user
+  stories? Would establishing a glossary as part of our documentation be beneficial for
+  ensuring consistency?
 
 ## Proposed User Story Drafts
 
 1. **Promise Assertion Story:**  
-   "As an agent, I promise that the event I create is valid, uniquely signed, and replayable, ensuring that the corresponding DAG edit operation maintains the integrity of the system's worldline."
+   "As an agent, I promise that the event I create is valid, uniquely signed, and
+   replayable, ensuring that the corresponding DAG edit operation maintains the
+   integrity of the system's worldline."
 
 2. **Replayable History Story:**  
-   "As a system operator, I want to replay the complete history of messages so that I can independently verify the assembly and integrity of the worldline in the Merkle DAG at any given point in time."
+   "As a system operator, I want to replay the complete history of messages so that I
+   can independently verify the assembly and integrity of the worldline in the Merkle
+   DAG at any given point in time."
 
 3. **Terminology and Clarity Story:**  
-   "As a developer, I need clear definitions for ‘message’ and ‘event’ in our documentation, ensuring that each promise (as a CWT claim) and DAG edit operation is interpreted consistently by the team."
+   "As a developer, I need clear definitions for ‘message’ and ‘event’ in our
+   documentation, ensuring that each promise (as a CWT claim) and DAG edit operation is
+   interpreted consistently by the team."
 
 4. **Multi-Worldline Management Story:**  
-   "As an administrator, I want the system to support editing operations that span multiple worldlines—even when these worldlines branch and merge—so that overall system integrity is maintained through verifiable DAG edits."
+   "As an administrator, I want the system to support editing operations that span
+   multiple worldlines—even when these worldlines branch and merge—so that overall
+   system integrity is maintained through verifiable DAG edits."
 
 ## Final Thoughts
 
-I believe these questions and proposed user stories help bridge our technical requirements with actionable development goals. Your feedback, especially on the clarity and scope of these stories, is greatly appreciated. Please let me know if any technical details (e.g., specific cryptographic measures or DAG replay mechanisms) need more in-depth coverage in the context of our user stories.
+I believe these questions and proposed user stories help bridge our technical
+requirements with actionable development goals. Your feedback, especially on the
+clarity and scope of these stories, is greatly appreciated. Please let me know if any
+technical details (e.g., specific cryptographic measures or DAG replay mechanisms)
+need more in-depth coverage in the context of our user stories.
 
 Best regards,  
 Sally
