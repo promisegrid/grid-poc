@@ -6,7 +6,7 @@ I advocate for a model where the messaging system’s worldlines are structured 
 
 ## The Git-Repo-Like Model for Worldlines
 
-Under this paradigm, every event in our messaging system is recorded as an individual "file" within a virtual repository. Each file’s name or its ordering reflects the chronological sequence of events. This model greatly simplifies operations such as event tracking, retrieval, and historical comparison.
+Under this paradigm, every event in our messaging system is recorded as an individual "file" within the repository. Each file’s name or its ordering reflects the chronological sequence of events. This model greatly simplifies operations such as event tracking, retrieval, and historical comparison.
 
 ### Key Characteristics
 
