@@ -1,17 +1,6 @@
-File: /home/stevegt/lab/grid-poc/x/dispatcher/paul.md
-```markdown
 # Paul’s Discussion Guide
 
 Below is a series of questions Paul can use to guide each participant toward the goals of the project. Each question is tailored to the perspective presented in the various documents.
-
-1. **Messages (x/dispatcher/messages.md):**  
-   How do our design choices—such as using raw byte slices in AgentByte versus structured types in AgentMsg—support our goal of ensuring that every message reliably serves as a promise (an assertion of a valid DAG edit) while maintaining secure, replayable communication across agents?
-
-2. **Subscriptions (x/dispatcher/subscriptions.md):**  
-   In what ways can we refine our subscription model so that the process of registering interest and routing messages not only efficiently matches messages to subscribers but also aligns with the principles of Promise Theory—where each promise is an autonomous assertion rather than a request for action—and guarantees the integrity of the DAG even when some nodes are inaccessible?
-
-3. **Worldlines (x/dispatcher/worldlines.md):**  
-   Considering our worldline completion model, how can we design the Merkle DAG to handle branching, merging, and occasional missing nodes, while ensuring that every DAG edit (insert, delete, or reorder) is a promise that validates the worldline’s state at any point in time?
 
 4. **Alice (x/dispatcher/alice.md):**  
    Alice, how does your hypergraph-based perspective address the challenges of maintaining consistency and replayability in a decentralized messaging system, and how can your model support the autonomous promise-making required by Promise Theory?
@@ -30,5 +19,3 @@ Below is a series of questions Paul can use to guide each participant toward the
 
 9. **Sally (x/dispatcher/sally.md):**  
    Sally, how do your proposed user stories capture the dual nature of messages as both functional DAG edits and promise assertions, and what additional clarifications or acceptance criteria should we incorporate to help bridge technical requirements with stakeholder expectations?
-```
-EOF_/home/stevegt/lab/grid-poc/x/dispatcher/paul.md

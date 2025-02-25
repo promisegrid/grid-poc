@@ -1,7 +1,8 @@
-add Gail to discussion script
+add Paul to discussion script
 
-Gail is describing the overall goal of the project.  Derive the goal
-from the discussion and from the PromiseGrid README.md file.  
+Write a series of questions that Paul can use to guide each
+participant toward the goals of the project, one question per
+participant.
 
 In: 
   x/dispatcher/messages.md
@@ -10,21 +11,16 @@ In:
   x/dispatcher/alice.md
   x/dispatcher/bob.md
   x/dispatcher/carol.md
-  .aidda/prompt
+  x/dispatcher/gail.md
   x/dispatcher/ray.md
   x/dispatcher/sally.md
+  .aidda/prompt
   /home/stevegt/lab/promisegrid/promisegrid/README.md
   /home/stevegt/lab/promisegrid/paper-ism/README.adoc
 Out:
-  x/dispatcher/gail.md
+  x/dispatcher/paul.md
   
 
-.stop
-add Paul to discussion script
-
-Paul is playing to role of prompting the participants to make progress
-toward the goal of the discussion.  Write a series of prompts that Paul
-can use to guide the discussion toward the goal.
 .stop
 
 check doc against requirements
