@@ -1,8 +1,9 @@
-add Paul to discussion script
+Add Dave to the discussion 
 
-Write a series of questions that Paul can use to guide each
-participant toward the goals of the project, one question per
-participant.
+Dave is the software developer for PromiseGrid.  He is trying to sort
+out what code he actually needs to write.  This is very much a "too
+many cooks" situation; Dave needs to ask a lot of questions and make
+some hard choices.
 
 In: 
   x/dispatcher/messages.md
@@ -12,13 +13,14 @@ In:
   x/dispatcher/bob.md
   x/dispatcher/carol.md
   x/dispatcher/gail.md
+  x/dispatcher/paul.md
   x/dispatcher/ray.md
   x/dispatcher/sally.md
   .aidda/prompt
   /home/stevegt/lab/promisegrid/promisegrid/README.md
   /home/stevegt/lab/promisegrid/paper-ism/README.adoc
 Out:
-  x/dispatcher/paul.md
+  x/dispatcher/dave.md
   
 
 .stop
