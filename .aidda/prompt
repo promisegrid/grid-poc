@@ -1,7 +1,43 @@
-understand message, DAG node, promise, and event relationships
+start discussion script
 
-Understand the relationships between messages, DAG nodes, promises, and
-events, and how each are structured.  In particular, we want to:
+Write position papers for three participants in a discussion about the
+design of a new data structure for a messaging system.  The papers
+should be written from the perspective of three different
+participants:  Alice, Bob, and Carol.  Their starting positions are
+as follows:
+
+Alice:  
+
+The set of all worldlines is a hypergraph.  Each hyperedge links one
+or more source states to one or more target states.  The source states
+are the states of the worldline(s) before the hyperedge, and the target
+states are the states of the worldline(s) after the hyperedge.  
+
+Bob:
+
+The set of all worldlines is a merkle DAG.  Each leaf node in the DAG
+is an event, and each internal node is a hash of its children.  
+
+Carol:
+
+The data structure is something like a git repo.  Each event is like a 
+file in the repo, and the files are named in chronological order.  
+
+
+In: 
+  x/dispatcher/messages.md
+  x/dispatcher/subscriptions.md
+  x/dispatcher/worldlines.md
+Out:
+  x/dispatcher/alice.md
+  x/dispatcher/bob.md
+  x/dispatcher/carol.md
+
+.stop
+
+check doc against requirements
+
+Ensure that the document meets these requirements:
 
 - Understand that these promises are Burgess-style promises according
   to Promise Theory:  An agent can only make promises about its own
@@ -18,6 +54,8 @@ events, and how each are structured.  In particular, we want to:
   nodes are accessible.
 - Understand whether a CWT is a promise itself, or if it is a
   container for one or more promises expressed as claims.
+- explore the possibility that the structure we're looking for is
+  something new, not a conventional merkle DAG. 
 
 
 In: 
@@ -26,7 +64,7 @@ In:
   x/dispatcher/subscriptions.md
   x/dispatcher/worldlines.md
 Out:
-  x/dispatcher/worldlines.md
+  x/dispatcher/analogy.md
 
 .stop
 
