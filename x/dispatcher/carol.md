@@ -1,4 +1,5 @@
-# Position Paper: Carol's Perspective on a Git-Repo-Like Worldline Model
+# Position Paper: Carol's Perspective on a Git-Repo-Like Worldline
+Model
 
 ## Introduction
 
@@ -18,9 +19,10 @@ operations such as event tracking, retrieval, and historical comparison.
 ### Key Characteristics
 
 - **Chronological File Ordering:**  
-  Each event is stored as a separate entity within the repository, following
-  a strict chronological order. This transparent ordering makes it easy to review
-  and trace event history without the need for complex verification mechanisms.
+  Each event is stored as a separate entity within the repository,
+  following a strict chronological order. This transparent ordering makes it
+  easy to review and trace event history without the need for complex
+  verification mechanisms.
 
 - **Simplicity and Familiarity:**  
   The Git repository metaphor is widely understood, even outside the realm
@@ -76,6 +78,12 @@ operations such as event tracking, retrieval, and historical comparison.
 A Git-repository-inspired worldline model offers a balanced blend of simplicity,
 transparency, and efficiency. By treating each event as a file in an ordered
 repository, we create a system that is both easy to understand and capable of
-handling complex historical reconstructions. With thoughtful consideration
-around scalability and merging, this approach provides a solid foundation for
-our messaging system.
+handling complex historical reconstructions.
+
+## Future Directions
+
+To help the project evolve, I suggest these avenues for future work:
+
+- **User Feedback Integration:**  
+  Collect and analyze user feedback to refine the balance between simplicity  
+  and the necessary technical intricacies.

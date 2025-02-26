@@ -59,9 +59,12 @@ correctly documented. Below are my observations and questions:
      how do their advantages compare against the Merkle DAG approach, particularly in
      relation to auditability and replay ability?
 
-I appreciate all the detailed documentation provided so far. Clarifying these points
-will help ensure that our requirements documentation accurately reflects the intended
-design and implementation strategies.
+## Clarification and Feedback
+
+To help resolve these issues, I propose we:
+
+- Initiate a joint review of both Merkle DAG and alternative proposals to
+  determine the best path forward.
 
 Best regards,  
 Ray

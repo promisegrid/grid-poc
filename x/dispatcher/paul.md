@@ -1,14 +1,14 @@
 # Paul’s Discussion Guide
 
 Below is a series of questions Paul can use to guide each participant toward the
-goals of the project. Each question is tailored to the perspective presented in the
-various documents.
+goals of the project. Each question is tailored to the perspective presented in
+the various documents.
 
 4. **Alice (x/dispatcher/alice.md):**  
    Alice, how does your hypergraph-based perspective address the challenges of
    maintaining consistency and replayability in a decentralized messaging system,
-   and how can your model support the autonomous promise-making required by Promise
-   Theory?
+   and how can your model support the autonomous promise-making required by
+   Promise Theory?
 
 5. **Bob (x/dispatcher/bob.md):**  
    Bob, given your advocacy for a Merkle DAG-based model, what specific mechanisms
@@ -39,3 +39,9 @@ various documents.
    functional DAG edits and promise assertions, and what additional clarifications or
    acceptance criteria should we incorporate to help bridge technical requirements with
    stakeholder expectations?
+
+## Guiding Questions for Next Phase
+
+To advance our discussion, please consider:
+
+- Suggesting concrete integration steps to reconcile differing proposals.
