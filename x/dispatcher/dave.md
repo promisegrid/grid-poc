@@ -85,13 +85,28 @@ leverages the strengths of hypergraphs, Merkle DAGs, and Git-like abstractions.
   Integrate feedback from all perspectives to validate promise assertions
   and ensure robust replay mechanisms.
 
+## Integration Update
+
+Since our last review, discussions have shown encouraging
+progress towards a unified approach. To move the discussion forward, we will:
+
+- finalize the unified hypergraph model.
+- Review the proposed unified CWT schema and validate digital signature
+  requirements.
+- Establish a clear timeline for integrating test suites and resolving open
+  questions regarding message structure and replayability.
+
+Your detailed feedback will be crucial for aligning our
+implementation with Promise Theory principles while ensuring end-to-end system
+integrity.
+
 ## Next Steps and Coordination
 
 I will work closely with each team member to refine our specifications.
 Our next meeting will focus on detailed protocol design and unified testing.
 Your continued feedback on these action items is crucial for ensuring that
-our implementation adheres to Promise Theory principles while addressing
-the complexities of decentralized system design.
+our implementation adheres to Promise Theory principles while addressing the
+complexities of decentralized system design.
 
 Best regards,
 
