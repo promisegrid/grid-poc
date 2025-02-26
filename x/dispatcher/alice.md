@@ -66,14 +66,13 @@ the event, while the target states represent the statuses *after* the event.
   necessary to visualize and manage these relationships effectively.
 
 - **Performance Overheads:**  
-  Evaluating and maintaining hyperedges that link multiple states may
-  introduce more computational overhead than simpler data structures. Balancing
-  expressiveness with performance is key.
+  Evaluating complex interconnections might introduce computational overhead,
+  particularly when scaling to very large systems.
 
 ## Conclusion
 
 Adopting a hypergraph-based model for our messaging system worldlines provides
-a powerful framework to capture the multidimensional nature of events. Through
-careful design and optimized algorithms, we can harness its flexibility to
-model complex state transitions while addressing performance and maintenance
-challenges.
+a powerful framework to capture the multidimensional nature of events. With
+appropriate tooling and optimized algorithms, we can harness its flexibility
+to model complex state transitions while addressing performance and
+maintenance challenges.

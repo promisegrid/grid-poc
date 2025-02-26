@@ -40,36 +40,30 @@ cryptographic proofs.
   vital in environments where agents might not fully trust each other.
 
 - **Modularity and Scalability:**  
-  The clear separation between leaf events and internal verification nodes
-  means that as the event log grows, we can still efficiently verify individual
-  segments of the DAG without reprocessing the entire history.
+  The separation between leaf events and internal nodes means that the
+  verification process scales well even as the event log grows.
 
 - **Deterministic Event Ordering:**  
-  Each event is deterministically associated with a unique hash, ensuring a
-  clear, verifiable order of operations. This property simplifies the process of
-  tracking and replaying events.
+  Unique hashes for each event ensure a clear, verifiable order of operations,
+  simplifying tracking and replaying of events.
 
 ## Challenges & Considerations
 
-- **Complexity in DAG Management:**  
-  Although a Merkle DAG offers strong security guarantees, managing the DAG—
-  especially when events need to be inserted, reordered, or deleted—can present
-  performance challenges and require sophisticated handling.
+- **DAG Management Complexity:**  
+  Handling insertions, deletions, and reordering with a Merkle DAG can be
+  challenging, requiring sophisticated algorithms to maintain efficiency.
 
 - **Storage Overhead:**  
-  Maintaining both the leaf events and the intermediate hash nodes
-  introduces additional storage requirements. Optimizations and pruning
-  strategies may be necessary to ensure long-term scalability.
+  Storing both events and intermediate hash nodes may increase storage needs;
+  strategies for optimization should be considered.
 
-- **Single Point of Verification:**  
-  While the structure is robust, the verification process must be diligently
-  managed to ensure that the integrity of the hash chain is preserved across
-  distributed nodes.
+- **Reactive Verification:**  
+  The system must support real-time verification of the hash chain even in
+  complex, distributed environments.
 
 ## Conclusion
 
-Embracing a Merkle DAG as the underlying data structure for worldlines in our
+Embracing a Merkle DAG as the underlying structure for worldlines in our
 messaging system provides a resilient, verifiable, and scalable framework.
-By leveraging cryptographic integrity, we not only secure the history of events
-but also instill trust among distributed agents, thereby supporting a robust and
-transparent system architecture.
+This approach not only secures the event history through cryptographic integrity
+but also supports robust traceability among distributed agents.

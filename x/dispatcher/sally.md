@@ -64,18 +64,17 @@ observations, propose some user story drafts, and ask a few clarifying questions
 
 - **Replay Mechanism:**  
   What level of detail is expected in a user story regarding the replayability of the
-  system? Do we need to outline acceptance criteria that include replaying entire DAGs or
-  just verifying critical nodes?
+  system? Should acceptance criteria include replaying the entire DAG or just key portions
+  necessary for verification?
 
 - **Unified vs. Multiple DAGs:**  
-  Is there a consensus on whether a single unified DAG represents all worldlines or if
-  each worldline maintains its own DAG? This choice impacts user stories related to the
-  management and verification of the data.
+  Is there a consensus on whether we use a single unified DAG for all worldlines or
+  maintain separate DAGs for each? This decision affects stories related to system-wide
+  verification and management.
 
 - **Terminology Consistency:**  
-  How strict should we be in differentiating between “message” and “event” in user
-  stories? Would establishing a glossary as part of our documentation be beneficial for
-  ensuring consistency?
+  How strict should the differentiation be between “message” and “event”? Would a
+  glossary be useful to ensure consistency?
 
 ## Proposed User Story Drafts
 
@@ -89,23 +88,21 @@ observations, propose some user story drafts, and ask a few clarifying questions
    can independently verify the assembly and integrity of the worldline in the Merkle
    DAG at any given point in time."
 
-3. **Terminology and Clarity Story:**  
-   "As a developer, I need clear definitions for ‘message’ and ‘event’ in our
-   documentation, ensuring that each promise (as a CWT claim) and DAG edit operation is
-   interpreted consistently by the team."
+3. **Terminology Clarity Story:**  
+   "As a developer, I need clear definitions for ‘message’ and ‘event’ so that every
+   promise (expressed as a CWT claim) and corresponding DAG edit is consistently
+   understood."
 
 4. **Multi-Worldline Management Story:**  
-   "As an administrator, I want the system to support editing operations that span
-   multiple worldlines—even when these worldlines branch and merge—so that overall
-   system integrity is maintained through verifiable DAG edits."
+   "As an administrator, I want messages to support editing operations that span
+   multiple worldlines—even when they branch and merge—so that overall system
+   integrity is maintained through verifiable DAG edits."
 
 ## Final Thoughts
 
-I believe these questions and proposed user stories help bridge our technical
-requirements with actionable development goals. Your feedback, especially on the
-clarity and scope of these stories, is greatly appreciated. Please let me know if any
-technical details (e.g., specific cryptographic measures or DAG replay mechanisms)
-need more in-depth coverage in the context of our user stories.
+I believe these questions and proposed user stories bridge our technical
+requirements with actionable development goals. Your feedback on the clarity and
+scope of these stories will be invaluable as we refine our approach further.
 
 Best regards,  
 Sally
