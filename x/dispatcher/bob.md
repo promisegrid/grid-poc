@@ -4,8 +4,7 @@
 
 I propose that the structure of all worldlines in our messaging system be
 defined as a Merkle Directed Acyclic Graph (DAG). This model leverages the
-benefits of cryptographic integrity and efficient event verification,
-aligning with the need for secure, traceable communication among agents.
+benefits of cryptographic integrity and efficient event verification.
 
 ## The Merkle DAG Worldline Model
 
@@ -43,17 +42,13 @@ also fosters trust through cryptographic proofs.
 
 ## Challenges & Considerations
 
-- **DAG Management Complexity:**  
-  Insertion, deletion, and reordering require sophisticated management,
-  challenging but necessary for long-term efficiency.
-
 - **Storage Overhead:**  
   Increased storage for events and intermediate nodes calls for careful
   optimization strategies.
 
 - **Reactive Verification:**  
   Real-time hash chain checking must be supported across our
-  distributed, dynamic environment.
+  decentralized, dynamic environment.
 
 ## Conclusion
 
@@ -70,6 +65,3 @@ To move the discussion forward, I recommend:
 - **Interdisciplinary Workshops:**  
   Collaborate across domains to refine DAG management algorithms and
   discover storage optimizations.
-- **Roadmap Development:**  
-  Create a detailed timeline that integrates Merkle DAG principles with
-  our overall system architecture.

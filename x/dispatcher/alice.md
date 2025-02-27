@@ -32,8 +32,10 @@ statuses *after* the event.
   processes.
 
 - **Flexibility in Modeling Complex Events:**  
-  Unlike simple graphs or trees, hypergraphs easily represent events
-  affecting a collection of states concurrently, aiding our evolution.
+  Unlike simple graphs or trees, hypergraphs allow for the
+  representation of events that affect a collection of states
+  simultaneously. This is particularly beneficial when events have
+  ripple effects across several system components.
 
 ## Advantages Over Alternative Models
 
@@ -47,39 +49,30 @@ statuses *after* the event.
   relationships without a radical re-design. Its flexibility is key.
 
 - **Intrinsic Multidimensionality:**  
-  It naturally captures parallel evolutions and synchronization
-  across varied contexts.
+  In systems where events can trigger parallel evolutions or need
+  synchronization across different contexts, hypergraphs provide a
+  native structure to capture these complexities.
 
 ## Challenges & Considerations
 
-- **Complexity Management:**  
-  Translating hypergraph concepts into efficient code requires care in
-  algorithm design to resolve multiple state changes concurrently.
-
 - **Visualization & Debugging:**  
-  The non-linear nature of hypergraphs calls for robust tools to
-  effectively visualize and manage state transitions.
-
-- **Performance Overheads:**  
-  Complex interconnections may add computational load, and we must
-  optimize to scale efficiently.
+  We'll need tools to visualize the graph.
 
 ## Conclusion
 
 Adopting a hypergraph-based model gives us a powerful framework to
-capture the multidimensional nature of events in our messaging system.
+capture the multidimensional nature of events.
 Its flexibility and expressiveness can drive us toward innovative
 solutions while addressing performance and maintenance challenges.
 
 ## Moving Forward
 
-To progress the discussion and refine our implementation, I propose:
-- **Collaborative Reviews:**  
-  Organize focused sessions to compare detailed design choices with
-  other proposed models.
+I propose:
 - **Prototype Integration:**  
-  Develop a small-scale hypergraph prototype and integrate with our
-  current message format.
+  Develop a small-scale hypergraph-based prototype and integrate with a
+  simple message format.
+
 - **Tooling Enhancements:**  
-  Invest in visualization and debugging tools to manage the model's
-  complexity over time.
+  Write or find visualization and debugging tools to manage the model's
+  complexity over time.  See if there are existing tools and models
+  that are written in Go that might influence our own data structures.

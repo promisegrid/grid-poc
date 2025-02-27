@@ -1,10 +1,9 @@
-Modify output documents
+Write Ellen's research paper 
 
-Modify documents to move the discussion forward, maintaining
-the perspective and views of each participant.  Use proper markdown
-formatting for section and subsection headings and bullet points.
-Keep lines wrapped at 70 characters.  
-
+Ellen researches IPFS, IPLD, and ATprotocol.  She writes a draft of a
+paper that discusses the three technologies and how they might be used
+as building blocks for PromiseGrid.  She includes both technical
+details as well as ideas for how to involve each of those communities.
 
 In: 
   x/dispatcher/alice.md
@@ -18,6 +17,21 @@ In:
   /home/stevegt/lab/promisegrid/promisegrid/README.md
   /home/stevegt/lab/promisegrid/paper-ism/README.adoc
 Out:
+  x/dispatcher/ellen.md
+  
+
+.stop
+
+
+Modify output documents
+
+Modify documents to move the discussion forward, maintaining
+the perspective and views of each participant.  Use proper markdown
+formatting for section and subsection headings and bullet points.
+Do not make trivial edits. Keep lines wrapped at 70 characters, but do
+not re-wrap unless you are making other changes to the paragraph.
+
+Out:
   x/dispatcher/alice.md
   x/dispatcher/bob.md
   x/dispatcher/carol.md
@@ -26,7 +40,6 @@ Out:
   x/dispatcher/paul.md
   x/dispatcher/ray.md
   x/dispatcher/sally.md
-  
 
 .stop
 

@@ -8,15 +8,24 @@ helped us refine our consensus, and I have updated our action items accordingly.
 
 ## Key Observations and Questions
 
+0. **IPFS and ATprotocol:**  
+   - I am also looking at IPFS and ATprotocol for data structures and
+     formats.
+   - *Question:* How do these technologies align with our promise-based approach?
+   - *Question:* Can we align with, hook into, or otherwise involve
+     the bluesky community and its developers?  (I could use the help.)
+
 1. **Promise Semantics:**  
    - Every message is a Burgess-style promise, asserting its own validity.
-   - *Question:* Can we finalize a centralized definition of a properly formed
-     CWT claim to qualify as a promise?
+   - *Question:* Can you each propose a Go data structure of a properly formed
+     CWT to qualify as a promise?
 
 2. **Worldline Structure and Replayability:**  
+   - We need to support replayability on a given node when the node
+     does not have all the leafs. 
+   - *Question:* Can you each describe how you will handle this?
    - Our system must support branching and merging worldlines.
-   - *Question:* Should we standardize on a unified hypergraph to ensure
-     replayability even when nodes are missing?
+   - *Question:* Can you each describe how you will handle this?
 
 3. **CWT Claims and Message Structure:**  
    - Messages include one or more CWT claims that represent DAG edit operations.
@@ -34,13 +43,14 @@ helped us refine our consensus, and I have updated our action items accordingly.
   Every message is an autonomous assertion—a promise confirming that a
   DAG edit operation is valid.
 
-- **Consolidated Worldline Representation:**  
-  We are progressing toward a single, unified hypergraph model that supports
-  both branching and complete replayability, even in modular settings.
-
 - **Integrated Message Structure:**  
   Each message is a promise with one or more well-defined CWT claims, including
   agent-specific timestamps and signatures.
+
+- **Investigate IPFS, IPLD, and ATprotocol:**  Explore how these
+  technologies can be used as building blocks for our promise-based
+  system.
+
 
 ## Integration of Participant Feedback
 
