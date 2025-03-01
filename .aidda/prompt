@@ -1,23 +1,31 @@
-Write Ellen's research paper 
+start draft RFC
 
-Ellen researches IPFS, IPLD, and ATprotocol.  She writes a draft of a
-paper that discusses the three technologies and how they might be used
-as building blocks for PromiseGrid.  She includes both technical
-details as well as ideas for how to involve each of those communities.
+Write a draft RFC describing the PromiseGrid wire protocol.  The RFC
+should describe the wire protocol in detail, including the format of
+messages.  The RFC must conform to IETF standards for RFCs.  
 
 In: 
-  x/dispatcher/alice.md
-  x/dispatcher/bob.md
-  x/dispatcher/carol.md
-  x/dispatcher/dave.md
-  x/dispatcher/gail.md
-  x/dispatcher/paul.md
-  x/dispatcher/ray.md
-  x/dispatcher/sally.md
+  x/atproto/slides.md
+  x/discussion/subscriptions.md
+  x/discussion/carol.md
+  x/discussion/alice.md
+  x/discussion/gail.md
+  x/discussion/ray.md
+  x/discussion/dave.md
+  x/discussion/paul.md
+  x/discussion/bob.md
+  x/discussion/ellen.md
+  x/discussion/worldlines.md
+  x/discussion/messages.md
+  x/discussion/sally.md
+  x/wasm-components/README.md
+  x/references.md
+  x/data-structure/description.md
+  x/gopherjs/hello-wasm/README.md
   /home/stevegt/lab/promisegrid/promisegrid/README.md
   /home/stevegt/lab/promisegrid/paper-ism/README.adoc
 Out:
-  x/dispatcher/ellen.md
+  x/rfc/draft-promisegrid.md
   
 
 .stop
@@ -31,15 +39,28 @@ formatting for section and subsection headings and bullet points.
 Do not make trivial edits. Keep lines wrapped at 70 characters, but do
 not re-wrap unless you are making other changes to the paragraph.
 
+In: 
+  x/discussion/alice.md
+  x/discussion/bob.md
+  x/discussion/carol.md
+  x/discussion/dave.md
+  x/discussion/ellen.md
+  x/discussion/gail.md
+  x/discussion/paul.md
+  x/discussion/ray.md
+  x/discussion/sally.md
+  /home/stevegt/lab/promisegrid/promisegrid/README.md
+  /home/stevegt/lab/promisegrid/paper-ism/README.adoc
 Out:
-  x/dispatcher/alice.md
-  x/dispatcher/bob.md
-  x/dispatcher/carol.md
-  x/dispatcher/dave.md
-  x/dispatcher/gail.md
-  x/dispatcher/paul.md
-  x/dispatcher/ray.md
-  x/dispatcher/sally.md
+  x/discussion/alice.md
+  x/discussion/bob.md
+  x/discussion/carol.md
+  x/discussion/dave.md
+  x/discussion/ellen.md
+  x/discussion/gail.md
+  x/discussion/paul.md
+  x/discussion/ray.md
+  x/discussion/sally.md
 
 .stop
 
@@ -67,12 +88,12 @@ Ensure that the document meets these requirements:
 
 
 In: 
-  x/dispatcher/dispatcher.go
-  x/dispatcher/messages.md
-  x/dispatcher/subscriptions.md
-  x/dispatcher/worldlines.md
+  x/discussion/dispatcher.go
+  x/discussion/messages.md
+  x/discussion/subscriptions.md
+  x/discussion/worldlines.md
 Out:
-  x/dispatcher/analogy.md
+  x/discussion/analogy.md
 
 .stop
 
@@ -139,12 +160,12 @@ show the correct structure for a message.
 
 
 In: 
-  x/dispatcher/dispatcher.go
-  x/dispatcher/messages.md
-  x/dispatcher/subscriptions.md
-  x/dispatcher/worldlines.md
+  x/discussion/dispatcher.go
+  x/discussion/messages.md
+  x/discussion/subscriptions.md
+  x/discussion/worldlines.md
 Out:
-  x/dispatcher/worldlines.md
+  x/discussion/worldlines.md
 
 .stop
 

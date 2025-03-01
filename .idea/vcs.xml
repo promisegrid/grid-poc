@@ -3,5 +3,6 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/x/cbor-tags-multitype" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/x/ipfs" vcs="Git" />
   </component>
 </project>
