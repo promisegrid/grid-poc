@@ -12,8 +12,10 @@ Abstract
    decentralized consensus-based computing, communications, and
    governance system.  The protocol defines the format and semantics of
    messages exchanged between PromiseGrid agents.  Messages are expressed
-   as structured claims based on CBOR Web Tokens (CWTs) and secured using
-   COSE, ensuring integrity, authenticity, and non-repudiation of promises.
+   as structured claims based on CBOR Web Tokens (CWTs), digitally signed
+   using COSE, and transmitted via a libp2p overlay network.  In addition,
+   messages are interlinked using IPLD with DAG-CBOR encoding, ensuring
+   verifiable relationships and replayability of event sequences.
    This document is intended to be consistent with IETF RFC style and
    practices.
 
@@ -52,6 +54,14 @@ Table of Contents
    This document describes the wire format and processing semantics for
    these messages, hereby called “PromiseGrid Messages.”
 
+   Notably, PromiseGrid leverages:
+   
+   o  CBOR for binary encoding of structured messages.
+   o  COSE for digital signing and optional encryption of messages.
+   o  libp2p as the transport mechanism for robust peer-to-peer communication.
+   o  IPLD and DAG-CBOR for linking messages into a verifiable Merkle
+      Directed Acyclic Graph, enabling replayability and audit trails.
+
 2.  Protocol Overview
 
    The PromiseGrid wire protocol is built on the following guiding
@@ -67,13 +77,18 @@ Table of Contents
       signature binds the message to the issuing agent, whose identity is
       expressed in the claims.
 
-   o  Messages include essential context such as timestamps, the target
-      worldline or resource identifier, prior node hashes for replayability,
-      and an operation code specifying the type of edit or query.
+   o  Messages are transmitted over a libp2p network, which provides a
+      decentralized, peer-to-peer transport layer that abstracts from
+      underlying network protocols (e.g., TCP, QUIC).
 
-   o  The protocol is transport agnostic.  While the wire encoding
-      relies on a compact binary format based on CBOR, underlying transport
-      layers can vary (e.g., TCP, HTTP/2, QUIC).
+   o  Relationships between messages are maintained using IPLD.  Each
+      message may reference previous messages via hash pointers using
+      DAG-CBOR encoding, thereby constructing a Merkle Directed Acyclic Graph
+      that supports consistency checks and replayability.
+
+   o  The protocol is transport agnostic beyond its reliance on libp2p.
+      Although the wire encoding is based on the compact binary format of CBOR,
+      underlying transport layers can vary.
 
 3.  Message Format
 
@@ -91,10 +106,13 @@ Table of Contents
          "signature":   SignatureData
       }
 
+   The “prevHashes” field enables linking of messages within a DAG, as defined
+   by IPLD using DAG-CBOR, to express relationships and ordering between events.
+
 3.1.  Common Fields
 
    op
-      A string value that identifies the operation type (e.g., "insert",
+      A string value identifying the operation type (e.g., "insert",
       "delete", "reorder", "query", or "subscribe").
 
    agent
@@ -102,8 +120,8 @@ Table of Contents
       contain a globally unique name or cryptographic key identifier.
 
    timestamp
-      A UTC timestamp (in ISO 8601 format) representing the creating agent’s
-      local time when the message is issued.
+      A UTC timestamp, in ISO 8601 format, representing the issuing agent’s
+      local time when the message is created.
 
    target
       A string or binary identifier denoting the target resource or
@@ -116,24 +134,25 @@ Table of Contents
 
    prevHashes
       An array of one or more hash values representing the immediate previous
-      internal node(s) in the DAG.  This field supports replayability and consistency
-      checks.
+      internal node(s) in the DAG.  These hash pointers, encoded with DAG-CBOR,
+      provide the basis for linking messages in an IPLD structure, ensuring verifiable
+      history and replayability.
 
    signature
-      A COSE-encapsulated digital signature covering the fields of the message.
-      This signature provides in-band security guaranteeing the authenticity and the
-      promise integrity of the message.
+      A COSE-encapsulated digital signature covering the message’s fields.
+      This signature guarantees both authenticity of the issuing agent and the
+      integrity of the promise embedded in the message.
 
 3.2.  Operation Types
 
-   PromiseGrid supports several operation types.  The following sub-sections describe
-   each supported type along with an example JSON representation (for human readability)
-   that is subsequently encoded in CBOR.
+   PromiseGrid supports several operation types.  The following sub-sections
+   describe each supported type along with an example JSON representation (for human
+   readability) that is subsequently encoded in CBOR.
 
 3.2.1.  Insert Operation
 
    The insert operation signals the addition of a new event into a worldline.
-   The payload conveys a promise to insert data along with relevant metadata.
+   The payload conveys a promise to insert data along with necessary metadata.
 
    Example:
 
@@ -157,7 +176,7 @@ Table of Contents
 3.2.2.  Delete Operation
 
    A delete operation signals the intention to remove an existing event or mark it as obsolete.
-   Context is provided to enable validators to confirm the operation.
+   Context is provided to enable validators to confirm the deletion.
 
    Example:
 
@@ -205,8 +224,8 @@ Table of Contents
 3.2.4.  Query Operation
 
    A query operation is used by an agent to request information about events matching
-   certain criteria.  Rather than directly retrieving data, the query itself is a promise
-   regarding the retrieval behavior.
+   specified criteria.  Rather than directly retrieving data, the query itself is a promise
+   regarding retrieval behavior.
 
    Example:
 
@@ -231,8 +250,8 @@ Table of Contents
 3.2.5.  Subscription Operation
 
    Subscription operations allow agents to register interest in future events
-   (e.g., insertions) on particular worldlines.  The promise here is to receive
-   notifications when events meeting specified criteria occur.
+   (e.g., insertions) on specified worldlines.  The promise here is to receive
+   notifications when events that meet the given criteria occur.
 
    Example:
 
@@ -260,12 +279,12 @@ Table of Contents
    digital signatures along with the compact token format of CWT.  Each message’s signature
    binds the agent’s identity to the promise of the DAG edit operation, enabling recipients
    to verify:
-
-   o  Message integrity – any tampering is detectable by a mismatch in the computed hash.
+   
+   o  Message integrity – any tampering is detectable via hash mismatches.
    o  Authenticity – the origin of the message is authenticated by verifying the signature
       against the issuing agent’s public key.
-   o  Replay protection – inclusion of timestamps and previous node hashes enables detection
-      of message replays.
+   o  Replay protection – timestamps and ‘prevHashes’ (as IPLD links) enable detection of
+      message replays.
 
    Implementers are advised to use secure cryptographic hash functions (e.g., SHA-256 or
    stronger) and follow best practices for key management and certificate validation.
@@ -278,8 +297,8 @@ Table of Contents
 6.  Acknowledgments
 
    The authors gratefully acknowledge contributions from the PromiseGrid research
-   community, as well as insights drawn from related work in IPFS, CBOR, COSE, and
-   Promise Theory.
+   community, as well as insights drawn from related work in IPFS, IPLD, CBOR, COSE,
+   and Promise Theory.
 
 7.  References
 
@@ -296,33 +315,35 @@ Table of Contents
    [IPFS]   Benet, J., "IPFS - Content Addressed, Versioned, P2P File System",
                 2014.
 
+   [IPLD]   Benet, J., "InterPlanetary Linked Data (IPLD)", https://ipld.io
+
+   [DAG-CBOR]  Technical documentation on DAG-CBOR, https://github.com/ipld/dag-cbor
+
+   [libp2p]  Protocol and documentation available at https://libp2p.io
+
    [IETF RFC Styles]   "Guidelines for Writing an Internet-Draft", IETF RFC 7322.
 
    This document is an Internet-Draft and is provided for discussion purposes only.
 
-
                               Authors' Addresses
 
    D. Traugott
    Email: stevegt@example.com
 
-
 Disclaimer
 
    This document is provided on an "AS IS" basis and the authors DISCLAIM
    any and all warranties, express or implied, including without limitation
    any warranty related to fitness for a particular purpose.
 
-
 Conclusion
 
    The PromiseGrid Wire Protocol outlined in this document enables secure,
    verifiable, and replayable operations across a decentralized platform.
-   Through its use of structured CWT claims, digital signatures using COSE,
-   and content-addressable references, the protocol ensures that the promises
-   made by agents can be audited and trusted across a network of autonomous nodes.
-   Future extensions may further elaborate on advanced merging, conflict
-   resolution mechanisms, and additional operation types.
+   By leveraging CBOR for encoding, COSE for digital signatures, libp2p for
+   message transport, and IPLD with DAG-CBOR for linking messages, the protocol
+   ensures that promises made by autonomous agents are auditable and trustworthy.
+   Future extensions may further elaborate on advanced merging, conflict resolution
+   mechanisms, and additional operation types.
 
-
                               End of Document
