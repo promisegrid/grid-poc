@@ -2,7 +2,8 @@ start draft RFC
 
 Write a draft RFC describing the PromiseGrid wire protocol.  The RFC
 should describe the wire protocol in detail, including the format of
-messages.  The RFC must conform to IETF standards for RFCs.  
+messages.  The RFC must conform to IETF standards for RFCs and be
+written in the style of an RFC.
 
 In: 
   x/atproto/slides.md

@@ -1,9 +1,7 @@
-File: /home/stevegt/lab/grid-poc/x/rfc/draft-promisegrid.md
-```markdown
-Network Working Group                                        D. Traugott
-Internet-Draft                                           September 2023
+Network Working Group                                        S. Traugott
+Internet-Draft                                           March 1, 2025
 Intended status: Informational                   Draft PromiseGrid Wire Protocol
-Expires: January 2024
+Expires: July 2025
 
                 PromiseGrid Wire Protocol
                 Draft Version 00
@@ -328,5 +326,3 @@ Conclusion
 
 
                               End of Document
-```
-EOF_/home/stevegt/lab/grid-poc/x/rfc/draft-promisegrid.md
