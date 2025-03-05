@@ -16,10 +16,11 @@ Abstract
    messages exchanged between PromiseGrid agents.  Messages are expressed
    as structured claims based on CBOR Web Tokens (CWTs), digitally signed
    using COSE, and transmitted via a libp2p overlay network.  In addition,
-   messages are interlinked using IPLD with DAG-CBOR encoding, ensuring
-   verifiable relationships and replayability of event sequences.
-   This document is intended to be consistent with IETF RFC style and
-   practices.
+   messages explicitly describe edits to a shared Merkle Directed Acyclic
+   Graph (DAG) that represents the global state.  The relationships between
+   messages are maintained using IPLD with DAG-CBOR encoding, ensuring
+   verifiable links and replayability of event sequences.  This document is
+   intended to be consistent with IETF RFC style and practices.
 
 Status of This Memo
 
@@ -53,16 +54,21 @@ Table of Contents
    In PromiseGrid, every message on the wire serves both as an instruction
    for a Directed Acyclic Graph (DAG) edit operation and as an irrevocable
    assertion of validity in a manner that is consistent with Promise Theory.
-   This document describes the wire format and processing semantics for
-   these messages, hereby called “PromiseGrid Messages.”
+   This revision clarifies that each message explicitly describes an edit
+   to the shared Merkle DAG – the ledger of global state – where operations
+   include insertions, deletions, reordering, and other modifications.
+   These DAG edits are interlinked via hash pointers using IPLD, enabling
+   consistency checks, replayability, and audit trails over time.
 
    Notably, PromiseGrid leverages:
    
    o  CBOR for binary encoding of structured messages.
-   o  COSE for digital signing and optional encryption of messages.
+   o  COSE for digital signing and optional encryption.
    o  libp2p as the transport mechanism for robust peer-to-peer communication.
    o  IPLD and DAG-CBOR for linking messages into a verifiable Merkle
-      Directed Acyclic Graph, enabling replayability and audit trails.
+      DAG.
+   o  Explicit semantics wherein each message represents a promised edit to the
+      DAG structure.
 
 2.  Protocol Overview
 
@@ -70,23 +76,24 @@ Table of Contents
    principles:
 
    o  Each message is expressed as a set of claims encapsulated within a
-      CWT (CBOR Web Token).  These claims represent promises about DAG
-      edit operations such as insertions, deletions, reordering, queries,
-      and subscription requests.
+      CWT (CBOR Web Token).  These claims represent promises not only about
+      the validity of an operation but also describe a specific edit to the
+      shared DAG. These edits update the state by inserting new events, deleting
+      obsolete events, reordering events to reflect logical or temporal changes,
+      or issuing queries and subscription registrations.
 
-   o  Every message is signed using COSE (CBOR Object Signing and
-      Encryption) to ensure authenticity and integrity.  The digital
-      signature binds the message to the issuing agent, whose identity is
-      expressed in the claims.
+   o  Every message is signed using COSE (CBOR Object Signing and Encryption)
+      to ensure authenticity and integrity.  The digital signature binds the
+      message to the issuing agent, whose identity is expressed in the claims.
 
    o  Messages are transmitted over a libp2p network, which provides a
       decentralized, peer-to-peer transport layer that abstracts from
       underlying network protocols (e.g., TCP, QUIC).
 
    o  Relationships between messages are maintained using IPLD.  Each
-      message may reference previous messages via hash pointers using
-      DAG-CBOR encoding, thereby constructing a Merkle Directed Acyclic Graph
-      that supports consistency checks and replayability.
+      message may reference previous messages via hash pointers encoded in
+      DAG-CBOR, thereby constructing a Merkle Directed Acyclic Graph that
+      supports verifiable history and replayability.
 
    o  The protocol is transport agnostic beyond its reliance on libp2p.
       Although the wire encoding is based on the compact binary format of CBOR,
@@ -109,7 +116,8 @@ Table of Contents
       }
 
    The “prevHashes” field enables linking of messages within a DAG, as defined
-   by IPLD using DAG-CBOR, to express relationships and ordering between events.
+   by IPLD using DAG-CBOR, to express relationships and ordering between events,
+   thereby solidifying the edit history of the shared DAG.
 
 3.1.  Common Fields
 
@@ -131,8 +139,8 @@ Table of Contents
 
    payload
       An object containing one or more claims.  Claims are structured as key/value
-      pairs that detail the intended edit operation (e.g., descriptions, details of
-      changes, and additional parameters).
+      pairs that detail the intended edit operation on the DAG (e.g., descriptions,
+      details of changes, and additional parameters).
 
    prevHashes
       An array of one or more hash values representing the immediate previous
@@ -149,12 +157,13 @@ Table of Contents
 
    PromiseGrid supports several operation types.  The following sub-sections
    describe each supported type along with an example JSON representation (for human
-   readability) that is subsequently encoded in CBOR.
+   readability) that is subsequently encoded in CBOR.  Each operation represents a specific
+   edit to the shared DAG of events.
 
 3.2.1.  Insert Operation
 
    The insert operation signals the addition of a new event into a worldline.
-   The payload conveys a promise to insert data along with necessary metadata.
+   The payload conveys a promise to insert data into the DAG along with necessary metadata.
 
    Example:
 
@@ -178,7 +187,7 @@ Table of Contents
 3.2.2.  Delete Operation
 
    A delete operation signals the intention to remove an existing event or mark it as obsolete.
-   Context is provided to enable validators to confirm the deletion.
+   Context is provided to enable validators to confirm the deletion from the DAG.
 
    Example:
 
@@ -202,7 +211,7 @@ Table of Contents
 3.2.3.  Reorder Operation
 
    Reordering events within a worldline may be necessary for logical or temporal
-   restructuring.  The payload details the intended new order.
+   restructuring.  The payload details the intended new order of events in the DAG.
 
    Example:
 
@@ -226,8 +235,8 @@ Table of Contents
 3.2.4.  Query Operation
 
    A query operation is used by an agent to request information about events matching
-   specified criteria.  Rather than directly retrieving data, the query itself is a promise
-   regarding retrieval behavior.
+   specified criteria within the DAG.  The query itself is a promise regarding retrieval
+   behavior over the DAG’s structure.
 
    Example:
 
@@ -252,8 +261,8 @@ Table of Contents
 3.2.5.  Subscription Operation
 
    Subscription operations allow agents to register interest in future events
-   (e.g., insertions) on specified worldlines.  The promise here is to receive
-   notifications when events that meet the given criteria occur.
+   (e.g., insertions) on specified worldlines.  The promise is to receive
+   notifications when events that meet the given criteria occur in the DAG.
 
    Example:
 
@@ -343,10 +352,10 @@ Conclusion
    The PromiseGrid Wire Protocol outlined in this document enables secure,
    verifiable, and replayable operations across a decentralized platform.
    By leveraging CBOR for encoding, COSE for digital signatures, libp2p for
-   message transport, and IPLD with DAG-CBOR for linking messages, the protocol
-   ensures that promises made by autonomous agents are auditable and trustworthy.
-   Future extensions may further elaborate on advanced merging, conflict resolution
-   mechanisms, and additional operation types.
+   message transport, and IPLD with DAG-CBOR for linking messages into a unified
+   Merkle DAG, the protocol ensures that each promise—expressed as an edit to the DAG—is
+   auditable and trustworthy.  Future extensions may further elaborate on advanced merging,
+   conflict resolution mechanisms, and additional operation types.
 
                               End of Document
 ```
