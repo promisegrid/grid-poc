@@ -1,3 +1,22 @@
+write x/kubo-full 
+
+Kubo-full is an example of a full kubo node embedded in a custom
+main.go.
+
+Fix the following errors:
+
+./main.go:85:89: cannot use ctx (variable of interface type context.Context) as "github.com/ipfs/kubo/commands".Context value in argument to corehttp.CommandsOption
+
+kubo-full/main.go|98 col 89| cannot use &cmdCtx{…} (value of type *cmdCtx) as "github.com/ipfs/kubo/commands".Context value in argument to corehttp.CommandsOption
+
+In:
+  x/kubo-full/main.go
+Out:
+  x/kubo-full/main.go
+
+.stop
+
+
 build on IPFS and IPLD
 
 Revise the draft RFC describing PromiseGrid wire protocols and message

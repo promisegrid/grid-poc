@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/ipfs/kubo/commands"
 	"github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/core"
 	"github.com/ipfs/kubo/core/coreapi"
@@ -15,6 +16,30 @@ import (
 	"github.com/ipfs/kubo/plugin/loader"
 	"github.com/ipfs/kubo/repo/fsrepo"
 )
+
+// cmdCtx is a minimal implementation of the commands.Context interface.
+// In addition to wrapping a standard context.Context, it implements the
+// additional methods expected by commands.Context.
+type cmdCtx struct {
+	ctx context.Context
+}
+
+// Context returns the underlying context.
+func (c *cmdCtx) Context() context.Context {
+	return c.ctx
+}
+
+// ConfigRoot returns an empty string. This stub satisfies the commands.Context
+// interface and can be modified to point to a valid configuration root if needed.
+func (c *cmdCtx) ConfigRoot() string {
+	return ""
+}
+
+// Online indicates that the node is running in online mode.
+// This stub satisfies the commands.Context interface.
+func (c *cmdCtx) Online() bool {
+	return true
+}
 
 func main() {
 	// Set up context and signal handling
@@ -81,8 +106,9 @@ func main() {
 		panic(fmt.Errorf("failed getting coreapi: %w", err))
 	}
 
-	// Start HTTP API server
-	err = corehttp.ListenAndServe(node, "/ip4/127.0.0.1/tcp/5001", corehttp.CommandsOption(ctx))
+	// Start HTTP API server.
+	cctx := env.(*commands.Context)
+	err = corehttp.ListenAndServe(node, "/ip4/127.0.0.1/tcp/5001", corehttp.CommandsOption(&cmdCtx{ctx: ctx}))
 	if err != nil {
 		panic(fmt.Errorf("failed starting API server: %w", err))
 	}
