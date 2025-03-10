@@ -17,8 +17,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	"github.com/multiformats/go-multiaddr"
 )
 
 const (
@@ -30,74 +33,85 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Get default bootstrap peers to be used for DHT bootstrapping and as static relays.
-	bootstrapPeers := dht.GetDefaultBootstrapPeerAddrInfos()
+	// Create a routing setup that uses the Kademlia DHT
+	var dhtNode *dht.IpfsDHT
+	newDHT := func(h host.Host) (routing.PeerRouting, error) {
+		var err error
+		dhtNode, err = dht.New(ctx, h, dht.Mode(dht.ModeAutoServer))
+		return dhtNode, err
+	}
 
-	// Create libp2p host with DHT and relay capabilities.
+	// Create libp2p host with relay and NAT traversal enabled
 	h, err := libp2p.New(
+		// Listen on TCP
+		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"),
+
+		// Enable relay features - modern API without deprecated options
 		libp2p.EnableRelay(),
-		libp2p.EnableAutoRelayWithStaticRelays(bootstrapPeers),
+		libp2p.EnableAutoRelay(),
+
+		// NAT traversal
 		libp2p.NATPortMap(),
+		libp2p.EnableHolePunching(),
+
+		// DHT for peer discovery
+		libp2p.Routing(newDHT),
+
+		// Disable black hole detection to avoid connection issues
+		libp2p.DisableBlackHoleDetection(),
 	)
 	if err != nil {
 		panic(err)
 	}
 
-	// Set up DHT with default IPFS bootstrap nodes.
-	kademliaDHT, err := dht.New(ctx, h,
-		dht.Mode(dht.ModeAuto),
-		dht.BootstrapPeers(bootstrapPeers...),
-	)
-	if err != nil {
+	// Bootstrap the DHT
+	log.Println("Bootstrapping DHT...")
+	if err = dhtNode.Bootstrap(ctx); err != nil {
 		panic(err)
 	}
 
-	// Bootstrap the DHT.
-	if err = kademliaDHT.Bootstrap(ctx); err != nil {
-		panic(err)
-	}
+	// Connect to bootstrap peers
+	connectToBootstrapPeers(ctx, h, convertBootstrapPeers(dht.DefaultBootstrapPeers()))
 
-	// Connect to bootstrap peers.
-	connectToBootstrapPeers(ctx, h, bootstrapPeers)
-
-	// Set up Gossipsub with DHT-based peer discovery.
+	// Set up Gossipsub with DHT-based peer discovery
 	ps, err := pubsub.NewGossipSub(ctx, h,
-		pubsub.WithDiscovery(drouting.NewRoutingDiscovery(kademliaDHT)),
+		pubsub.WithDiscovery(drouting.NewRoutingDiscovery(dhtNode)),
 		pubsub.WithPeerExchange(true),
 	)
 	if err != nil {
 		panic(err)
 	}
 
-	// Join the topic.
+	// Join the topic
 	topic, err := ps.Join(topicName)
 	if err != nil {
 		panic(err)
 	}
 
-	// Subscribe to topic.
+	// Subscribe to topic
 	sub, err := topic.Subscribe()
 	if err != nil {
 		panic(err)
 	}
 	defer sub.Cancel()
 
-	// Set up mDNS for local discovery.
+	// Set up mDNS for local discovery
 	setupMdnsDiscovery(ctx, h, rendezvous)
 
-	// Advertise our presence using DHT.
-	routingDiscovery := drouting.NewRoutingDiscovery(kademliaDHT)
-	routingDiscovery.Advertise(ctx, rendezvous)
+	// Advertise our presence using DHT
+	routingDiscovery := drouting.NewRoutingDiscovery(dhtNode)
+	log.Println("Advertising ourselves...")
+	drouting.Advertise(ctx, routingDiscovery, rendezvous)
 
-	// Start message handler.
+	// Start message handler
 	go handleMessages(ctx, sub)
 
-	// Print node information.
+	// Print node information
 	log.Printf("Node ID: %s\n", h.ID())
 	log.Printf("Connect using: /p2p-circuit/p2p/%s\n", h.ID())
 
-	// Maintain network connectivity.
+	// Periodically discover peers
 	go discoverPeers(ctx, h, routingDiscovery)
 
 	// Start input loop in a separate goroutine.
@@ -152,21 +166,22 @@ func discoverPeers(ctx context.Context, h host.Host, discovery *drouting.Routing
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			peersChan, err := discovery.FindPeers(ctx, rendezvous)
+			peers, err := discovery.FindPeers(ctx, rendezvous)
 			if err != nil {
 				log.Printf("Peer discovery failed: %v", err)
 				continue
 			}
 
-			var peers []peer.AddrInfo
-			for p := range peersChan {
-				peers = append(peers, p)
-				// fmt.Printf("  - %s\n", p.ID)
+			// Count and collect peers
+			var peerList []peer.AddrInfo
+			for p := range peers {
+				peerList = append(peerList, p)
 			}
-			// fmt.Printf("Found %d peers:\n", len(peers))
+			log.Printf("Found %d peers for topic %s", len(peerList), rendezvous)
 
+			// Connect to new peers
 			var connected, unconnected []peer.AddrInfo
-			for _, p := range peers {
+			for _, p := range peerList {
 				if p.ID == h.ID() || h.Network().Connectedness(p.ID) == network.Connected {
 					connected = append(connected, p)
 					continue
@@ -195,6 +210,9 @@ func discoverPeers(ctx context.Context, h host.Host, discovery *drouting.Routing
 
 func connectToBootstrapPeers(ctx context.Context, h host.Host, peers []peer.AddrInfo) {
 	for _, p := range peers {
+		if p.ID == h.ID() {
+			continue
+		}
 		h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
 		if err := h.Connect(ctx, p); err != nil {
 			log.Printf("Failed to connect to bootstrap peer %s: %v", p.ID, err)
@@ -202,6 +220,18 @@ func connectToBootstrapPeers(ctx context.Context, h host.Host, peers []peer.Addr
 			log.Printf("Connected to bootstrap peer: %s", p.ID)
 		}
 	}
+}
+
+func convertBootstrapPeers(addrs []multiaddr.Multiaddr) []peer.AddrInfo {
+	var peers []peer.AddrInfo
+	for _, addr := range addrs {
+		pinfo, err := peer.AddrInfoFromP2pAddr(addr)
+		if err != nil {
+			continue
+		}
+		peers = append(peers, *pinfo)
+	}
+	return peers
 }
 
 type mdnsNotifee struct {
