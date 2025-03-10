@@ -1,7 +1,14 @@
-use libp2p's DHT and Gossipsub to handle peer discovery automatically
+add an input loop
 
-appears to work, needs input capabilities
+Add an input loop that reads messages from stdin and writes them to
+the gossipsub topic.  The loop should run until the user hits Ctrl-D,
+at which time the entire program should exit.  The loop should be
+non-blocking, so that the program can continue to receive messages
+from the network while waiting for user input.
 
+
+
+Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
 In:
   x/gossipsub/gossipsub.go
 Out:

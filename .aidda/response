@@ -3,6 +3,7 @@ File: /home/stevegt/lab/grid-poc/x/gossipsub/gossipsub.go
 package main
 
 import (
+	"bufio"
 	"context"
 	"log"
 	"os"
@@ -34,11 +35,10 @@ func main() {
 	bootstrapPeers := dht.GetDefaultBootstrapPeerAddrInfos()
 
 	// Create libp2p host with DHT and relay capabilities.
-	// Supply the list of static relays to EnableAutoRelay to avoid panic.
 	h, err := libp2p.New(
 		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"),
 		libp2p.EnableRelay(),
-		libp2p.EnableAutoRelay(libp2p.WithStaticRelays(bootstrapPeers)),
+		libp2p.EnableAutoRelayWithStaticRelays(bootstrapPeers),
 		libp2p.NATPortMap(),
 	)
 	if err != nil {
@@ -46,9 +46,8 @@ func main() {
 	}
 
 	// Set up DHT with default IPFS bootstrap nodes.
-	dhtMode := dht.Mode(dht.ModeAuto)
 	kademliaDHT, err := dht.New(ctx, h,
-		dhtMode,
+		dht.Mode(dht.ModeAuto),
 		dht.BootstrapPeers(bootstrapPeers...),
 	)
 	if err != nil {
@@ -102,12 +101,33 @@ func main() {
 	// Maintain network connectivity.
 	go discoverPeers(ctx, h, routingDiscovery)
 
-	// Wait for exit signal.
+	// Start input loop in a separate goroutine.
+	inputDone := make(chan struct{})
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		for scanner.Scan() {
+			text := scanner.Text()
+			if err := topic.Publish(ctx, []byte(text)); err != nil {
+				log.Printf("Failed to publish message: %v", err)
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Printf("Error reading input: %v", err)
+		}
+		log.Println("Input closed. Exiting...")
+		close(inputDone)
+	}()
+
+	// Wait for exit signal: either OS signal or user input closure (Ctrl-D).
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+	select {
+	case <-sigCh:
+	case <-inputDone:
+	}
 
 	log.Println("Shutting down...")
+	cancel()
 }
 
 func handleMessages(ctx context.Context, sub *pubsub.Subscription) {

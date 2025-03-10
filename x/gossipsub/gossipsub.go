@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -98,12 +100,34 @@ func main() {
 	// Maintain network connectivity.
 	go discoverPeers(ctx, h, routingDiscovery)
 
-	// Wait for exit signal.
+	// Start input loop in a separate goroutine.
+	inputDone := make(chan struct{})
+	go func() {
+		scanner := bufio.NewScanner(os.Stdin)
+		fmt.Println("Enter text to send to the network. Press Ctrl-D to exit.")
+		for scanner.Scan() {
+			text := scanner.Text()
+			if err := topic.Publish(ctx, []byte(text)); err != nil {
+				log.Printf("Failed to publish message: %v", err)
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			log.Printf("Error reading input: %v", err)
+		}
+		log.Println("Input closed. Exiting...")
+		close(inputDone)
+	}()
+
+	// Wait for exit signal: either OS signal or user input closure (Ctrl-D).
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
+	select {
+	case <-sigCh:
+	case <-inputDone:
+	}
 
 	log.Println("Shutting down...")
+	cancel()
 }
 
 func handleMessages(ctx context.Context, sub *pubsub.Subscription) {
@@ -128,23 +152,42 @@ func discoverPeers(ctx context.Context, h host.Host, discovery *drouting.Routing
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			peers, err := discovery.FindPeers(ctx, rendezvous)
+			peersChan, err := discovery.FindPeers(ctx, rendezvous)
 			if err != nil {
 				log.Printf("Peer discovery failed: %v", err)
 				continue
 			}
 
-			for p := range peers {
+			var peers []peer.AddrInfo
+			for p := range peersChan {
+				peers = append(peers, p)
+				// fmt.Printf("  - %s\n", p.ID)
+			}
+			// fmt.Printf("Found %d peers:\n", len(peers))
+
+			var connected, unconnected []peer.AddrInfo
+			for _, p := range peers {
 				if p.ID == h.ID() || h.Network().Connectedness(p.ID) == network.Connected {
+					connected = append(connected, p)
 					continue
 				}
 
 				h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
 				if err := h.Connect(ctx, p); err != nil {
-					log.Printf("Failed to connect to %s: %v", p.ID, err)
+					// log.Printf("Failed to connect to %s: %v", p.ID, err)
+					unconnected = append(unconnected, p)
+					// log.Printf("Failed to connect to %s", p.ID)
 				} else {
+					connected = append(connected, p)
 					log.Printf("Connected to new peer: %s", p.ID)
 				}
+			}
+
+			for _, p := range connected {
+				fmt.Printf("  - %s (connected)\n", p.ID)
+			}
+			for _, p := range unconnected {
+				fmt.Printf("  - %s (unconnected)\n", p.ID)
 			}
 		}
 	}
