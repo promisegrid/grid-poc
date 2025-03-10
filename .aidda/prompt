@@ -1,9 +1,4 @@
-gossipsub: use public relays
-
-Instead of a multiaddr, expect only the peer ID of the other gossipsub node.
-Before trying to connect, add code to find and list public relays,
-then pick a relay and form a multiaddr from the relay's address and the
-peer ID of the other gossipsub node.
+use libp2p's DHT and Gossipsub to handle peer discovery automatically
 
 In:
   x/gossipsub/gossipsub.go
