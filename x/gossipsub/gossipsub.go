@@ -47,7 +47,7 @@ func main() {
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"),
 
-		// Enable relay features - modern API without deprecated options
+		// Enable relay features
 		libp2p.EnableRelay(),
 		libp2p.EnableAutoRelay(),
 
@@ -57,9 +57,6 @@ func main() {
 
 		// DHT for peer discovery
 		libp2p.Routing(newDHT),
-
-		// Disable black hole detection to avoid connection issues
-		libp2p.DisableBlackHoleDetection(),
 	)
 	if err != nil {
 		panic(err)
@@ -72,7 +69,7 @@ func main() {
 	}
 
 	// Connect to bootstrap peers
-	connectToBootstrapPeers(ctx, h, convertBootstrapPeers(dht.DefaultBootstrapPeers()))
+	connectToBootstrapPeers(ctx, h, convertBootstrapPeers(dht.DefaultBootstrapPeers))
 
 	// Set up Gossipsub with DHT-based peer discovery
 	ps, err := pubsub.NewGossipSub(ctx, h,
@@ -102,7 +99,9 @@ func main() {
 	// Advertise our presence using DHT
 	routingDiscovery := drouting.NewRoutingDiscovery(dhtNode)
 	log.Println("Advertising ourselves...")
-	drouting.Advertise(ctx, routingDiscovery, rendezvous)
+	if _, err := routingDiscovery.Advertise(ctx, rendezvous); err != nil {
+		log.Printf("Failed to advertise: %v", err)
+	}
 
 	// Start message handler
 	go handleMessages(ctx, sub)
@@ -114,7 +113,7 @@ func main() {
 	// Periodically discover peers
 	go discoverPeers(ctx, h, routingDiscovery)
 
-	// Start input loop in a separate goroutine.
+	// Start input loop in a separate goroutine
 	inputDone := make(chan struct{})
 	go func() {
 		scanner := bufio.NewScanner(os.Stdin)
@@ -132,7 +131,7 @@ func main() {
 		close(inputDone)
 	}()
 
-	// Wait for exit signal: either OS signal or user input closure (Ctrl-D).
+	// Wait for exit signal: either OS signal or user input closure (Ctrl-D)
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	select {
@@ -199,10 +198,11 @@ func discoverPeers(ctx context.Context, h host.Host, discovery *drouting.Routing
 			}
 
 			for _, p := range connected {
-				fmt.Printf("  - %s (connected)\n", p.ID)
+				fmt.Printf(" - %s (connected)\n", p.ID)
 			}
+
 			for _, p := range unconnected {
-				fmt.Printf("  - %s (unconnected)\n", p.ID)
+				fmt.Printf(" - %s (unconnected)\n", p.ID)
 			}
 		}
 	}

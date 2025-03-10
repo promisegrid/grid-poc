@@ -1,10 +1,11 @@
-add an input loop
+fix compile errors
 
-Add an input loop that reads messages from stdin and writes them to
-the gossipsub topic.  The loop should run until the user hits Ctrl-D,
-at which time the entire program should exit.  The loop should be
-non-blocking, so that the program can continue to receive messages
-from the network while waiting for user input.
+./gossipsub.go:46:27: undefined: swarm.BlackHoleConfig
+./gossipsub.go:70:10: undefined: libp2p.WithSwarmOptions
+./gossipsub.go:70:45: undefined: libp2p.SwarmOptions
+./gossipsub.go:85:56: invalid operation: cannot call non-function dht.DefaultBootstrapPeers (variable of type []multiaddr.Multiaddr)
+./gossipsub.go:115:11: undefined: drouting.Advertise
+
 
 
 
