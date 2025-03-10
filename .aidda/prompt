@@ -1,18 +1,14 @@
-write x/kubo-full 
+gossipsub: use public relays
 
-Kubo-full is an example of a full kubo node embedded in a custom
-main.go.
-
-Fix the following errors:
-
-./main.go:85:89: cannot use ctx (variable of interface type context.Context) as "github.com/ipfs/kubo/commands".Context value in argument to corehttp.CommandsOption
-
-kubo-full/main.go|98 col 89| cannot use &cmdCtx{…} (value of type *cmdCtx) as "github.com/ipfs/kubo/commands".Context value in argument to corehttp.CommandsOption
+Instead of a multiaddr, expect only the peer ID of the other gossipsub node.
+Before trying to connect, add code to find and list public relays,
+then pick a relay and form a multiaddr from the relay's address and the
+peer ID of the other gossipsub node.
 
 In:
-  x/kubo-full/main.go
+  x/gossipsub/gossipsub.go
 Out:
-  x/kubo-full/main.go
+  x/gossipsub/gossipsub.go
 
 .stop
 
