@@ -1,12 +1,9 @@
-fix compile errors
+handle peer discovery automatically
 
-./gossipsub.go:46:27: undefined: swarm.BlackHoleConfig
-./gossipsub.go:70:10: undefined: libp2p.WithSwarmOptions
-./gossipsub.go:70:45: undefined: libp2p.SwarmOptions
-./gossipsub.go:85:56: invalid operation: cannot call non-function dht.DefaultBootstrapPeers (variable of type []multiaddr.Multiaddr)
-./gossipsub.go:115:11: undefined: drouting.Advertise
-
-
+fix errors:
+panic: Can not create a new relayFinder. Need a Peer Source fn or a list of static relays. Refer to the documentation around `libp2p.EnableAutoRelay`
+./gossipsub.go:53:33: undefined: libp2p.WithStaticRelays
+github.com/libp2p/go-libp2p/autorelay: module github.com/libp2p/go-libp2p@latest found (v0.41.0), but does not contain package github.com/libp2p/go-libp2p/autorelay
 
 
 Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.

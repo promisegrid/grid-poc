@@ -20,6 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/discovery/mdns"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -41,15 +42,21 @@ func main() {
 		return dhtNode, err
 	}
 
-	// Create libp2p host with relay and NAT traversal enabled
+	// Create libp2p host with relay and NAT traversal enabled.
+	// To avoid the panic ("Can not create a new relayFinder. Need a Peer Source fn or a list of static relays"),
+	// we supply a peer source function to EnableAutoRelay.
 	h, err := libp2p.New(
 		// Listen on TCP
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0"),
 
-		// Enable relay features
+		// Enable relay features: supply a Peer Source that returns the default bootstrap peers.
 		libp2p.EnableRelay(),
-		libp2p.EnableAutoRelay(),
+		libp2p.EnableAutoRelay(autorelay.WithPeerSource(
+			func() []peer.AddrInfo {
+				return convertBootstrapPeers(dht.DefaultBootstrapPeers)
+			},
+		)),
 
 		// NAT traversal
 		libp2p.NATPortMap(),
@@ -110,7 +117,7 @@ func main() {
 	log.Printf("Node ID: %s\n", h.ID())
 	log.Printf("Connect using: /p2p-circuit/p2p/%s\n", h.ID())
 
-	// Periodically discover peers
+	// Periodically discover peers automatically
 	go discoverPeers(ctx, h, routingDiscovery)
 
 	// Start input loop in a separate goroutine
@@ -171,7 +178,7 @@ func discoverPeers(ctx context.Context, h host.Host, discovery *drouting.Routing
 				continue
 			}
 
-			// Count and collect peers
+			// Collect peers
 			var peerList []peer.AddrInfo
 			for p := range peers {
 				peerList = append(peerList, p)
@@ -189,8 +196,8 @@ func discoverPeers(ctx context.Context, h host.Host, discovery *drouting.Routing
 				h.Peerstore().AddAddrs(p.ID, p.Addrs, peerstore.PermanentAddrTTL)
 				if err := h.Connect(ctx, p); err != nil {
 					// log.Printf("Failed to connect to %s: %v", p.ID, err)
-					unconnected = append(unconnected, p)
 					// log.Printf("Failed to connect to %s", p.ID)
+					unconnected = append(unconnected, p)
 				} else {
 					connected = append(connected, p)
 					log.Printf("Connected to new peer: %s", p.ID)
