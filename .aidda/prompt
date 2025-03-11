@@ -1,16 +1,20 @@
-handle peer discovery automatically
+x/ipfs-rpc: create three-node DAG
 
-fix errors:
-panic: Can not create a new relayFinder. Need a Peer Source fn or a list of static relays. Refer to the documentation around `libp2p.EnableAutoRelay`
-./gossipsub.go:53:33: undefined: libp2p.WithStaticRelays
-github.com/libp2p/go-libp2p/autorelay: module github.com/libp2p/go-libp2p@latest found (v0.41.0), but does not contain package github.com/libp2p/go-libp2p/autorelay
+In a subroutine, create a three-node DAG using the
+github.com/ipfs/kubo/client/rpc API.  The DAG should have three nodes;
+two leaf nodes and one internal node. The internal node should have
+the two leaf nodes as children.  
 
+After creating the DAG, publish the root CID to the 't7a' pubsub topic.
 
-Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p, only
+  use examples from 2024 or 2025 to avoid deprecated APIs. 
 In:
-  x/gossipsub/gossipsub.go
+  x/ipfs-rpc/main.go
 Out:
-  x/gossipsub/gossipsub.go
+  x/ipfs-rpc/main.go
 
 .stop
 
