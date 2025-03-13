@@ -7,7 +7,9 @@ import (
 
 	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/go-cid"
+	ipldcbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/ipfs/kubo/client/rpc"
+	mh "github.com/multiformats/go-multihash"
 )
 
 func main() {
@@ -59,9 +61,13 @@ func createThreeNodeDAG(ctx context.Context, ipfs *rpc.HttpApi) (cid.Cid, error)
 		"data": "leaf node 1",
 	}
 	// convert leaf1Data to format.Node
-	node1, err := path.NodeFromMap(leaf1Data)
-
-	leaf1Cid, err := ipfs.Dag().Add(ctx, node1)
+	leaf1, err := ipldcbor.WrapObject(leaf1Data, mh.SHA2_256, -1)
+	if err != nil {
+		return cid.Undef, fmt.Errorf("failed to wrap leaf 1: %w", err)
+	}
+	leaf1Cid := leaf1.Cid()
+	// add leaf1 to IPFS
+	err = ipfs.Dag().Add(ctx, leaf1)
 	if err != nil {
 		return cid.Undef, fmt.Errorf("failed to dag put leaf 1: %w", err)
 	}
@@ -71,7 +77,14 @@ func createThreeNodeDAG(ctx context.Context, ipfs *rpc.HttpApi) (cid.Cid, error)
 	leaf2Data := map[string]interface{}{
 		"data": "leaf node 2",
 	}
-	leaf2Cid, err := ipfs.Dag().Add(ctx, leaf2Data)
+	// convert leaf2Data to format.Node
+	leaf2, err := ipldcbor.WrapObject(leaf2Data, mh.SHA2_256, -1)
+	if err != nil {
+		return cid.Undef, fmt.Errorf("failed to wrap leaf 2: %w", err)
+	}
+	leaf2Cid := leaf2.Cid()
+	// add leaf2 to IPFS
+	err = ipfs.Dag().Add(ctx, leaf2)
 	if err != nil {
 		return cid.Undef, fmt.Errorf("failed to dag put leaf 2: %w", err)
 	}
@@ -82,7 +95,14 @@ func createThreeNodeDAG(ctx context.Context, ipfs *rpc.HttpApi) (cid.Cid, error)
 		"left":  map[string]interface{}{"/": leaf1Cid.String()},
 		"right": map[string]interface{}{"/": leaf2Cid.String()},
 	}
-	rootCid, err := ipfs.Dag().Add(ctx, internalData)
+	// convert internalData to format.Node
+	internal, err := ipldcbor.WrapObject(internalData, mh.SHA2_256, -1)
+	if err != nil {
+		return cid.Undef, fmt.Errorf("failed to wrap internal node: %w", err)
+	}
+	rootCid := internal.Cid()
+	// add internal to IPFS
+	err = ipfs.Dag().Add(ctx, internal)
 	if err != nil {
 		return cid.Undef, fmt.Errorf("failed to dag put internal node: %w", err)
 	}
