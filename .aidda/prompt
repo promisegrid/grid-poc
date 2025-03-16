@@ -1,8 +1,12 @@
-refactor createThreeNodeDAG
+publish an IPNS record 
 
-createThreeNodeDAG is long and repetitive.  Refactor it to extract a new
-function that creates a single node with a given payload and optional
-child nodes.  
+In a subroutine, publish an IPNS record for the root CID of the
+three-node DAG.  The record should be signed with the private key
+named "three-node-dag-test".  If the private key does not exist,
+create it.
+
+Refer to /home/stevegt/lab/ipfs/kubo/client/rpc/name.go for how to
+publish an IPNS record.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -10,6 +14,26 @@ Sysmsg:
   use examples from 2024 or 2025 to avoid deprecated APIs. 
 In:
   x/ipfs-rpc/main.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/errors_test.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/errors.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/auth/auth.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/response.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/apifile.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/requestbuilder.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/name.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/unixfs.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/key.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/routing.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/request.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/pubsub.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/path.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/api.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/object.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/swarm.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/pin.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/block.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/dag.go
+  /home/stevegt/lab/ipfs/kubo/client/rpc/api_test.go
 Out:
   x/ipfs-rpc/main.go
 

@@ -6,13 +6,31 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/go-cid"
 	ipldcbor "github.com/ipfs/go-ipld-cbor"
 	"github.com/ipfs/kubo/client/rpc"
+	caopts "github.com/ipfs/kubo/core/coreiface/options"
 	mh "github.com/multiformats/go-multihash"
 )
+
+// NamePublishKey returns a NamePublishOption that sets the key field.
+func NamePublishKey(key string) caopts.NamePublishOption {
+	return func(s *caopts.NamePublishSettings) error {
+		s.Key = key
+		return nil
+	}
+}
+
+// NamePublishLifetime returns a NamePublishOption that sets the valid lifetime.
+func NamePublishLifetime(lifetime time.Duration) caopts.NamePublishOption {
+	return func(s *caopts.NamePublishSettings) error {
+		s.ValidTime = lifetime
+		return nil
+	}
+}
 
 func main() {
 	// Connect to the local IPFS node via the RPC API.
@@ -21,18 +39,16 @@ func main() {
 		log.Fatalf("failed to create local IPFS API: %v", err)
 	}
 
-	// Pin a given file by its CID.
 	ctx := context.Background()
+
+	// Pin a given file by its CID.
 	c, err := cid.Decode("bafkreidtuosuw37f5xmn65b3ksdiikajy7pwjjslzj2lxxz2vc4wdy3zku")
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalf("failed to decode cid: %v", err)
 	}
 	cidPath := path.FromCid(c)
-	err = ipfs.Pin().Add(ctx, cidPath)
-	if err != nil {
-		fmt.Println(err)
-		return
+	if err := ipfs.Pin().Add(ctx, cidPath); err != nil {
+		log.Fatalf("failed to pin file: %v", err)
 	}
 
 	// Create a three-node DAG.
@@ -47,12 +63,10 @@ func main() {
 		log.Fatalf("failed to pin the root node: %v", err)
 	}
 
-	// Publish the root CID to the pubsub topic "t7a".
-	message := []byte(rootCid.String())
-	if err := ipfs.PubSub().Publish(ctx, "t7a", message); err != nil {
-		log.Fatalf("failed to publish on pubsub: %v", err)
+	// Publish an IPNS record for the root CID.
+	if err := publishIPNSRecord(ctx, ipfs, rootCid); err != nil {
+		log.Fatalf("failed to publish IPNS record: %v", err)
 	}
-	fmt.Println("Published root CID to pubsub topic 't7a'")
 }
 
 // createNode creates a single node with the given payload.
@@ -103,6 +117,44 @@ func createThreeNodeDAG(ctx context.Context, ipfs *rpc.HttpApi) (cid.Cid, error)
 	}
 
 	return internalCid, nil
+}
+
+// publishIPNSRecord publishes an IPNS record for the given root CID.
+// It uses the private key "three-node-dag-test". If the key does not exist, it is created.
+func publishIPNSRecord(ctx context.Context, ipfs *rpc.HttpApi, root cid.Cid) error {
+	// Check if the key "three-node-dag-test" exists.
+	keys, err := ipfs.Key().List(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to list keys: %w", err)
+	}
+	var keyExists bool
+	for _, k := range keys {
+		if k.Name() == "three-node-dag-test" {
+			keyExists = true
+			break
+		}
+	}
+	// If the key does not exist, create it.
+	if !keyExists {
+		// Creating a new key with RSA algorithm and a default size.
+		_, err := ipfs.Key().Generate(ctx, "three-node-dag-test")
+		if err != nil {
+			return fmt.Errorf("failed to generate key 'three-node-dag-test': %w", err)
+		}
+		fmt.Println("Created private key 'three-node-dag-test'")
+	}
+
+	// Publish the IPNS record for the root CID.
+	rootPath := path.FromCid(root)
+	// Set a lifetime of 24 hours; adjust as needed.
+	published, err := ipfs.Name().Publish(ctx, rootPath,
+		NamePublishKey("three-node-dag-test"),
+		NamePublishLifetime(24*time.Hour))
+	if err != nil {
+		return fmt.Errorf("failed to publish IPNS record: %w", err)
+	}
+	fmt.Printf("Published IPNS record with name: %s\n", published)
+	return nil
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/ipfs-rpc/main.go
