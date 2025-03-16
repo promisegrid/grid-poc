@@ -19,7 +19,7 @@ func main() {
 		log.Fatalf("failed to create local IPFS API: %v", err)
 	}
 
-	// Pin a given file by its CID
+	// Pin a given file by its CID.
 	ctx := context.Background()
 	c, err := cid.Decode("bafkreidtuosuw37f5xmn65b3ksdiikajy7pwjjslzj2lxxz2vc4wdy3zku")
 	if err != nil {
@@ -51,62 +51,55 @@ func main() {
 		log.Fatalf("failed to publish on pubsub: %v", err)
 	}
 	fmt.Println("Published root CID to pubsub topic 't7a'")
+
+}
+
+// createNode creates a single node with the given payload.
+// It wraps the payload in an IPLD CBOR node and adds it to IPFS.
+// It returns the node's CID.
+func createNode(ctx context.Context, ipfs *rpc.HttpApi, payload map[string]interface{}) (cid.Cid, error) {
+	node, err := ipldcbor.WrapObject(payload, mh.SHA2_256, -1)
+	if err != nil {
+		return cid.Undef, fmt.Errorf("failed to wrap node: %w", err)
+	}
+	nodeCid := node.Cid()
+	if err := ipfs.Dag().Add(ctx, node); err != nil {
+		return cid.Undef, fmt.Errorf("failed to dag put node: %w", err)
+	}
+	fmt.Printf("Created node CID: %s\n", nodeCid.String())
+	return nodeCid, nil
 }
 
 // createThreeNodeDAG creates a three-node DAG consisting of two leaf nodes and
-// one internal node. The internal node links the two leaf nodes.
+// one internal node that links the two leaf nodes.
 func createThreeNodeDAG(ctx context.Context, ipfs *rpc.HttpApi) (cid.Cid, error) {
 	// Create the first leaf node.
 	leaf1Data := map[string]interface{}{
 		"data": "leaf node 1",
 	}
-	// convert leaf1Data to format.Node
-	leaf1, err := ipldcbor.WrapObject(leaf1Data, mh.SHA2_256, -1)
+	leaf1Cid, err := createNode(ctx, ipfs, leaf1Data)
 	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to wrap leaf 1: %w", err)
+		return cid.Undef, fmt.Errorf("failed to create leaf 1: %w", err)
 	}
-	leaf1Cid := leaf1.Cid()
-	// add leaf1 to IPFS
-	err = ipfs.Dag().Add(ctx, leaf1)
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to dag put leaf 1: %w", err)
-	}
-	fmt.Printf("Leaf 1 CID: %s\n", leaf1Cid.String())
 
 	// Create the second leaf node.
 	leaf2Data := map[string]interface{}{
 		"data": "leaf node 2",
 	}
-	// convert leaf2Data to format.Node
-	leaf2, err := ipldcbor.WrapObject(leaf2Data, mh.SHA2_256, -1)
+	leaf2Cid, err := createNode(ctx, ipfs, leaf2Data)
 	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to wrap leaf 2: %w", err)
+		return cid.Undef, fmt.Errorf("failed to create leaf 2: %w", err)
 	}
-	leaf2Cid := leaf2.Cid()
-	// add leaf2 to IPFS
-	err = ipfs.Dag().Add(ctx, leaf2)
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to dag put leaf 2: %w", err)
-	}
-	fmt.Printf("Leaf 2 CID: %s\n", leaf2Cid.String())
 
 	// Create the internal node linking both leaf nodes.
 	internalData := map[string]interface{}{
 		"left":  map[string]interface{}{"/": leaf1Cid.String()},
 		"right": map[string]interface{}{"/": leaf2Cid.String()},
 	}
-	// convert internalData to format.Node
-	internal, err := ipldcbor.WrapObject(internalData, mh.SHA2_256, -1)
+	internalCid, err := createNode(ctx, ipfs, internalData)
 	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to wrap internal node: %w", err)
+		return cid.Undef, fmt.Errorf("failed to create internal node: %w", err)
 	}
-	rootCid := internal.Cid()
-	// add internal to IPFS
-	err = ipfs.Dag().Add(ctx, internal)
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to dag put internal node: %w", err)
-	}
-	fmt.Printf("Internal (root) CID: %s\n", rootCid.String())
 
-	return rootCid, nil
+	return internalCid, nil
 }

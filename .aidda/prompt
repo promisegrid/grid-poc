@@ -1,16 +1,16 @@
-troubleshoot the IPFS DAG retrieval error
+refactor createThreeNodeDAG
 
-main.go creates a three-node DAG that, when an attempt is made to
-retrieve the root node, returns an error.  The error is:
-
-$ ipfs get bafyreibqo6hxj6ysrfbqy4lz62jjztdr267us4oxgltyexqkwm4yqii3ci
-Error: unknown node type
+createThreeNodeDAG is long and repetitive.  Refactor it to extract a new
+function that creates a single node with a given payload and optional
+child nodes.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
   to the given code or documentation. For IPFS, IPLD, or libp2p, only
   use examples from 2024 or 2025 to avoid deprecated APIs. 
 In:
+  x/ipfs-rpc/main.go
+Out:
   x/ipfs-rpc/main.go
 
 .stop

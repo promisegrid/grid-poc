@@ -1,38 +1,108 @@
-Below is the explanation and resolution.
+File: /home/stevegt/lab/grid-poc/x/ipfs-rpc/main.go
+```go
+package main
 
-──────────────────────────────
-The issue isn’t that your DAG isn’t being stored properly but rather that you’re trying to retrieve a DAG‐CBOR node using the ipfs get command. ipfs get works for UnixFS (file/dir) nodes but not for arbitrary IPLD nodes (like the DAG‑CBOR nodes we created). When you try
+import (
+	"context"
+	"fmt"
+	"log"
 
-  ipfs get bafyreibqo6hxj6ysrfbqy4lz62jjztdr267us4oxgltyexqkwm4yqii3ci
+	"github.com/ipfs/boxo/path"
+	"github.com/ipfs/go-cid"
+	ipldcbor "github.com/ipfs/go-ipld-cbor"
+	"github.com/ipfs/kubo/client/rpc"
+	mh "github.com/multiformats/go-multihash"
+)
 
-the IPFS daemon doesn’t know how to “render” that node as a file and so returns the error “unknown node type.”
+func main() {
+	// Connect to the local IPFS node via the RPC API.
+	ipfs, err := rpc.NewLocalApi()
+	if err != nil {
+		log.Fatalf("failed to create local IPFS API: %v", err)
+	}
 
-──────────────────────────────
-Two approaches to resolve this:
+	// Pin a given file by its CID.
+	ctx := context.Background()
+	c, err := cid.Decode("bafkreidtuosuw37f5xmn65b3ksdiikajy7pwjjslzj2lxxz2vc4wdy3zku")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	cidPath := path.FromCid(c)
+	err = ipfs.Pin().Add(ctx, cidPath)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
 
-1. If your goal is simply to inspect the data, use the dag get command (which is designed for general IPLD nodes):
+	// Create a three-node DAG.
+	rootCid, err := createThreeNodeDAG(ctx, ipfs)
+	if err != nil {
+		log.Fatalf("failed to create three node DAG: %v", err)
+	}
 
-  ipfs dag get bafyreibqo6hxj6ysrfbqy4lz62jjztdr267us4oxgltyexqkwm4yqii3ci
+	// Pin the root node for persistence.
+	rootCidPath := path.FromCid(rootCid)
+	if err := ipfs.Pin().Add(ctx, rootCidPath); err != nil {
+		log.Fatalf("failed to pin the root node: %v", err)
+	}
 
-This command will return the decoded DAG‑CBOR representation.
+	// Publish the root CID to the pubsub topic "t7a".
+	message := []byte(rootCid.String())
+	if err := ipfs.PubSub().Publish(ctx, "t7a", message); err != nil {
+		log.Fatalf("failed to publish on pubsub: %v", err)
+	}
+	fmt.Println("Published root CID to pubsub topic 't7a'")
+}
 
-2. If you intended the DAG to be “file‐like” so you can use ipfs get (or ipfs cat) to retrieve file content, then you’d need to build a UnixFS node rather than wrapping the content with ipldcbor.WrapObject. That would involve (for example) constructing a dag-pb node (which uses UnixFS wrapping) so that the IPFS get command knows how to interpret it. (Note that doing so is more involved and would require you to create the PB node with a proper UnixFS data structure.) 
+// createNode creates a single node with the given payload.
+// It wraps the payload in an IPLD CBOR node and adds it to IPFS.
+// It returns the node's CID.
+func createNode(ctx context.Context, ipfs *rpc.HttpApi, payload map[string]interface{}) (cid.Cid, error) {
+	node, err := ipldcbor.WrapObject(payload, mh.SHA2_256, -1)
+	if err != nil {
+		return cid.Undef, fmt.Errorf("failed to wrap node: %w", err)
+	}
+	nodeCid := node.Cid()
+	if err := ipfs.Dag().Add(ctx, node); err != nil {
+		return cid.Undef, fmt.Errorf("failed to dag put node: %w", err)
+	}
+	fmt.Printf("Created node CID: %s\n", nodeCid.String())
+	return nodeCid, nil
+}
 
-──────────────────────────────
-In your case, since you are creating a generic DAG of three nodes using DAG‑CBOR, it is best to use “ipfs dag get” for retrieval.
+// createThreeNodeDAG creates a three-node DAG consisting of two leaf nodes and
+// one internal node that links the two leaf nodes.
+func createThreeNodeDAG(ctx context.Context, ipfs *rpc.HttpApi) (cid.Cid, error) {
+	// Create the first leaf node.
+	leaf1Data := map[string]interface{}{
+		"data": "leaf node 1",
+	}
+	leaf1Cid, err := createNode(ctx, ipfs, leaf1Data)
+	if err != nil {
+		return cid.Undef, fmt.Errorf("failed to create leaf 1: %w", err)
+	}
 
-There’s no bug in your three‐node DAG construction—the error is simply due to retrieving a non‐UnixFS IPLD node with a command that expects UnixFS formatting.
+	// Create the second leaf node.
+	leaf2Data := map[string]interface{}{
+		"data": "leaf node 2",
+	}
+	leaf2Cid, err := createNode(ctx, ipfs, leaf2Data)
+	if err != nil {
+		return cid.Undef, fmt.Errorf("failed to create leaf 2: %w", err)
+	}
 
-──────────────────────────────
-In summary, use the following command to view your root node:
+	// Create the internal node linking both leaf nodes.
+	internalData := map[string]interface{}{
+		"left":  map[string]interface{}{"/": leaf1Cid.String()},
+		"right": map[string]interface{}{"/": leaf2Cid.String()},
+	}
+	internalCid, err := createNode(ctx, ipfs, internalData)
+	if err != nil {
+		return cid.Undef, fmt.Errorf("failed to create internal node: %w", err)
+	}
 
-  ipfs dag get bafyreibqo6hxj6ysrfbqy4lz62jjztdr267us4oxgltyexqkwm4yqii3ci
-
-This change (or clarification in your documentation) should resolve the “unknown node type” error.
-
-──────────────────────────────
-Note on the Code and API Versions:
-
-• The code uses ipldcbor.WrapObject and the newly recommended RPC client from the Kubo repo. Make sure you’re running on a recent IPFS (Kubo) version that supports dag operations on DAG‑CBOR nodes. (The examples here follow guidance from 2024–2025 so they should be current.)
-
-Happy coding!
+	return internalCid, nil
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/ipfs-rpc/main.go
