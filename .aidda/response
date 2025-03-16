@@ -1,133 +1,38 @@
-File: /home/stevegt/lab/grid-poc/x/ipfs-rpc/main.go
-```go
-package main
+Below is the explanation and resolution.
 
-import (
-	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
-	"log"
-	"net/url"
+──────────────────────────────
+The issue isn’t that your DAG isn’t being stored properly but rather that you’re trying to retrieve a DAG‐CBOR node using the ipfs get command. ipfs get works for UnixFS (file/dir) nodes but not for arbitrary IPLD nodes (like the DAG‑CBOR nodes we created). When you try
 
-	"github.com/ipfs/boxo/path"
-	"github.com/ipfs/go-cid"
-	"github.com/ipfs/kubo/client/rpc"
-)
+  ipfs get bafyreibqo6hxj6ysrfbqy4lz62jjztdr267us4oxgltyexqkwm4yqii3ci
 
-// DagPutOptions represents the options for the DAG put operation.
-// Note: The original rpc.DagPutOpts type has been removed in the updated API,
-// so we define our own options type here.
-type DagPutOptions struct {
-	Format string
-	Hash   string
-}
+the IPFS daemon doesn’t know how to “render” that node as a file and so returns the error “unknown node type.”
 
-// dagPut is a helper function that calls the IPFS RPC endpoint "dag/put".
-// It marshals the given object using JSON and passes the options as query parameters.
-// This uses the updated API (2024/2025) since earlier DagPut methods have been deprecated.
-func dagPut(ctx context.Context, ipfs *rpc.HttpApi, obj interface{}, opts DagPutOptions) (cid.Cid, error) {
-	b, err := json.Marshal(obj)
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to marshal object: %w", err)
-	}
+──────────────────────────────
+Two approaches to resolve this:
 
-	qs := url.Values{}
-	qs.Set("format", opts.Format)
-	qs.Set("hash", opts.Hash)
-	qs.Set("inputenc", "json")
+1. If your goal is simply to inspect the data, use the dag get command (which is designed for general IPLD nodes):
 
-	// Build the request to the "dag/put" endpoint.
-	req := ipfs.Request("dag/put?" + qs.Encode())
-	req.Body(bytes.NewReader(b))
+  ipfs dag get bafyreibqo6hxj6ysrfbqy4lz62jjztdr267us4oxgltyexqkwm4yqii3ci
 
-	// The response structure; the API returns a JSON object containing the "Cid".
-	var out struct {
-		Cid string
-	}
-	if err := req.Exec(ctx, &out); err != nil {
-		return cid.Undef, fmt.Errorf("dag/put request failed: %w", err)
-	}
+This command will return the decoded DAG‑CBOR representation.
 
-	c, err := cid.Decode(out.Cid)
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to decode cid: %w", err)
-	}
-	return c, nil
-}
+2. If you intended the DAG to be “file‐like” so you can use ipfs get (or ipfs cat) to retrieve file content, then you’d need to build a UnixFS node rather than wrapping the content with ipldcbor.WrapObject. That would involve (for example) constructing a dag-pb node (which uses UnixFS wrapping) so that the IPFS get command knows how to interpret it. (Note that doing so is more involved and would require you to create the PB node with a proper UnixFS data structure.) 
 
-// createThreeNodeDAG creates a three-node DAG consisting of two leaf nodes and
-// one internal node. The internal node links the two leaf nodes.
-func createThreeNodeDAG(ctx context.Context, ipfs *rpc.HttpApi) (cid.Cid, error) {
-	// Create the first leaf node.
-	leaf1Data := map[string]interface{}{
-		"data": "leaf node 1",
-	}
-	leaf1Cid, err := dagPut(ctx, ipfs, leaf1Data, DagPutOptions{
-		Format: "dag-cbor",
-		Hash:   "sha2-256",
-	})
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to dag put leaf 1: %w", err)
-	}
-	fmt.Printf("Leaf 1 CID: %s\n", leaf1Cid.String())
+──────────────────────────────
+In your case, since you are creating a generic DAG of three nodes using DAG‑CBOR, it is best to use “ipfs dag get” for retrieval.
 
-	// Create the second leaf node.
-	leaf2Data := map[string]interface{}{
-		"data": "leaf node 2",
-	}
-	leaf2Cid, err := dagPut(ctx, ipfs, leaf2Data, DagPutOptions{
-		Format: "dag-cbor",
-		Hash:   "sha2-256",
-	})
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to dag put leaf 2: %w", err)
-	}
-	fmt.Printf("Leaf 2 CID: %s\n", leaf2Cid.String())
+There’s no bug in your three‐node DAG construction—the error is simply due to retrieving a non‐UnixFS IPLD node with a command that expects UnixFS formatting.
 
-	// Create the internal node linking both leaf nodes.
-	internalData := map[string]interface{}{
-		"left":  map[string]interface{}{"/": leaf1Cid.String()},
-		"right": map[string]interface{}{"/": leaf2Cid.String()},
-	}
-	rootCid, err := dagPut(ctx, ipfs, internalData, DagPutOptions{
-		Format: "dag-cbor",
-		Hash:   "sha2-256",
-	})
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to dag put internal node: %w", err)
-	}
-	fmt.Printf("Internal (root) CID: %s\n", rootCid.String())
+──────────────────────────────
+In summary, use the following command to view your root node:
 
-	return rootCid, nil
-}
+  ipfs dag get bafyreibqo6hxj6ysrfbqy4lz62jjztdr267us4oxgltyexqkwm4yqii3ci
 
-func main() {
-	// Connect to the local IPFS node via the RPC API.
-	ctx := context.Background()
-	ipfs, err := rpc.NewLocalApi()
-	if err != nil {
-		log.Fatalf("failed to create local IPFS API: %v", err)
-	}
+This change (or clarification in your documentation) should resolve the “unknown node type” error.
 
-	// Create the three-node DAG.
-	rootCid, err := createThreeNodeDAG(ctx, ipfs)
-	if err != nil {
-		log.Fatalf("failed to create three node DAG: %v", err)
-	}
+──────────────────────────────
+Note on the Code and API Versions:
 
-	// Pin the root node for persistence.
-	p := path.FromCid(rootCid)
-	if err := ipfs.Pin().Add(ctx, p); err != nil {
-		log.Fatalf("failed to pin the root node: %v", err)
-	}
+• The code uses ipldcbor.WrapObject and the newly recommended RPC client from the Kubo repo. Make sure you’re running on a recent IPFS (Kubo) version that supports dag operations on DAG‑CBOR nodes. (The examples here follow guidance from 2024–2025 so they should be current.)
 
-	// Publish the root CID to the pubsub topic "t7a".
-	message := []byte(rootCid.String())
-	if err := ipfs.PubSub().Publish(ctx, "t7a", message); err != nil {
-		log.Fatalf("failed to publish on pubsub: %v", err)
-	}
-	fmt.Println("Published root CID to pubsub topic 't7a'")
-}
-```
-EOF_/home/stevegt/lab/grid-poc/x/ipfs-rpc/main.go
+Happy coding!

@@ -1,19 +1,16 @@
-x/ipfs-rpc: create three-node DAG
+troubleshoot the IPFS DAG retrieval error
 
-In a subroutine, create a three-node DAG using the
-github.com/ipfs/kubo/client/rpc API.  The DAG should have three nodes;
-two leaf nodes and one internal node. The internal node should have
-the two leaf nodes as children.  
+main.go creates a three-node DAG that, when an attempt is made to
+retrieve the root node, returns an error.  The error is:
 
-After creating the DAG, publish the root CID to the 't7a' pubsub topic.
+$ ipfs get bafyreibqo6hxj6ysrfbqy4lz62jjztdr267us4oxgltyexqkwm4yqii3ci
+Error: unknown node type
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
   to the given code or documentation. For IPFS, IPLD, or libp2p, only
   use examples from 2024 or 2025 to avoid deprecated APIs. 
 In:
-  x/ipfs-rpc/main.go
-Out:
   x/ipfs-rpc/main.go
 
 .stop
