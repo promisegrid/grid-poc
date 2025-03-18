@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 
@@ -71,16 +72,16 @@ func main() {
 	}
 
 	// Decode from the byte array
-	decoder, err := dagjson.DecodeOptions{}.DecodeBytes(buf)
+	// Create a new builder from the empty node's prototype.
+	builder := emptyNode.Prototype().NewBuilder()
+	err = dagjson.Decode(builder, bytes.NewReader(buf))
 	if err != nil {
 		panic(err)
 	}
+	decodedNode := builder.Build()
 
 	// Fill our empty node with the decoded data
-	err = emptyNode.AssignNode(decoder)
-	if err != nil {
-		panic(err)
-	}
+	XXX
 
 	// The empty Person struct has now been populated
 	fmt.Println("Decoded person:")

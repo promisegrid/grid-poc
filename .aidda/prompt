@@ -1,3 +1,33 @@
+fill empty node with decoded data
+
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p, only
+  use examples from 2024 or 2025 to avoid deprecated APIs.  Please
+  verify that the code compiles and runs without errors -- do not
+  hallucinate library methods, structs, or functions that do not exist.
+In:
+  x/ipld-schema/main.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStruct.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaUnionsStringprefix.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaUnionsKinded.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaLinks.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStructReprListpairs.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStructReprStringjoin.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaUnions.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaLists.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schema.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStructReprTuple.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaScalars.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaMaps.go
+  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStructsContainingMaybe.go
+Out:
+  x/ipld-schema/main.go
+
+
+.stop
+
 publish an IPNS record 
 
 In a subroutine, publish an IPNS record for the root CID of the

@@ -1,160 +1,98 @@
-File: /home/stevegt/lab/grid-poc/x/ipfs-rpc/main.go
+File: /home/stevegt/lab/grid-poc/x/ipld-schema/main.go
 ```go
 package main
 
 import (
-	"context"
+	"bytes"
 	"fmt"
-	"log"
-	"time"
+	"os"
 
-	"github.com/ipfs/boxo/path"
-	"github.com/ipfs/go-cid"
-	ipldcbor "github.com/ipfs/go-ipld-cbor"
-	"github.com/ipfs/kubo/client/rpc"
-	caopts "github.com/ipfs/kubo/core/coreiface/options"
-	mh "github.com/multiformats/go-multihash"
+	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagjson"
+	"github.com/ipld/go-ipld-prime/node/bindnode"
 )
 
-// NamePublishKey returns a NamePublishOption that sets the key field.
-func NamePublishKey(key string) caopts.NamePublishOption {
-	return func(s *caopts.NamePublishSettings) error {
-		s.Key = key
-		return nil
-	}
-}
-
-// NamePublishLifetime returns a NamePublishOption that sets the valid lifetime.
-func NamePublishLifetime(lifetime time.Duration) caopts.NamePublishOption {
-	return func(s *caopts.NamePublishSettings) error {
-		s.ValidTime = lifetime
-		return nil
-	}
+// Define Go structures that match our schema
+type Person struct {
+	Name    string
+	Age     int
+	Friends []string
 }
 
 func main() {
-	// Connect to the local IPFS node via the RPC API.
-	ipfs, err := rpc.NewLocalApi()
+	// Define an IPLD Schema as a string
+	schema := `type Person struct {
+		name String
+		age Int
+		friends [String]
+	} representation tuple`
+
+	// Create a Person instance
+	person := &Person{
+		Name:    "Alice",
+		Age:     34,
+		Friends: []string{"Bob", "Charlie"},
+	}
+
+	// Load the schema
+	ts, err := ipld.LoadSchemaBytes([]byte(schema))
 	if err != nil {
-		log.Fatalf("failed to create local IPFS API: %v", err)
+		panic(err)
 	}
 
-	ctx := context.Background()
+	// Get the Person type from the schema
+	personType := ts.TypeByName("Person")
 
-	// Pin a given file by its CID.
-	c, err := cid.Decode("bafkreidtuosuw37f5xmn65b3ksdiikajy7pwjjslzj2lxxz2vc4wdy3zku")
+	// Bind our Go struct to the IPLD schema type
+	// This creates an IPLD Node representing our data
+	node := bindnode.Wrap(person, personType)
+
+	// Get the representation according to the schema
+	// This applies the representation strategy (tuple in this case)
+	nodeRepr := node.Representation()
+
+	// Encode to DAG-JSON and print
+	fmt.Println("Encoded data (representation):")
+	err = dagjson.Encode(nodeRepr, os.Stdout)
 	if err != nil {
-		log.Fatalf("failed to decode cid: %v", err)
+		panic(err)
 	}
-	cidPath := path.FromCid(c)
-	if err := ipfs.Pin().Add(ctx, cidPath); err != nil {
-		log.Fatalf("failed to pin file: %v", err)
-	}
+	fmt.Println()
 
-	// Create a three-node DAG.
-	rootCid, err := createThreeNodeDAG(ctx, ipfs)
+	// For demonstration, create a new empty Person to decode into
+	newPerson := &Person{}
+
+	// Create a new bindnode that we'll fill with decoded data
+	emptyNode := bindnode.Wrap(newPerson, personType)
+
+	// Normally you would read from a file or network here
+	// For simplicity, we'll just re-encode our existing node to get a []byte
+	var buf []byte
+	buf, err = ipld.Encode(nodeRepr, dagjson.Encode)
 	if err != nil {
-		log.Fatalf("failed to create three node DAG: %v", err)
+		panic(err)
 	}
 
-	// Pin the root node for persistence.
-	rootCidPath := path.FromCid(rootCid)
-	if err := ipfs.Pin().Add(ctx, rootCidPath); err != nil {
-		log.Fatalf("failed to pin the root node: %v", err)
-	}
-
-	// Publish an IPNS record for the root CID.
-	if err := publishIPNSRecord(ctx, ipfs, rootCid); err != nil {
-		log.Fatalf("failed to publish IPNS record: %v", err)
-	}
-}
-
-// createNode creates a single node with the given payload.
-// It wraps the payload in an IPLD CBOR node and adds it to IPFS.
-// It returns the node's CID.
-func createNode(ctx context.Context, ipfs *rpc.HttpApi, payload map[string]interface{}) (cid.Cid, error) {
-	node, err := ipldcbor.WrapObject(payload, mh.SHA2_256, -1)
+	// Decode from the byte array using the updated API.
+	// Create a new builder from the empty node's prototype.
+	builder := emptyNode.Prototype().NewBuilder()
+	err = dagjson.Decode(bytes.NewReader(buf), builder)
 	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to wrap node: %w", err)
+		panic(err)
 	}
-	nodeCid := node.Cid()
-	if err := ipfs.Dag().Add(ctx, node); err != nil {
-		return cid.Undef, fmt.Errorf("failed to dag put node: %w", err)
-	}
-	fmt.Printf("Created node CID: %s\n", nodeCid.String())
-	return nodeCid, nil
-}
+	decodedNode := builder.Build()
 
-// createThreeNodeDAG creates a three-node DAG consisting of two leaf nodes and
-// one internal node that links the two leaf nodes.
-func createThreeNodeDAG(ctx context.Context, ipfs *rpc.HttpApi) (cid.Cid, error) {
-	// Create the first leaf node.
-	leaf1Data := map[string]interface{}{
-		"data": "leaf node 1",
-	}
-	leaf1Cid, err := createNode(ctx, ipfs, leaf1Data)
+	// Fill our empty node with the decoded data
+	err = emptyNode.AssignNode(decodedNode)
 	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to create leaf 1: %w", err)
+		panic(err)
 	}
 
-	// Create the second leaf node.
-	leaf2Data := map[string]interface{}{
-		"data": "leaf node 2",
-	}
-	leaf2Cid, err := createNode(ctx, ipfs, leaf2Data)
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to create leaf 2: %w", err)
-	}
-
-	// Create the internal node linking both leaf nodes.
-	internalData := map[string]interface{}{
-		"left":  map[string]interface{}{"/": leaf1Cid.String()},
-		"right": map[string]interface{}{"/": leaf2Cid.String()},
-	}
-	internalCid, err := createNode(ctx, ipfs, internalData)
-	if err != nil {
-		return cid.Undef, fmt.Errorf("failed to create internal node: %w", err)
-	}
-
-	return internalCid, nil
-}
-
-// publishIPNSRecord publishes an IPNS record for the given root CID.
-// It uses the private key "three-node-dag-test". If the key does not exist, it is created.
-func publishIPNSRecord(ctx context.Context, ipfs *rpc.HttpApi, root cid.Cid) error {
-	// Check if the key "three-node-dag-test" exists.
-	keys, err := ipfs.Key().List(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to list keys: %w", err)
-	}
-	var keyExists bool
-	for _, k := range keys {
-		if k.Name() == "three-node-dag-test" {
-			keyExists = true
-			break
-		}
-	}
-	// If the key does not exist, create it.
-	if !keyExists {
-		// Creating a new key with RSA algorithm and a default size.
-		_, err := ipfs.Key().Generate(ctx, "three-node-dag-test")
-		if err != nil {
-			return fmt.Errorf("failed to generate key 'three-node-dag-test': %w", err)
-		}
-		fmt.Println("Created private key 'three-node-dag-test'")
-	}
-
-	// Publish the IPNS record for the root CID.
-	rootPath := path.FromCid(root)
-	// Set a lifetime of 24 hours; adjust as needed.
-	published, err := ipfs.Name().Publish(ctx, rootPath,
-		NamePublishKey("three-node-dag-test"),
-		NamePublishLifetime(24*time.Hour))
-	if err != nil {
-		return fmt.Errorf("failed to publish IPNS record: %w", err)
-	}
-	fmt.Printf("Published IPNS record with name: %s\n", published)
-	return nil
+	// The empty Person struct has now been populated
+	fmt.Println("Decoded person:")
+	fmt.Printf("Name: %s\n", newPerson.Name)
+	fmt.Printf("Age: %d\n", newPerson.Age)
+	fmt.Printf("Friends: %v\n", newPerson.Friends)
 }
 ```
-EOF_/home/stevegt/lab/grid-poc/x/ipfs-rpc/main.go
+EOF_/home/stevegt/lab/grid-poc/x/ipld-schema/main.go
