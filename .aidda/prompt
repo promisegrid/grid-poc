@@ -1,14 +1,6 @@
-fix error
+ipld-schema: add a dag-cbor example
 
-Encoded data (representation):
-["Alice",34,["Bob","Charlie"]]
-panic: func called on wrong kind: "BeginList" called on a Person node (kind: map), but only makes sense on list
-
-goroutine 1 [running]:
-main.main()
-        /home/stevegt/lab/grid-poc/x/ipld-schema/main.go:79 +0x4bb
-exit status 2
-
+Add an example of DAG-CBOR representation; both encoding and decoding.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -16,21 +8,10 @@ Sysmsg:
   use examples from 2024 or 2025 to avoid deprecated APIs.  Please
   verify that the code compiles and runs without errors -- do not
   hallucinate library methods, structs, or functions that do not exist.
+  Do not quote or escape single backticks in the code -- Go uses
+  backticks for raw string literals.  
 In:
   x/ipld-schema/main.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStruct.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaUnionsStringprefix.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaUnionsKinded.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaLinks.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStructReprListpairs.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStructReprStringjoin.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaUnions.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaLists.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schema.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStructReprTuple.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaScalars.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaMaps.go
-  /home/stevegt/lab/ipfs/go-ipld-prime/node/tests/schemaStructsContainingMaybe.go
 Out:
   x/ipld-schema/main.go
 
