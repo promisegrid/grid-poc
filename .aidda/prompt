@@ -1,4 +1,13 @@
-fill empty node with decoded data
+fix error
+
+Encoded data (representation):
+["Alice",34,["Bob","Charlie"]]
+panic: func called on wrong kind: "BeginList" called on a Person node (kind: map), but only makes sense on list
+
+goroutine 1 [running]:
+main.main()
+        /home/stevegt/lab/grid-poc/x/ipld-schema/main.go:79 +0x4bb
+exit status 2
 
 
 Sysmsg: 
