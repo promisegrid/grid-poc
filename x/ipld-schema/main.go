@@ -81,7 +81,10 @@ func main() {
 	decodedNode := builder.Build()
 
 	// Fill our empty node with the decoded data
-	XXX
+	newPerson, ok := bindnode.Unwrap(decodedNode).(*Person)
+	if !ok {
+		panic("unexpected type")
+	}
 
 	// The empty Person struct has now been populated
 	fmt.Println("Decoded person:")

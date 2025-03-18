@@ -73,10 +73,10 @@ func main() {
 		panic(err)
 	}
 
-	// Decode from the byte array using the updated API.
+	// Decode from the byte array
 	// Create a new builder from the empty node's prototype.
 	builder := emptyNode.Prototype().NewBuilder()
-	err = dagjson.Decode(bytes.NewReader(buf), builder)
+	err = dagjson.Decode(builder, bytes.NewReader(buf))
 	if err != nil {
 		panic(err)
 	}
