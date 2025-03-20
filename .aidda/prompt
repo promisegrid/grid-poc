@@ -1,6 +1,7 @@
-ipld-schema: add a dag-cbor example
+ipld-schema: add a map example
 
-Add an example of DAG-CBOR representation; both encoding and decoding.
+Add an example of map representation after the existing tuple
+representation examples.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
