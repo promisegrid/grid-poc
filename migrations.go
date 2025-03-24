@@ -87,7 +87,7 @@ func serializePerson(data interface{}, ts *schema.TypeSystem) []byte {
 	}
 	
 	proto := bindnode.Prototype(data, nodeType)
-	node := proto.Wrap(data)
+	node := bindnode.Wrap(data, proto)
 	reprNode := node.Representation()
 
 	var buf bytes.Buffer

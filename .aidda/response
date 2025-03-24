@@ -1,123 +1,25 @@
 <think>
-Alright, I need to figure out how to complete the serializePerson function in the migrations.go file so that the tests pass. Let me look at the code provided.
+Okay, let me start by looking at the errors the user is encountering. The first error is about `proto.Wrap` being undefined in the `schema.TypedPrototype` type. The second error is an unused import of `github.com/ipld/go-ipld-prime/schema` in the test file. 
 
-The serializePerson function is supposed to encode a Person using the provided schema. The current code has a placeholder "XXX" where the implementation should be. The function takes a data interface{} and a TypeSystem, and returns a byte slice.
+For the first error, the user is calling `proto.Wrap(data)`, where `proto` is from `bindnode.Prototype(...)`. Looking at the IPLD documentation or code, maybe `Prototype` returns a different type that doesn't have a `Wrap` method. Wait, in the code, `proto` is assigned as `bindnode.Prototype(data, nodeType)`. The `bindnode` package's `Prototype` function returns a `schema.TypedPrototype`. Checking the IPLD bindnode package's documentation, I see that `TypedPrototype` might not have a `Wrap` method. Instead, perhaps they should use `bindnode.Wrap` function directly, passing the data and the prototype. So instead of `proto.Wrap(data)`, it should be `bindnode.Wrap(data, proto)`. That would make sense because `Wrap` is a function in the bindnode package, not a method on the prototype.
 
-Looking at the surrounding code, the PersonV1 struct uses a tuple representation in schemaV1. The serializePerson function needs to encode the data into IPLD using the schema. The tryParse function in the same file uses bindnode.Prototype and dagjson.Encode, which might be relevant here.
+For the second error, the test file imports `github.com/ipld/go-ipld-prime/schema` but doesn't use it. Looking at the test code, the `schema` package is used in the `initSchema` function which is part of the migrations package. Wait, the test file has an import for `schema` but maybe in the test code, all references to `schema` are through the migrations package's code. Wait, in the test file, they have `import "github.com/ipld/go-ipld-prime/schema"`, but the test functions call `initSchema` from the migrations package, which already imports `schema`. Wait, no, the test is in the same package (migrations), so maybe the `initSchema` function in migrations.go already imports `schema`, so the test file doesn't need to import it again. But the test file's imports include it. However, if the test file doesn't directly use any identifiers from `schema`, then the import is unnecessary and can be removed. So removing that import in the test file would fix the unused import error.
 
-In the test TestSerializePerson, they check if the encoded data contains the name and age. Since schemaV1 uses a tuple representation, the encoded data should be in an array format like ["Bob", 25] instead of a map.
+Looking at the test file's imports, they have `github.com/ipld/go-ipld-prime/schema` imported, but in the test functions, they're using `schemaV1` and `schemaV2` from the migrations package, and `initSchema` which is part of the migrations package. The test code doesn't directly reference any types from `schema`, so that import is indeed unused. Removing that import should resolve the second error.
 
-Wait, the PersonV1 is struct-based, but the schema uses a tuple representation. So when serializing, it should use the representation form. The tryParse function uses useRepr flag, which for schemaV1 would mean using the tuple representation.
+So, the fixes needed are:
 
-So for serializePerson, I need to create a bindnode wrapper using the schema, then encode it using the representation. Let's look at the tryParse function for reference. It uses proto.Representation().NewBuilder() when useRepr is true. Similarly, for encoding, maybe we need to get the representation node and encode that.
+1. Replace `proto.Wrap(data)` with `bindnode.Wrap(data, proto)` in both migrations.go and migrations_test.go.
 
-So the steps would be:
+2. Remove the unused import of `github.com/ipld/go-ipld-prime/schema` from migrations_test.go.
 
-1. Wrap the data using bindnode.Wrap, providing the prototype from the schema.
-2. Get the representation node of the wrapped data.
-3. Encode that representation node using dagjson.
+Let me check the code snippets again.
 
-In code, that would look like:
+In migrations.go:90, `node := proto.Wrap(data)` should become `node := bindnode.Wrap(data, proto)`. Similarly, in migrations_test.go:96, `node := proto.Wrap(original)` becomes `node := bindnode.Wrap(original, proto)`.
 
-proto := bindnode.Prototype(data, ts.TypeByName("Person"))
-node := bindnode.Wrap(data, proto.Type())
-reprNode := node.Representation()
+In migrations_test.go, the import statement for `schema` is at line 10. Since the test doesn't directly use `schema` (e.g., no variables or functions from that package are used in the test code), removing that line should fix the unused import.
 
-Then encode reprNode using dagjson.Encode into a byte buffer.
-
-Wait, but in the function signature, data is interface{}, so we need to make sure it's properly wrapped. Let's see, in the Main function, they pass original (a *PersonV1) to serializePerson. So data is a pointer to PersonV1 or PersonV2.
-
-So in serializePerson:
-
-- Get the prototype for the type using the schema.
-- Wrap the data into a node using bindnode.
-- Get the representation node.
-- Encode the representation node.
-
-Putting that into code:
-
-func serializePerson(data interface{}, ts *schema.TypeSystem) []byte {
-	nodeType := ts.TypeByName("Person")
-	if nodeType == nil {
-		log.Fatal("Person type not found in schema")
-	}
-	proto := bindnode.Prototype(data, nodeType)
-	node := bindnode.Wrap(data, proto.Type())
-	reprNode := node.Representation()
-
-	var buf bytes.Buffer
-	if err := dagjson.Encode(reprNode, &buf); err != nil {
-		log.Fatalf("Failed to encode person: %v", err)
-	}
-	return buf.Bytes()
-}
-
-Wait, but the prototype is obtained by bindnode.Prototype((*T)(nil), nodeType), as seen in tryParse. So maybe we should create the prototype using the data's type. Alternatively, since data is passed as an interface{}, perhaps we can use bindnode.Prototype(data, nodeType). But wait, the function is called with data being a *PersonV1 or *PersonV2.
-
-Wait, in the tryParse function, they do:
-
-proto := bindnode.Prototype((*T)(nil), nodeType)
-
-So for a generic type T, they pass a nil pointer of that type. In serializePerson, data is of type interface{}, but it's either *PersonV1 or *PersonV2. So maybe we can get the prototype by using the type of data.
-
-But how to handle that? The Prototype function expects a goType (which is a pointer to a struct) and a schema type.
-
-Alternatively, perhaps the correct way is to use bindnode.Prototype(data, nodeType). But since data is a non-nil value, maybe that's okay.
-
-Alternatively, in the Main function, when they call serializePerson(original, tsV1), original is a *PersonV1. So in serializePerson, data is a *PersonV1. So the prototype can be obtained with:
-
-proto := bindnode.Prototype(data, nodeType)
-
-But I need to check the bindnode package documentation. From the search results, in [3], there's an example:
-
-person := &Person{Name: "Alice", Age: 34, Friends: []string{"Bob"}}
-node := bindnode.Wrap(person, schemaType)
-
-So to wrap a Go value with a schema type, you pass the value and the schema type. Then, when encoding, you can get the representation node.
-
-Therefore, in serializePerson, the steps are:
-
-1. Get the schema type (nodeType) from the TypeSystem.
-2. Create a prototype using the data and nodeType.
-3. Wrap the data into a node.
-4. Get the representation of that node.
-5. Encode the representation node using dagjson.
-
-So the code would be:
-
-func serializePerson(data interface{}, ts *schema.TypeSystem) []byte {
-	nodeType := ts.TypeByName("Person")
-	if nodeType == nil {
-		log.Fatalf("Schema missing type Person")
-	}
-	// Create a prototype using the data's type and the schema type.
-	proto := bindnode.Prototype(data, nodeType)
-	node := proto.Wrap(data)
-	reprNode := node.Representation()
-
-	var buf bytes.Buffer
-	if err := dagjson.Encode(reprNode, &buf); err != nil {
-		log.Fatalf("Failed to encode person: %v", err)
-	}
-	return buf.Bytes()
-}
-
-Wait, but in the example from [3], they use bindnode.Wrap directly. Maybe using proto.Wrap is better here, as proto is built from the schema and data type.
-
-Alternatively, maybe the correct code is:
-
-proto := bindnode.Prototype(data, nodeType)
-node := proto.Wrap(data)
-
-But when data is a pointer to a struct, this should work. Then, getting the representation node and encoding that.
-
-Testing this code should serialize the PersonV1 as a tuple, which is an array in JSON. For example, ["Alice", 30]. The tests in TestSerializePerson check that the encoded data contains the name and age as strings in the JSON. But with the tuple representation, the JSON would be an array, so the test is checking if the string contains "Bob" and "25", which are the values in the test.
-
-So with this code, when we serialize a PersonV1, it should produce a JSON array like ["Bob", 25], which does contain the strings "Bob" and "25", so the test should pass.
-
-In the TestTryParseDirectV2, they encode a PersonV2 using the map representation, which should produce a JSON object like {"name": "Dave", "age": 28, "email": "dave@example.com"}.
-
-Thus, replacing the XXX with the code above should make the tests pass.
+So, applying these changes should resolve both errors.
 </think>
 
 File: /tmp/gotmp-ipld-migrate/migrations.go
@@ -211,7 +113,7 @@ func serializePerson(data interface{}, ts *schema.TypeSystem) []byte {
 	}
 	
 	proto := bindnode.Prototype(data, nodeType)
-	node := proto.Wrap(data)
+	node := bindnode.Wrap(data, proto)
 	reprNode := node.Representation()
 
 	var buf bytes.Buffer
@@ -298,7 +200,6 @@ import (
 
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
-	"github.com/ipld/go-ipld-prime/schema"
 )
 
 // TestInitSchema tests that initSchema correctly loads a valid schema and that the required type is present.
@@ -384,7 +285,7 @@ func TestTryParseDirectV2(t *testing.T) {
 	nodeType := ts.TypeByName("Person")
 	proto := bindnode.Prototype((*PersonV2)(nil), nodeType)
 	// Use map representation (v2 underlying representation)
-	node := proto.Wrap(original)
+	node := bindnode.Wrap(original, proto)
 	var buf bytes.Buffer
 	if err := dagjson.Encode(node, &buf); err != nil {
 		t.Fatalf("Failed to encode PersonV2: %v", err)
@@ -404,13 +305,11 @@ func TestTryParseDirectV2(t *testing.T) {
 EOF_/tmp/gotmp-ipld-migrate/migrations_test.go
 
 <references>
-[1] https://ipld.io/docs/schemas/using/migrations/
-[2] https://pkg.go.dev/github.com/adlio/schema
-[3] https://pkg.go.dev/github.com/ipld/go-ipld-prime
-[4] https://github.com/ipld/go-ipld-prime/blob/master/schema.go
-[5] https://github.com/ipld/go-ipld-prime
-[6] https://www.youtube.com/watch?v=EavdaeUmn64
-[7] https://gitlab.dms3.io/ld/go-ld-prime/-/blob/e25510996d271cd56803b28db9d1f8e352f74f54/doc/schema.md
-[8] https://ipld.io/libraries/golang/
-[9] https://gitstar-ranking.com/ipld/go-ipld-schema
+[1] https://matrix-org.github.io/go-neb/pkg/github.com/golang/protobuf/proto/index.html
+[2] https://pkg.go.dev/google.golang.org/protobuf/types/known/wrapperspb
+[3] https://pkg.go.dev/google.golang.org/protobuf/proto
+[4] https://protobuf.dev/reference/go/go-generated/
+[5] https://protobuf.dev/reference/go/faq/
+[6] https://dev.to/techschoolguru/go-generate-serialize-protobuf-message-4m7a
+[7] https://github.com/golang/protobuf/issues/727
 </references>

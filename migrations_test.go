@@ -7,7 +7,6 @@ import (
 
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
-	"github.com/ipld/go-ipld-prime/schema"
 )
 
 // TestInitSchema tests that initSchema correctly loads a valid schema and that the required type is present.
@@ -93,7 +92,7 @@ func TestTryParseDirectV2(t *testing.T) {
 	nodeType := ts.TypeByName("Person")
 	proto := bindnode.Prototype((*PersonV2)(nil), nodeType)
 	// Use map representation (v2 underlying representation)
-	node := proto.Wrap(original)
+	node := bindnode.Wrap(original, proto)
 	var buf bytes.Buffer
 	if err := dagjson.Encode(node, &buf); err != nil {
 		t.Fatalf("Failed to encode PersonV2: %v", err)
