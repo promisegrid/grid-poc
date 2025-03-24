@@ -1,4 +1,4 @@
-module main
+module ipld-migrate
 
 go 1.24.0
 

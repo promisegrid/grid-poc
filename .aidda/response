@@ -1,25 +1,30 @@
 <think>
-Okay, let me start by looking at the errors the user is encountering. The first error is about `proto.Wrap` being undefined in the `schema.TypedPrototype` type. The second error is an unused import of `github.com/ipld/go-ipld-prime/schema` in the test file. 
+Okay, I need to figure out why the bindnode.Wrap calls are causing errors in the Go code. The error messages say that the second argument, which is a schema.TypedPrototype, doesn't implement schema.Type because it's missing the Name method. 
 
-For the first error, the user is calling `proto.Wrap(data)`, where `proto` is from `bindnode.Prototype(...)`. Looking at the IPLD documentation or code, maybe `Prototype` returns a different type that doesn't have a `Wrap` method. Wait, in the code, `proto` is assigned as `bindnode.Prototype(data, nodeType)`. The `bindnode` package's `Prototype` function returns a `schema.TypedPrototype`. Checking the IPLD bindnode package's documentation, I see that `TypedPrototype` might not have a `Wrap` method. Instead, perhaps they should use `bindnode.Wrap` function directly, passing the data and the prototype. So instead of `proto.Wrap(data)`, it should be `bindnode.Wrap(data, proto)`. That would make sense because `Wrap` is a function in the bindnode package, not a method on the prototype.
+Looking at the code, in migrations.go, the serializePerson function calls bindnode.Prototype(data, nodeType) to get proto, and then passes proto to bindnode.Wrap(data, proto). But according to the search results, especially from source [3] and [7], the bindnode.Wrap function expects a schema.Type as its second argument. 
 
-For the second error, the test file imports `github.com/ipld/go-ipld-prime/schema` but doesn't use it. Looking at the test code, the `schema` package is used in the `initSchema` function which is part of the migrations package. Wait, the test file has an import for `schema` but maybe in the test code, all references to `schema` are through the migrations package's code. Wait, in the test file, they have `import "github.com/ipld/go-ipld-prime/schema"`, but the test functions call `initSchema` from the migrations package, which already imports `schema`. Wait, no, the test is in the same package (migrations), so maybe the `initSchema` function in migrations.go already imports `schema`, so the test file doesn't need to import it again. But the test file's imports include it. However, if the test file doesn't directly use any identifiers from `schema`, then the import is unnecessary and can be removed. So removing that import in the test file would fix the unused import error.
+Wait, in the example from source [5], they use bindnode.Wrap(person, schemaType), where schemaType is obtained from ts.TypeByName("Person"). That makes sense because the second argument should be the schema type, not the prototype. The prototype is used to create a node builder, but when wrapping, you need the schema type.
 
-Looking at the test file's imports, they have `github.com/ipld/go-ipld-prime/schema` imported, but in the test functions, they're using `schemaV1` and `schemaV2` from the migrations package, and `initSchema` which is part of the migrations package. The test code doesn't directly reference any types from `schema`, so that import is indeed unused. Removing that import should resolve the second error.
+So the mistake here is passing proto (which is a schema.TypedPrototype) instead of the actual schema.Type. The correct approach is to get the schema type using ts.TypeByName("Person") and pass that to bindnode.Wrap, not the prototype. 
 
-So, the fixes needed are:
+In the current code, proto is created by bindnode.Prototype, which returns a prototype. But the second argument to Wrap should be the schema.Type. Therefore, the fix would be to pass nodeType (which is already the schema.Type) instead of proto. 
 
-1. Replace `proto.Wrap(data)` with `bindnode.Wrap(data, proto)` in both migrations.go and migrations_test.go.
+Let me check the parameters again. In the example from source [5], they do:
+node := bindnode.Wrap(person, schemaType)
+where schemaType is the type from the schema. So in the code, the line should be node := bindnode.Wrap(data, nodeType) instead of using proto.
 
-2. Remove the unused import of `github.com/ipld/go-ipld-prime/schema` from migrations_test.go.
+Looking at the code in serializePerson:
+proto := bindnode.Prototype(data, nodeType)
+node := bindnode.Wrap(data, proto)
 
-Let me check the code snippets again.
+Ah, here they're passing proto (the prototype) instead of nodeType (the schema.Type). That's the issue. The second argument to Wrap should be the schema type, not the prototype. So changing proto to nodeType should fix the error.
 
-In migrations.go:90, `node := proto.Wrap(data)` should become `node := bindnode.Wrap(data, proto)`. Similarly, in migrations_test.go:96, `node := proto.Wrap(original)` becomes `node := bindnode.Wrap(original, proto)`.
+Similarly, in migrations_test.go, in TestTryParseDirectV2, they have:
+proto := bindnode.Prototype((*PersonV2)(nil), nodeType)
+node := bindnode.Wrap(original, proto)
+This line is also wrong for the same reason. They should pass nodeType instead of proto to Wrap.
 
-In migrations_test.go, the import statement for `schema` is at line 10. Since the test doesn't directly use `schema` (e.g., no variables or functions from that package are used in the test code), removing that line should fix the unused import.
-
-So, applying these changes should resolve both errors.
+So the fix is in both places to replace proto with nodeType in the bindnode.Wrap calls. That way, the schema.Type is passed as the second argument, which should have the required Name method, resolving the error.
 </think>
 
 File: /tmp/gotmp-ipld-migrate/migrations.go
@@ -113,7 +118,7 @@ func serializePerson(data interface{}, ts *schema.TypeSystem) []byte {
 	}
 	
 	proto := bindnode.Prototype(data, nodeType)
-	node := bindnode.Wrap(data, proto)
+	node := bindnode.Wrap(data, nodeType)
 	reprNode := node.Representation()
 
 	var buf bytes.Buffer
@@ -285,7 +290,7 @@ func TestTryParseDirectV2(t *testing.T) {
 	nodeType := ts.TypeByName("Person")
 	proto := bindnode.Prototype((*PersonV2)(nil), nodeType)
 	// Use map representation (v2 underlying representation)
-	node := bindnode.Wrap(original, proto)
+	node := bindnode.Wrap(original, nodeType)
 	var buf bytes.Buffer
 	if err := dagjson.Encode(node, &buf); err != nil {
 		t.Fatalf("Failed to encode PersonV2: %v", err)
@@ -305,11 +310,17 @@ func TestTryParseDirectV2(t *testing.T) {
 EOF_/tmp/gotmp-ipld-migrate/migrations_test.go
 
 <references>
-[1] https://matrix-org.github.io/go-neb/pkg/github.com/golang/protobuf/proto/index.html
-[2] https://pkg.go.dev/google.golang.org/protobuf/types/known/wrapperspb
-[3] https://pkg.go.dev/google.golang.org/protobuf/proto
-[4] https://protobuf.dev/reference/go/go-generated/
-[5] https://protobuf.dev/reference/go/faq/
-[6] https://dev.to/techschoolguru/go-generate-serialize-protobuf-message-4m7a
-[7] https://github.com/golang/protobuf/issues/727
+[1] https://www.memoryandthought.me/go,/ipld/2021/01/23/go-ipld-prime-intro.html
+[2] https://discussions.apple.com/thread/255397473
+[3] https://pkg.go.dev/github.com/ipld/go-ipld-prime/node/bindnode
+[4] https://www.sidefx.com/forum/post/348990/
+[5] https://godocs.io/github.com/ipld/go-ipld-prime
+[6] https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind
+[7] https://pkg.go.dev/github.com/ipld/go-ipld-prime
+[8] https://docs.godotengine.org/en/stable/classes/class_callable.html
+[9] https://forums.developer.nvidia.com/t/get-rgb-and-depth-data-from-camera-prim/223716
+[10] https://docs.oracle.com/en/database/oracle/oracle-database/23/jaxml/index-all.html
+[11] https://com-lihaoyi.github.io/scalatags/
+[12] https://github.com/ipld/go-ipld-prime/blob/master/CHANGELOG.md
+[13] https://github.com/ipld/go-ipld-prime/releases
 </references>

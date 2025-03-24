@@ -85,9 +85,9 @@ func serializePerson(data interface{}, ts *schema.TypeSystem) []byte {
 	if nodeType == nil {
 		log.Fatalf("Schema missing type Person")
 	}
-	
-	proto := bindnode.Prototype(data, nodeType)
-	node := bindnode.Wrap(data, proto)
+
+	// proto := bindnode.Prototype(data, nodeType)
+	node := bindnode.Wrap(data, nodeType)
 	reprNode := node.Representation()
 
 	var buf bytes.Buffer

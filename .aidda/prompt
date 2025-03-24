@@ -1,12 +1,10 @@
 Fix errors
 
-- What is proto.Wrap supposed to do?  
-- Why is github.com/ipld/go-ipld-prime/schema imported and not used?
+- What is bindnode.Wrap supposed to do?
 
 # main [main.test]
-./migrations.go:90:16: proto.Wrap undefined (type schema.TypedPrototype has no field or method Wrap)
-./migrations_test.go:10:2: "github.com/ipld/go-ipld-prime/schema" imported and not used
-./migrations_test.go:96:16: proto.Wrap undefined (type schema.TypedPrototype has no field or method Wrap)
+./migrations.go:90:30: cannot use proto (variable of interface type schema.TypedPrototype) as schema.Type value in argument to bindnode.Wrap: schema.TypedPrototype does not implement schema.Type (missing method Name)
+./migrations_test.go:95:34: cannot use proto (variable of interface type schema.TypedPrototype) as schema.Type value in argument to bindnode.Wrap: schema.TypedPrototype does not implement schema.Type (missing method Name)
 FAIL	main [build failed]
 
 Sysmsg: You are an expert Go programmer. 

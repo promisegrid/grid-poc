@@ -90,9 +90,9 @@ func TestTryParseDirectV2(t *testing.T) {
 
 	// Encode using the v2 schema.
 	nodeType := ts.TypeByName("Person")
-	proto := bindnode.Prototype((*PersonV2)(nil), nodeType)
+	// proto := bindnode.Prototype((*PersonV2)(nil), nodeType)
 	// Use map representation (v2 underlying representation)
-	node := bindnode.Wrap(original, proto)
+	node := bindnode.Wrap(original, nodeType)
 	var buf bytes.Buffer
 	if err := dagjson.Encode(node, &buf); err != nil {
 		t.Fatalf("Failed to encode PersonV2: %v", err)
