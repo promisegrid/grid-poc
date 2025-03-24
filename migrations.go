@@ -81,7 +81,20 @@ func initSchema(schemaText, typeName string) *schema.TypeSystem {
 // serializePerson encodes a Person using the provided schema.
 // This uses the original v1 tuple representation.
 func serializePerson(data interface{}, ts *schema.TypeSystem) []byte {
-	XXX
+	nodeType := ts.TypeByName("Person")
+	if nodeType == nil {
+		log.Fatalf("Schema missing type Person")
+	}
+	
+	proto := bindnode.Prototype(data, nodeType)
+	node := proto.Wrap(data)
+	reprNode := node.Representation()
+
+	var buf bytes.Buffer
+	if err := dagjson.Encode(reprNode, &buf); err != nil {
+		log.Fatalf("Failed to encode person: %v", err)
+	}
+	return buf.Bytes()
 }
 
 // performMigration tries to decode encoded data using the new schema (v2).

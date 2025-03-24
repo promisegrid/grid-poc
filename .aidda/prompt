@@ -1,7 +1,13 @@
-Finish the code
+Fix errors
 
-Make the tests pass.
+- What is proto.Wrap supposed to do?  
+- Why is github.com/ipld/go-ipld-prime/schema imported and not used?
 
+# main [main.test]
+./migrations.go:90:16: proto.Wrap undefined (type schema.TypedPrototype has no field or method Wrap)
+./migrations_test.go:10:2: "github.com/ipld/go-ipld-prime/schema" imported and not used
+./migrations_test.go:96:16: proto.Wrap undefined (type schema.TypedPrototype has no field or method Wrap)
+FAIL	main [build failed]
 
 Sysmsg: You are an expert Go programmer. 
 In: 
