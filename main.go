@@ -38,8 +38,8 @@ type PersonV1 struct { // Original schema version (tuple format)
 }
 
 type PersonV2 struct { // Evolved schema version (map format)
-	Name  string  `ipld:"name"`        // Required field maintained across versions
-	Age   int64   `ipld:"age"`         // Type consistency with schema Int
+	Name  string  `ipld:"name"`            // Required field maintained across versions
+	Age   int64   `ipld:"age"`             // Type consistency with schema Int
 	Email *string `ipld:"email,omitempty"` // Optional field using pointer + omitempty
 }
 
@@ -93,8 +93,16 @@ func encodeData(data interface{}, ts *schema.TypeSystem, useRepresentation bool)
 	var buf bytes.Buffer
 	encoderNode := node
 	if useRepresentation {
-		// Use schema-specific serialization format (tuple/map) with type assertion
-		encoderNode = node.(schema.TypedNode).Representation()
+		// Instead of asserting to *bindnode.Node (which no longer exists),
+		// we assert to an interface that provides the Representation method.
+		type hasRepresentation interface {
+			Representation() ipld.Node
+		}
+		rep, ok := node.(hasRepresentation)
+		if !ok {
+			log.Fatal("node does not support representation")
+		}
+		encoderNode = rep.Representation()
 	}
 
 	// Serialize using DAG-JSON codec with schema-enforced structure

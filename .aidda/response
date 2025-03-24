@@ -1,41 +1,3 @@
-<think>
-Okay, I need to fix the Go error where a datamodel.Node is being used as a schema.TypedNode. The error says that datamodel.Node doesn't implement schema.TypedNode because it's missing the Representation method.
-
-Looking at the code, in the encodeData function, there's a line where node.Representation() is assigned to encoderNode. The error occurs because node is created using bindnode.Wrap, which returns a datamodel.Node. But schema.TypedNode requires the Representation method, which isn't present on datamodel.Node.
-
-Wait, the bindnode.Wrap function returns a schema.TypedNode. Oh right, because when you wrap a Go value with a schema, it should implement the TypedNode interface. But in the code, node is declared as a datamodel.Node. So maybe the type assertion is missing.
-
-In the code, node := bindnode.Wrap(data, schemaType). The return type of Wrap is a schema.TypedNode, but if it's stored as a datamodel.Node, then accessing Representation() would require a type assertion.
-
-Looking at the bindnode package docs, Wrap returns a schema.TypedNode. So the issue is that the code is treating it as a datamodel.Node, which doesn't have the Representation method. So we need to assert that it's a schema.TypedNode.
-
-In the line encoderNode = node.Representation(), node is of type datamodel.Node, which doesn't have Representation(). So we need to cast node to schema.TypedNode first.
-
-So the fix would be to change node.Representation() to node.(schema.TypedNode).Representation(). But wait, node is declared as datamodel.Node, which is an interface. So we need to ensure that the underlying type is schema.TypedNode.
-
-In the code, when we do node := bindnode.Wrap(...), the returned value is a schema.TypedNode. But the variable node is of type datamodel.Node because that's the return type of Wrap. So to access the Representation method, we need to perform a type assertion.
-
-Therefore, in the encodeData function, when assigning encoderNode, we should cast node to schema.TypedNode before calling Representation(). So the line should be:
-
-encoderNode = node.(schema.TypedNode).Representation()
-
-But we need to check if the type assertion is valid. Alternatively, since bindnode.Wrap is supposed to return a TypedNode, the type assertion should be safe.
-
-So the error is because the code is trying to use node.Representation() where node is a datamodel.Node, but the actual node is a schema.TypedNode. Therefore, adding the type assertion to schema.TypedNode should resolve the error.
-
-Looking at the code in main.go line 97: encoderNode = node.Representation(). Changing that to node.(schema.TypedNode).Representation() should fix it.
-
-Wait, in the code, node is declared as node := bindnode.Wrap(data, schemaType). The return type of bindnode.Wrap is a datamodel.Node, but it's actually a schema.TypedNode under the hood. So the type assertion is necessary to access the Representation method.
-
-So the fix is to perform a type assertion on node to schema.TypedNode before calling Representation().
-
-Therefore, updating the line in encodeData from encoderNode = node.Representation() to encoderNode = node.(schema.TypedNode).Representation() should resolve the error.
-
-Additionally, in the tryParse function, when using decoderNode, which is a representation node, assigning it to finalNode and then converting to the typed node might require similar type assertions. But the error in the original question is specifically in line 97, so focusing on that.
-
-So the main fix is adding the type assertion in the encodeData function where node.Representation() is called.
-</think>
-
 File: /tmp/gotmp-ipld-migrate/main.go
 ```go
 package main
@@ -78,8 +40,8 @@ type PersonV1 struct { // Original schema version (tuple format)
 }
 
 type PersonV2 struct { // Evolved schema version (map format)
-	Name  string  `ipld:"name"`        // Required field maintained across versions
-	Age   int64   `ipld:"age"`         // Type consistency with schema Int
+	Name  string  `ipld:"name"`            // Required field maintained across versions
+	Age   int64   `ipld:"age"`             // Type consistency with schema Int
 	Email *string `ipld:"email,omitempty"` // Optional field using pointer + omitempty
 }
 
@@ -133,8 +95,16 @@ func encodeData(data interface{}, ts *schema.TypeSystem, useRepresentation bool)
 	var buf bytes.Buffer
 	encoderNode := node
 	if useRepresentation {
-		// Use schema-specific serialization format (tuple/map) with type assertion
-		encoderNode = node.(schema.TypedNode).Representation()
+		// Instead of asserting to *bindnode.Node (which no longer exists),
+		// we assert to an interface that provides the Representation method.
+		type hasRepresentation interface {
+			Representation() ipld.Node
+		}
+		rep, ok := node.(hasRepresentation)
+		if !ok {
+			log.Fatal("node does not support representation")
+		}
+		encoderNode = rep.Representation()
 	}
 
 	// Serialize using DAG-JSON codec with schema-enforced structure
@@ -209,33 +179,3 @@ func tryParse[T any](encoded []byte, ts *schema.TypeSystem, useRepresentation bo
 }
 ```
 EOF_/tmp/gotmp-ipld-migrate/main.go
-
-The critical fix is in the `encodeData` function where we add a type assertion to access the Representation method:
-
-```go
-encoderNode = node.(schema.TypedNode).Representation()
-```
-
-This resolves the interface implementation error by:
-1. Acknowledging that `bindnode.Wrap` returns a `schema.TypedNode` implementation
-2. Using type assertion to access the full `schema.TypedNode` interface
-3. Properly handling the schema-aware representation system
-
-The solution maintains type safety while enabling proper use of schema-specific representations for both tuple and map formats.
-
-<references>
-[1] https://forum.golangbridge.org/t/why-cant-i-call-an-interface-with-a-collection-of-methods-from-the-main-package/25477
-[2] https://pkg.go.dev/github.com/ipld/go-ipld-prime/node/bindnode
-[3] https://blog.gkomninos.com/interfaces-and-error-checking-golang
-[4] https://github.com/ipld/js-ipld-schema
-[5] https://go.dev/blog/error-handling-and-go
-[6] https://pkg.go.dev/github.com/ipld/go-ipld-prime/datamodel
-[7] https://groups.google.com/g/golang-nuts/c/7KaiFc5_B54
-[8] https://docs.tibco.com/pub/ebx/5.9.21/doc/html/en/Java_API/com/orchestranetworks/schema/SchemaNode.html
-[9] https://labex.io/tutorials/go-how-to-implement-error-interfaces-431377
-[10] https://ipld.io/docs/schemas/using/migrations/
-[11] https://github.com/golang/go/issues/59831
-[12] https://orkhan.gitbook.io/typeorm/docs/multiple-data-sources
-[13] https://cognite-sdk-python.readthedocs-hosted.com/en/latest/data_modeling.html
-[14] https://gitlab.dms3.io/ld/go-ld-prime/-/blob/91923f8ab2f487b64622fedcb7e2789ae941ba35/schema/typedNode.go
-</references>

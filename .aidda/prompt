@@ -1,9 +1,9 @@
-Fix the following error:
+Research IPLD migration Go code and fix the following error:
 
 # command-line-arguments
-./main.go:97:17: cannot use node.Representation() (value of interface type datamodel.Node) as schema.TypedNode value in assignment: datamodel.Node does not implement schema.TypedNode (missing method Representation)
+./main.go:100:29: undefined: bindnode.Node
 
-Sysmsg: You are an expert Go programmer. Please make the requested changes to the given code or documentation.
+Sysmsg: You are an expert Go programmer. 
 In: 
     main.go
 Out: 
