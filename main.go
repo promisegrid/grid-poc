@@ -93,8 +93,8 @@ func encodeData(data interface{}, ts *schema.TypeSystem, useRepresentation bool)
 	var buf bytes.Buffer
 	encoderNode := node
 	if useRepresentation {
-		// Use schema-specific serialization format (tuple/map)
-		encoderNode = node.Representation()
+		// Use schema-specific serialization format (tuple/map) with type assertion
+		encoderNode = node.(schema.TypedNode).Representation()
 	}
 
 	// Serialize using DAG-JSON codec with schema-enforced structure
