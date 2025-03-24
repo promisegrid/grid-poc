@@ -1,10 +1,16 @@
-Research IPLD migration Go code and fix the following error:
+Split main.go into migrations.go and migrations_test.go.  
 
-# command-line-arguments
-./main.go:100:29: undefined: bindnode.Node
+- split the main.go file into two files: migrations.go and migrations_test.go
+- set the package name of all files to migrations
+- move the contents of the main.go file to the migrations.go file
+- write test cases for the functions in the migrations.go file in the migrations_test.go file
+- remove the contents of the main.go file
+
 
 Sysmsg: You are an expert Go programmer. 
 In: 
     main.go
 Out: 
     main.go
+    migrations.go
+    migrations_test.go
