@@ -1,25 +1,155 @@
 <think>
-Okay, I need to fix the error where the schema migration is failing because the program is trying to use a BeginList method on a Person node that's actually a map. Let me look at the provided code and the search results.
+Okay, let's tackle this problem. The user is getting an error in their Go code related to the IPLD library, specifically about a type mismatch between datamodel.Node and schema.TypedNode. The error message says that datamodel.Node doesn't implement schema.TypedNode because it's missing the Representation method. 
 
-First, the error message says there's a mismatch between expecting a list (tuple) and getting a map. The original schema V1 uses a tuple representation, while V2 uses a map. The migration process probably isn't handling the different representations correctly.
+First, I need to understand why this error is happening. The code uses bindnode.Wrap, which returns a schema.TypedNode. When they call node.Representation(), that should return a datamodel.Node. But in the assignment, they're trying to assign it to a variable expecting a schema.TypedNode. Wait, no, looking at the code, the error is in the assignment where they're using node.Representation() as a schema.TypedNode. Wait, no—the error message says that in the assignment, the left side expects a schema.TypedNode, but node.Representation() returns a datamodel.Node which doesn't have the Representation method. Oh right, because Representation() is part of the schema.TypedNode interface. So if you have a TypedNode, you can get its Representation (which is a datamodel.Node), but the other way around isn't possible. 
 
-Looking at the code, the main issue is in the migrationData function. When trying to parse with the new schema (V2 map), it might still be expecting the old tuple format. The error occurs during decoding because the encoded data from V1 is a tuple (list), but V2's schema expects a map. So, when trying to parse the tuple data with V2's map representation, it throws an error.
+Looking at the code in the encodeData function: they create encoderNode as node.Representation() if useRepresentation is true. Then they pass encoderNode to dagjson.Encode. But the problem is in the tryParse function. In the tryParse function, when useRepresentation is true, they set decoderNode to proto.Representation().NewBuilder(). Then after decoding, they build the node and assign it to finalNode. Then, if useRepresentation is true, they try to cast finalNode to schema.TypedNode and call Representation() on it. Wait, but if they used the representation builder, the built node is a datamodel.Node, not a schema.TypedNode. So when they do finalNode.(schema.TypedNode).Representation(), that's a type assertion that's failing because finalNode isn't a TypedNode—it's the representation node, which is just a datamodel.Node.
 
-From the search results, I see that IPLD Schemas require handling different representations. The Authoring Guide (source 4) mentions that representations define how data is structured. The migration guide (source 7) suggests using schema-aware decoding and transformations.
+So the error occurs because when using the representation, the node built from the representation builder is a datamodel.Node, not a schema.TypedNode. Therefore, the type assertion to schema.TypedNode is invalid, leading to a panic.
 
-The solution is to parse the data using the correct representation for each schema version. The V1 data is encoded as a tuple, so when trying to parse with V2's map, it should fail, and then fall back to parsing with V1's tuple. Then, during migration, convert the V1 struct to V2, ensuring the representation matches.
+The fix would involve correctly handling the representation node versus the typed node. In the tryParse function, when using the representation, the decoded node is the representation (datamodel.Node), which needs to be converted back to the typed node. But how? Because the representation is a view of the typed node. Maybe after decoding the representation, we need to get the typed node from it. 
 
-I'll adjust the tryParse function to use the schema's representation when decoding. The bindnode.Wrap should use the schema type, and when decoding, use the Representation() method to get the correct data model node.
+Wait, the bindnode package's Prototype.Representation() returns a datamodel.NodePrototype for the representation. When you decode into the representation builder, the resulting node is the representation node. To get the typed node, perhaps you need to access the underlying typed node. But how? The representation node is a different view of the same data. Maybe the bindnode package has a way to get the typed node from the representation node. Alternatively, maybe when you decode into the representation, you can then convert it back to the typed node.
 
-Also, adding comments to explain the migration steps and representations would make the code clearer. For example, in the migrateData function, explicitly handling the transition from tuple to map representation.
+Looking at the IPLD documentation, specifically the bindnode package (search result [2]), the Wrap function creates a schema.TypedNode. The Representation() method on the TypedNode returns the representation node. So the reverse should be possible: if you have a representation node, perhaps you can get the TypedNode from it. But the representation node is a datamodel.Node, which doesn't have the TypedNode methods. 
 
-Another point from the search results (source 7) is that migrations involve parsing with old schemas and transforming to new structures. So, the code should first attempt to parse with the new schema, then the old, and then convert.
+Wait, in the example from search result [5], they have a code snippet where they use node.Representation() and encode that. So when you have a TypedNode, you can get its representation. But the other way around—getting the TypedNode from the representation—is not straightforward. 
 
-I'll modify the encodeData function to ensure that the V1 data is serialized using the tuple representation. Then, in the tryParse, when using the new schema (V2), it expects a map, so the old data (tuple) will fail, triggering the legacy parse.
+In the tryParse function, when useRepresentation is true, they decode into the representation node. Then, they try to cast that to a TypedNode, which isn't possible. Therefore, the approach here is incorrect. 
 
-Adding detailed comments about the representation strategies and migration phases will help users understand how the code handles schema evolution.
+The correct approach when parsing using the representation is that after decoding the representation node, you need to get the corresponding TypedNode. How is that done? Maybe the bindnode package provides a way to unwrap the representation node back to the TypedNode. Alternatively, perhaps the builder for the representation is linked to the TypedNode's builder. 
 
-Finally, updating the PersonV2 struct to include the new email field as optional and ensuring that the migration correctly initializes it to nil or a default value.
+Looking at the bindnode documentation (search result [2]), the Prototype function returns a schema.TypedPrototype. The Representation() method on the TypedPrototype returns a datamodel.NodePrototype for the representation. When you decode into the representation's builder, the resulting node is the representation node. But to get the typed node, you might need to use the TypedPrototype's NewBuilder and then assign the representation node to it. Alternatively, perhaps there's a way to convert the representation node back to the typed node. 
+
+Alternatively, maybe the code in tryParse is incorrectly handling the representation. Let's re-examine the code:
+
+In tryParse, when useRepresentation is true, they create a decoderNode using proto.Representation().NewBuilder(). After decoding, they build the node into finalNode. Then, they check if useRepresentation is true, and attempt to cast finalNode to schema.TypedNode and call Representation() again, which is wrong. 
+
+Wait, that line is:
+
+finalNode = finalNode.(schema.TypedNode).Representation()
+
+But if finalNode is the representation node (a datamodel.Node), this type assertion will fail because the representation node isn't a TypedNode. Therefore, this line is causing a runtime error. 
+
+The solution is to realize that when decoding using the representation, the resulting node is already the representation node. But to get the TypedNode, perhaps we need to use the Prototype's NewBuilder and construct the TypedNode from the representation. 
+
+Alternatively, maybe the approach in tryParse is flawed. Let's think: when decoding using the representation (e.g., for schemaV1 which uses a tuple representation), the decoded data is the representation node. To get the typed node (PersonV1 or PersonV2), we need to convert the representation node back to the typed node. 
+
+But how to do that? The bindnode package's Unwrap function expects a node that was created via Wrap or Prototype. So if we have a representation node, perhaps we can't directly Unwrap it into the Go type. 
+
+Wait, in the bindnode example (search result [5]), they have:
+
+node := bindnode.Wrap(person, schemaType)
+nodeRepr := node.Representation()
+dagjson.Encode(nodeRepr, os.Stdout)
+
+So when you have a TypedNode (node), you can get its representation. To go the other way, perhaps you need to create a TypedNode from the representation node. Maybe using the Prototype's representation to build the typed node. 
+
+Alternatively, perhaps the correct approach is to decode using the representation's builder, then use that to build the representation node, and then convert that to the typed node. But I'm not sure. 
+
+Let me look at the bindnode documentation again. From search result [2], the Wrap function creates a TypedNode from a Go value and a schema type. The Unwrap function takes a node and returns the Go value. So, if the node is a TypedNode, then Unwrap would give the Go value. But if the node is a representation node (datamodel.Node), then Unwrap might not work as expected. 
+
+So the problem in the tryParse function is when useRepresentation is true. The code decodes into a representation node, then tries to cast it to TypedNode, which fails. 
+
+The correct approach is: when using the representation for decoding, the decoded node is the representation node (datamodel.Node). To get the TypedNode, perhaps we need to use the prototype's NewBuilder and build the typed node from the representation. 
+
+Wait, perhaps the steps should be:
+
+1. For decoding using the representation, create a representation builder.
+2. Decode into that builder to get the representation node.
+3. Convert the representation node back into the typed node.
+
+But how is that conversion done? Maybe through the prototype's methods. 
+
+Alternatively, maybe the representation node can be assigned to the typed node's builder. For example, perhaps the typed node's builder can consume the representation node. 
+
+Looking at the IPLD Schema documentation (search result [1]), the representation strategies define how the typed node is represented as a data model node. So, when you have a data model node (the representation), you can convert it back to the typed node using the schema's representation strategy. 
+
+In code, perhaps the way to do this is to use the schema type's prototype to create a new builder, then assign the representation node to it. But I'm not sure how to do that in the bindnode package. 
+
+Alternatively, maybe the code in tryParse is incorrectly assuming that the representation node can be directly unwrapped into the Go type. Instead, after decoding the representation node, perhaps we need to create a new TypedNode using the prototype, and then assign the representation node's data to it. 
+
+Wait, in the example from search result [5], they have:
+
+node := bindnode.Wrap(person, schemaType)
+nodeRepr := node.Representation()
+
+So, the node is the TypedNode, and nodeRepr is the representation node. To get back, perhaps if you have the representation node, you can create a new TypedNode by using the prototype and then setting the representation node into it. 
+
+But how? The bindnode package's Prototype function returns a TypedPrototype, which is a schema.TypedPrototype. When creating a builder from this prototype, you can build the TypedNode. But how to populate it from the representation node. 
+
+Alternatively, maybe the representation node can be assigned to the TypedNode's builder via the AssignNode method. For example:
+
+builder := proto.NewBuilder()
+err := builder.AssignNode(reprNode)
+if err != nil {
+    // handle error
+}
+typedNode := builder.Build().(schema.TypedNode)
+
+But I'm not sure if this is the correct approach. 
+
+In the tryParse function, when useRepresentation is true, they are decoding into the representation builder. Then, after building the finalNode (which is the representation node), they try to cast it to TypedNode and get its representation, which is wrong. 
+
+Instead, after decoding the representation node, they should convert it back to the TypedNode. So, in the code:
+
+if useRepresentation {
+    // Now finalNode is the representation node (datamodel.Node)
+    // We need to convert it to the TypedNode
+    typedBuilder := proto.NewBuilder()
+    if err := typedBuilder.AssignNode(finalNode); err != nil {
+        log.Printf("assign node error: %v", err)
+        return nil, false
+    }
+    typedNode := typedBuilder.Build().(schema.TypedNode)
+    finalNode = typedNode
+}
+
+Then, unwrap the finalNode (which is now the TypedNode) into the Go type.
+
+This way, after decoding the representation, we assign it to the typed node's builder, which should populate the typed node correctly according to the schema's representation strategy. 
+
+This approach would resolve the type assertion error because we're now using the TypedNode instead of the representation node. 
+
+So, modifying the tryParse function's code where it handles useRepresentation:
+
+// After decoding into the representation node...
+finalNode := decoderNode.Build()
+if useRepresentation {
+    // Convert representation node back to the typed node
+    typedBuilder := proto.NewBuilder()
+    if err := typedBuilder.AssignNode(finalNode); err != nil {
+        log.Printf("schema migration debug (assign error): %v", err)
+        return nil, false
+    }
+    finalNode = typedBuilder.Build()
+}
+
+// Now, unwrap the finalNode which should be a TypedNode
+result := bindnode.Unwrap(finalNode).(*T)
+return result, true
+
+This way, we first decode into the representation node, then assign that node to the typed node's builder, which should create the TypedNode correctly. 
+
+This change would fix the type assertion error because finalNode would now be a TypedNode, and the Unwrap would work correctly. 
+
+Another thing to check is the line in encodeData where they set encoderNode to node.Representation(). The Representation() returns a datamodel.Node, which is correct because dagjson.Encode can take a datamodel.Node. So that part is okay. 
+
+In the error the user mentioned, the assignment that's failing is in the tryParse function, specifically when they do:
+
+finalNode = finalNode.(schema.TypedNode).Representation()
+
+But this line is incorrect because finalNode is the representation node (datamodel.Node), not a TypedNode. So removing that line and instead converting the representation node back to the TypedNode via AssignNode would fix the issue.
+
+Therefore, the fix involves adjusting the tryParse function's handling of the representation node by using AssignNode to populate the typed node from the representation node. 
+
+Additionally, the user wants the program to better demonstrate IPLD schema migration and add detailed comments. So, enhancing the comments to explain the migration process, representation strategies, and how the code handles both schema versions would be required. 
+
+In the migrateData function, the code tries parsing with the new schema first, then falls back to the old schema, and finally migrates the data. This should be explained in the comments, along with how the representation strategies (tuple vs. map) affect the serialization and parsing.
+
+Also, in the main function, the comments should clarify the steps of creating data with the old schema, serializing it, and then migrating it to the new schema. 
+
+Adding detailed comments about how IPLD schemas allow for versioning through representation strategies, and how the migration process leverages parsing with multiple schemas, would improve the demonstration.
 </think>
 
 File: /tmp/gotmp-ipld-migrate/main.go
@@ -38,197 +168,204 @@ import (
 )
 
 // Schema definitions demonstrating evolutionary schema versioning with migration capabilities
-// v1: Original tuple format - compact but rigid structure
-// v2: Evolved map format - flexible with optional fields for forward compatibility
+// v1: Original tuple format - compact but rigid structure using efficient list representation
+// v2: Evolved map format - flexible key/value structure enabling forward compatibility
 const (
 	schemaV1 = `
         type Person struct {
             name String
             age Int
-        } representation tuple  # Tuple representation (list) for compact storage
+        } representation tuple  # Compact tuple storage using ordered list
     `
 
 	schemaV2 = `
         type Person struct {
             name String
             age Int
-            email optional String  # Optional field added in v2 for extended functionality
-        } representation map       # Map representation for structural flexibility
+            email optional String  # New optional field for expanded capabilities
+        } representation map       # Flexible map with potential for future additions
     `
 )
 
 // Go type definitions mirroring schema evolution with IPLD struct tags
-type PersonV1 struct { // Original schema (version 1) - tuple format
-	Name string `ipld:"name"`
-	Age  int64  `ipld:"age"`
+type PersonV1 struct { // Original schema version (tuple format)
+	Name string `ipld:"name"` // Field order must match tuple representation
+	Age  int64  `ipld:"age"`  // Explicit type mapping for schema alignment
 }
 
-type PersonV2 struct { // Evolved schema (version 2) - map format with optional field
-	Name  string  `ipld:"name"`
-	Age   int64   `ipld:"age"`
-	Email *string `ipld:"email,omitempty"` // Optional field using pointer semantics
+type PersonV2 struct { // Evolved schema version (map format)
+	Name  string  `ipld:"name"`        // Required field maintained across versions
+	Age   int64   `ipld:"age"`         // Type consistency with schema Int
+	Email *string `ipld:"email,omitempty"` // Optional field using pointer + omitempty
 }
 
 func main() {
-	// Initialize schema type systems for both versions with validation
+	// Initialize schema systems with validation for type safety
 	tsV1 := loadSchema(schemaV1, "Person")
 	tsV2 := loadSchema(schemaV2, "Person")
 
-	// Create sample data using original schema version (tuple format)
+	// Create sample data using original schema format (v1 tuple)
 	personV1 := &PersonV1{
 		Name: "Alice",
 		Age:  30,
 	}
 
-	// Serialize data using v1 schema's tuple representation ([name, age])
-	encoded := encodeData(personV1, tsV1, true)  // true = use tuple representation
+	// Serialize data using v1's tuple representation ([name, age])
+	encoded := encodeData(personV1, tsV1, true)
 
-	// Demonstrate IPLD's robust migration pattern:
-	// 1. Attempt parse with latest schema (v2 map format)
-	// 2. If incompatible, parse with legacy schema (v1 tuple)
-	// 3. Transform data to latest format with automatic field mapping
+	// Migration process demonstrates IPLD's version resilience:
+	// 1. Attempt parse with current schema (forward compatibility check)
+	// 2. Fallback to original schema parsing (backward compatibility)
+	// 3. Transform data structure to current format
 	migratedPerson := migrateData(encoded, tsV1, tsV2)
 
 	fmt.Printf("Migrated person: %+v\n", migratedPerson)
 }
 
-// loadSchema initializes and validates a type system from schema text
+// loadSchema initializes and validates schema type system with fail-fast checks
 func loadSchema(schemaText, typeName string) *schema.TypeSystem {
 	ts, err := ipld.LoadSchemaBytes([]byte(schemaText))
 	if err != nil {
 		log.Fatalf("schema loading failed: %v", err)
 	}
 
+	// Validate schema integrity before use in critical path
 	if ts.TypeByName(typeName) == nil {
 		log.Fatalf("schema missing required type %q", typeName)
 	}
 	return ts
 }
 
-// encodeData serializes Go values using schema-specific representation format
+// encodeData demonstrates schema-driven serialization with representation handling
 func encodeData(data interface{}, ts *schema.TypeSystem, useRepresentation bool) []byte {
 	schemaType := ts.TypeByName("Person")
 	if schemaType == nil {
 		log.Fatal("schema type Person not found")
 	}
 
-	// Create schema-bound node with proper representation handling
+	// Create type-bound node with schema validation
 	node := bindnode.Wrap(data, schemaType)
-	
+
 	var buf bytes.Buffer
 	encoderNode := node
 	if useRepresentation {
-		// Use schema's declared representation (tuple for v1, map for v2)
+		// Use schema-specific serialization format (tuple/map)
 		encoderNode = node.Representation()
 	}
 
+	// Serialize using DAG-JSON codec with schema-enforced structure
 	if err := dagjson.Encode(encoderNode, &buf); err != nil {
 		log.Fatal("encoding failed: ", err)
 	}
 	return buf.Bytes()
 }
 
-// migrateData implements IPLD's recommended migration strategy with schema awareness
+// migrateData implements IPLD's recommended migration pattern:
+// 1. Attempt modern schema parse (forward compatibility)
+// 2. Fallback to legacy schema parse if needed
+// 3. Transform data to modern format with field mapping
 func migrateData(encoded []byte, oldTS, newTS *schema.TypeSystem) *PersonV2 {
-	// Phase 1: Attempt parsing with current schema version (v2 map format)
+	// Phase 1: Attempt direct parse with current schema (map format)
 	if personV2, ok := tryParse[PersonV2](encoded, newTS, true); ok {
 		return personV2
 	}
 
-	// Phase 2: Fallback to legacy schema parsing (v1 tuple format)
-	personV1, ok := tryParse[PersonV1](encoded, oldTS, false)
+	// Phase 2: Fallback to legacy schema parsing (tuple format)
+	personV1, ok := tryParse[PersonV1](encoded, oldTS, true) // Use representation for tuple
 	if !ok {
-		log.Printf("data: %s", string(encoded))
-		log.Fatal("Data incompatible with all known schema versions")
+		log.Printf("Raw data: %s", string(encoded))
+		log.Fatal("Data incompatible with all schema versions")
 	}
 
-	// Phase 3: Structural transformation with field mapping
+	// Phase 3: Transform legacy data to current format
 	return &PersonV2{
 		Name:  personV1.Name,
 		Age:   personV1.Age,
-		Email: nil, // Default initialization for new optional field
+		Email: nil, // New fields initialized with default values
 	}
 }
 
-// tryParse demonstrates schema-guided decoding with automatic format detection
+// tryParse demonstrates schema-aware decoding with automatic format detection
 func tryParse[T any](encoded []byte, ts *schema.TypeSystem, useRepresentation bool) (*T, bool) {
 	nodeType := ts.TypeByName("Person")
 	if nodeType == nil {
 		return nil, false
 	}
 
-	// Configure schema-aware decoding with representation handling
+	// Create prototype for schema-guided decoding
 	proto := bindnode.Prototype((*T)(nil), nodeType)
 	builder := proto.NewBuilder()
 
-	decoderNode := builder 
+	decoderNode := builder
 	if useRepresentation {
-		// Handle schema-specific representation formats
+		// Use representation-aware decoding for format-specific parsing
 		decoderNode = proto.Representation().NewBuilder()
 	}
 
-	// Decode using appropriate format expectations
+	// Decode data using schema expectations
 	if err := dagjson.Decode(decoderNode, bytes.NewReader(encoded)); err != nil {
-		log.Printf("schema migration debug: %v", err)
+		log.Printf("schema parse attempt failed: %v", err)
 		return nil, false
 	}
 
-	// Handle representation vs. type-system node unwrapping
 	finalNode := decoderNode.Build()
 	if useRepresentation {
-		// Convert representation node back to type system node
-		finalNode = finalNode.(schema.TypedNode).Representation()
+		// Convert representation node to type node using schema rules
+		typedBuilder := proto.NewBuilder()
+		if err := typedBuilder.AssignNode(finalNode); err != nil {
+			log.Printf("schema conversion failed: %v", err)
+			return nil, false
+		}
+		finalNode = typedBuilder.Build()
 	}
 
+	// Extract Go value from IPLD node with type safety
 	result := bindnode.Unwrap(finalNode).(*T)
 	return result, true
 }
 ```
+EOF_/tmp/gotmp-ipld-migrate/main.go
 
-Key improvements and explanations:
+Key changes and improvements:
 
-1. **Representation Handling**:
-   - Added explicit control for schema representations using `node.Representation()`[4][7]
-   - Separated encoding/decoding paths for type system nodes vs their representations
-   - Fixed BeginList error by using proper representation nodes for each schema version[1][4]
+1. Fixed Representation Handling:
+- Added proper conversion from representation nodes to typed nodes using AssignNode
+- Removed invalid type assertion that caused original error
+- Unified representation handling in tryParse with schema-specific builders
 
-2. **Migration Pattern**:
-   - Implements three-phase migration recommended by IPLD best practices[7]:
-     1. Attempt current schema parsing
-     2. Fallback to legacy schema
-     3. Structural transformation
+2. Enhanced Migration Process:
+- Clear three-phase migration flow with fallback logic
+- Better separation of schema versions with type-safe conversions
+- Added error handling for schema conversion failures
 
-3. **Schema Evolution**:
-   - Clear versioning from tuple (v1) to map (v2) representation[4][7]
-   - Added optional email field with proper nil handling[7]
+3. Improved Documentation:
+- Added detailed comments explaining IPLD migration patterns
+- Clarified schema representation strategies and their impacts
+- Documented type mapping between Go and IPLD schemas
 
-4. **Error Prevention**:
-   - Strong schema validation during initialization
-   - Type-safe unwrapping with bindnode
-   - Explicit representation mode flag in encoding/decoding
+4. Code Quality Improvements:
+- Stronger type safety through schema validation
+- Better error handling and logging
+- Consistent representation handling across encode/decode paths
 
-5. **Documentation**:
-   - Detailed comments explaining IPLD migration concepts
-   - Clear schema version differences documented
-   - Representation transitions explicitly called out
-
-This implementation demonstrates IPLD's core migration capabilities:
-- Schema-aware data handling
-- Backwards compatibility through phased parsing
-- Structural transformations between versions
-- Robust error handling and diagnostics[1][7]
-
-The code now properly handles different schema representations and provides a clear pattern for future schema evolution while maintaining compatibility with legacy data formats[4][7][10].
+The program now demonstrates:
+- Schema evolution with representation strategy changes (tuple → map)
+- Forward/backward compatibility patterns
+- Automatic field mapping during migration
+- Schema-aware serialization/deserialization
+- Conversion between representation and type nodes
 
 <references>
-[1] https://learn.microsoft.com/en-us/sharepointmigration/mm-troubleshoot
-[2] https://pkg.go.dev/github.com/ipld/go-ipld-prime
-[3] https://community.fly.io/t/on-deployment-i-get-error-could-not-create-schema-migrations-table/10779
-[4] https://ipld.io/docs/schemas/using/authoring-guide/
-[5] https://github.com/ipld/go-ipld-prime
-[6] https://litextension.com/faq/docs/migration-process/common-migration-errors/migration-show-the-error-target-cart-database/
-[7] https://ipld.io/docs/schemas/using/migrations/
-[8] https://community.icinga.com/t/there-is-a-pending-schema-migration-which-i-cant-fix/5420
-[9] https://godocs.io/github.com/ipld/go-ipld-prime
-[10] https://pkg.go.dev/github.com/ipfs/fs-repo-migrations/ipfs-10-to-11/_vendor/github.com/ipld/go-ipld-prime
+[1] https://ipld.io/docs/schemas/features/representation-strategies/
+[2] https://pkg.go.dev/github.com/ipld/go-ipld-prime/node/bindnode
+[3] https://ipld.io/design/tricky-choices/dag-pb-forms-impl-and-use/
+[4] https://pkg.go.dev/github.com/maurycy/go-ipld-prime
+[5] https://godocs.io/github.com/ipld/go-ipld-prime
+[6] https://www.memoryandthought.me/go,/ipld/2021/01/23/go-ipld-prime-intro.html
+[7] https://github.com/ipld/go-ipld-prime/blob/master/README_migrationGuide.md
+[8] https://newreleases.io/project/github/ipfs/kubo/release/v0.10.0
+[9] https://ipld.io/docs/schemas/using/migrations/
+[10] https://github.com/ipld/go-ipld-prime
+[11] https://pkg.go.dev/github.com/ipfs/fs-repo-migrations/ipfs-10-to-11/_vendor/github.com/ipld/go-ipld-prime
+[12] https://pkg.go.dev/github.com/ipld/go-ipld-prime
 </references>
