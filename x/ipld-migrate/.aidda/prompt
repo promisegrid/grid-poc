@@ -1,0 +1,16 @@
+Fix errors
+
+- What is bindnode.Wrap supposed to do?
+
+# main [main.test]
+./migrations.go:90:30: cannot use proto (variable of interface type schema.TypedPrototype) as schema.Type value in argument to bindnode.Wrap: schema.TypedPrototype does not implement schema.Type (missing method Name)
+./migrations_test.go:95:34: cannot use proto (variable of interface type schema.TypedPrototype) as schema.Type value in argument to bindnode.Wrap: schema.TypedPrototype does not implement schema.Type (missing method Name)
+FAIL	main [build failed]
+
+Sysmsg: You are an expert Go programmer. 
+In: 
+    migrations.go
+    migrations_test.go
+Out: 
+    migrations.go
+    migrations_test.go

@@ -1,0 +1,326 @@
+<think>
+Okay, I need to figure out why the bindnode.Wrap calls are causing errors in the Go code. The error messages say that the second argument, which is a schema.TypedPrototype, doesn't implement schema.Type because it's missing the Name method. 
+
+Looking at the code, in migrations.go, the serializePerson function calls bindnode.Prototype(data, nodeType) to get proto, and then passes proto to bindnode.Wrap(data, proto). But according to the search results, especially from source [3] and [7], the bindnode.Wrap function expects a schema.Type as its second argument. 
+
+Wait, in the example from source [5], they use bindnode.Wrap(person, schemaType), where schemaType is obtained from ts.TypeByName("Person"). That makes sense because the second argument should be the schema type, not the prototype. The prototype is used to create a node builder, but when wrapping, you need the schema type.
+
+So the mistake here is passing proto (which is a schema.TypedPrototype) instead of the actual schema.Type. The correct approach is to get the schema type using ts.TypeByName("Person") and pass that to bindnode.Wrap, not the prototype. 
+
+In the current code, proto is created by bindnode.Prototype, which returns a prototype. But the second argument to Wrap should be the schema.Type. Therefore, the fix would be to pass nodeType (which is already the schema.Type) instead of proto. 
+
+Let me check the parameters again. In the example from source [5], they do:
+node := bindnode.Wrap(person, schemaType)
+where schemaType is the type from the schema. So in the code, the line should be node := bindnode.Wrap(data, nodeType) instead of using proto.
+
+Looking at the code in serializePerson:
+proto := bindnode.Prototype(data, nodeType)
+node := bindnode.Wrap(data, proto)
+
+Ah, here they're passing proto (the prototype) instead of nodeType (the schema.Type). That's the issue. The second argument to Wrap should be the schema type, not the prototype. So changing proto to nodeType should fix the error.
+
+Similarly, in migrations_test.go, in TestTryParseDirectV2, they have:
+proto := bindnode.Prototype((*PersonV2)(nil), nodeType)
+node := bindnode.Wrap(original, proto)
+This line is also wrong for the same reason. They should pass nodeType instead of proto to Wrap.
+
+So the fix is in both places to replace proto with nodeType in the bindnode.Wrap calls. That way, the schema.Type is passed as the second argument, which should have the required Name method, resolving the error.
+</think>
+
+File: /tmp/gotmp-ipld-migrate/migrations.go
+```go
+package migrations
+
+import (
+	"bytes"
+	"fmt"
+	"log"
+
+	"github.com/ipld/go-ipld-prime"
+	"github.com/ipld/go-ipld-prime/codec/dagjson"
+	"github.com/ipld/go-ipld-prime/node/bindnode"
+	"github.com/ipld/go-ipld-prime/schema"
+)
+
+// Schema definitions for demonstration purposes.
+// schemaV1 uses a tuple representation (compact order-dependent format).
+// schemaV2 uses a map representation (flexible key/value format with an additional optional field).
+const (
+	schemaV1 = `
+		type Person struct {
+			name String
+			age  Int
+		} representation tuple
+	`
+	schemaV2 = `
+		type Person struct {
+			name  String
+			age   Int
+			email optional String
+		} representation map
+	`
+)
+
+// PersonV1 corresponds to the original tuple schema.
+type PersonV1 struct {
+	Name string `ipld:"name"`
+	Age  int64  `ipld:"age"`
+}
+
+// PersonV2 corresponds to the evolved map schema.
+type PersonV2 struct {
+	Name  string  `ipld:"name"`
+	Age   int64   `ipld:"age"`
+	Email *string `ipld:"email,omitempty"`
+}
+
+// Main is provided as an example of how to perform a migration.
+// In an actual application, this might be replaced or integrated into a larger system.
+func Main() {
+	// Initialize the schema type systems for both versions.
+	tsV1 := initSchema(schemaV1, "Person")
+	tsV2 := initSchema(schemaV2, "Person")
+
+	// Create an instance of Person using the original v1 structure.
+	original := &PersonV1{
+		Name: "Alice",
+		Age:  30,
+	}
+
+	// Serialize the PersonV1 data using the tuple representation.
+	encodedData := serializePerson(original, tsV1)
+	fmt.Println("Encoded IPLD Data:", string(encodedData))
+
+	// Migrate the data from the original format (v1) to the new format (v2).
+	migrated := performMigration(encodedData, tsV1, tsV2)
+	fmt.Printf("Migrated Person: %+v\n", migrated)
+}
+
+// initSchema loads and validates an IPLD schema from a schema string.
+// It ensures the required type exists.
+func initSchema(schemaText, typeName string) *schema.TypeSystem {
+	ts, err := ipld.LoadSchemaBytes([]byte(schemaText))
+	if err != nil {
+		log.Fatalf("Failed to load schema: %v", err)
+	}
+	if ts.TypeByName(typeName) == nil {
+		log.Fatalf("Schema missing required type %q", typeName)
+	}
+	return ts
+}
+
+// serializePerson encodes a Person using the provided schema.
+// This uses the original v1 tuple representation.
+func serializePerson(data interface{}, ts *schema.TypeSystem) []byte {
+	nodeType := ts.TypeByName("Person")
+	if nodeType == nil {
+		log.Fatalf("Schema missing type Person")
+	}
+	
+	proto := bindnode.Prototype(data, nodeType)
+	node := bindnode.Wrap(data, nodeType)
+	reprNode := node.Representation()
+
+	var buf bytes.Buffer
+	if err := dagjson.Encode(reprNode, &buf); err != nil {
+		log.Fatalf("Failed to encode person: %v", err)
+	}
+	return buf.Bytes()
+}
+
+// performMigration tries to decode encoded data using the new schema (v2).
+// If decoding with v2 fails, it falls back to decoding with the v1 schema and then
+// converting the data to the v2 structure.
+func performMigration(encoded []byte, tsOld, tsNew *schema.TypeSystem) *PersonV2 {
+	// Attempt decoding directly using the new schema (map representation).
+	if pNew, ok := tryParse[PersonV2](encoded, tsNew, true); ok {
+		return pNew
+	}
+
+	// Fallback: decode using the old schema (tuple representation).
+	pOld, ok := tryParse[PersonV1](encoded, tsOld, true)
+	if !ok {
+		log.Fatalf("Data incompatible with both schema versions. Raw data: %s", string(encoded))
+	}
+
+	// Transform from v1 to v2; new fields get default values.
+	return &PersonV2{
+		Name:  pOld.Name,
+		Age:   pOld.Age,
+		Email: nil,
+	}
+}
+
+// tryParse is a generic helper that attempts to decode IPLD-encoded data into the desired Go type.
+// The useRepr flag controls whether decoding should use the schema's representation (e.g. tuple or map).
+func tryParse[T any](encoded []byte, ts *schema.TypeSystem, useRepr bool) (*T, bool) {
+	nodeType := ts.TypeByName("Person")
+	if nodeType == nil {
+		log.Println("Schema missing type Person")
+		return nil, false
+	}
+	proto := bindnode.Prototype((*T)(nil), nodeType)
+	var builder ipld.NodeBuilder
+	if useRepr {
+		builder = proto.Representation().NewBuilder()
+	} else {
+		builder = proto.NewBuilder()
+	}
+
+	if err := dagjson.Decode(builder, bytes.NewReader(encoded)); err != nil {
+		log.Printf("Failed to decode using schema: %v", err)
+		return nil, false
+	}
+	node := builder.Build()
+
+	if useRepr {
+		// Convert the representation node to its native form.
+		nativeBuilder := proto.NewBuilder()
+		if err := nativeBuilder.AssignNode(node); err != nil {
+			log.Printf("Failed to convert representation: %v", err)
+			return nil, false
+		}
+		node = nativeBuilder.Build()
+	}
+
+	// Unwrap the bindnode to extract the underlying Go value.
+	result, ok := bindnode.Unwrap(node).(*T)
+	if !ok {
+		log.Println("Type assertion failed during unmarshalling")
+		return nil, false
+	}
+	return result, true
+}
+```
+EOF_/tmp/gotmp-ipld-migrate/migrations.go
+
+File: /tmp/gotmp-ipld-migrate/migrations_test.go
+```go
+package migrations
+
+import (
+	"bytes"
+	"strings"
+	"testing"
+
+	"github.com/ipld/go-ipld-prime/codec/dagjson"
+	"github.com/ipld/go-ipld-prime/node/bindnode"
+)
+
+// TestInitSchema tests that initSchema correctly loads a valid schema and that the required type is present.
+func TestInitSchema(t *testing.T) {
+	// Use schemaV1 from migrations.go
+	ts := initSchema(schemaV1, "Person")
+	if ts == nil {
+		t.Fatal("initSchema returned nil for a valid schema")
+	}
+	if ts.TypeByName("Person") == nil {
+		t.Fatal("Schema does not contain type 'Person'")
+	}
+}
+
+// TestSerializePerson tests that serializePerson returns a non-empty encoded output.
+func TestSerializePerson(t *testing.T) {
+	ts := initSchema(schemaV1, "Person")
+	original := &PersonV1{
+		Name: "Bob",
+		Age:  25,
+	}
+
+	encoded := serializePerson(original, ts)
+	if len(encoded) == 0 {
+		t.Fatal("serializePerson returned an empty result")
+	}
+
+	// Check that the encoded data contains the expected fields.
+	if !strings.Contains(string(encoded), "Bob") {
+		t.Errorf("Encoded data does not contain expected name, got: %s", string(encoded))
+	}
+	if !strings.Contains(string(encoded), "25") {
+		t.Errorf("Encoded data does not contain expected age, got: %s", string(encoded))
+	}
+}
+
+// TestPerformMigration tests that performMigration correctly transforms a PersonV1 into a PersonV2.
+func TestPerformMigration(t *testing.T) {
+	// Prepare both schema type systems.
+	tsV1 := initSchema(schemaV1, "Person")
+	tsV2 := initSchema(schemaV2, "Person")
+
+	// Create a PersonV1 instance and serialize using schemaV1.
+	original := &PersonV1{
+		Name: "Charlie",
+		Age:  40,
+	}
+	encoded := serializePerson(original, tsV1)
+
+	// Perform migration.
+	migrated := performMigration(encoded, tsV1, tsV2)
+	if migrated == nil {
+		t.Fatal("performMigration returned nil")
+	}
+
+	// Validate that the migrated data matches the original for shared fields.
+	if migrated.Name != original.Name {
+		t.Errorf("Expected name %q but got %q", original.Name, migrated.Name)
+	}
+	if migrated.Age != original.Age {
+		t.Errorf("Expected age %d but got %d", original.Age, migrated.Age)
+	}
+	// Email is new in v2 and should be nil by default.
+	if migrated.Email != nil {
+		t.Errorf("Expected email to be nil but got %v", migrated.Email)
+	}
+}
+
+// TestTryParseDirectV2 tests that tryParse succeeds when encoding directly with the v2 schema representation.
+func TestTryParseDirectV2(t *testing.T) {
+	// Prepare the v2 schema.
+	ts := initSchema(schemaV2, "Person")
+
+	// Create a PersonV2 instance with all fields.
+	email := "dave@example.com"
+	original := &PersonV2{
+		Name:  "Dave",
+		Age:   28,
+		Email: &email,
+	}
+
+	// Encode using the v2 schema.
+	nodeType := ts.TypeByName("Person")
+	proto := bindnode.Prototype((*PersonV2)(nil), nodeType)
+	// Use map representation (v2 underlying representation)
+	node := bindnode.Wrap(original, nodeType)
+	var buf bytes.Buffer
+	if err := dagjson.Encode(node, &buf); err != nil {
+		t.Fatalf("Failed to encode PersonV2: %v", err)
+	}
+	encoded := buf.Bytes()
+
+	// Try decoding directly as PersonV2.
+	res, ok := tryParse[PersonV2](encoded, ts, true)
+	if !ok || res == nil {
+		t.Fatal("tryParse failed for a valid PersonV2 encoding")
+	}
+	if res.Name != original.Name || res.Age != original.Age || res.Email == nil || *res.Email != *original.Email {
+		t.Errorf("Decoded value does not match original. Got %+v, expected %+v", res, original)
+	}
+}
+```
+EOF_/tmp/gotmp-ipld-migrate/migrations_test.go
+
+<references>
+[1] https://www.memoryandthought.me/go,/ipld/2021/01/23/go-ipld-prime-intro.html
+[2] https://discussions.apple.com/thread/255397473
+[3] https://pkg.go.dev/github.com/ipld/go-ipld-prime/node/bindnode
+[4] https://www.sidefx.com/forum/post/348990/
+[5] https://godocs.io/github.com/ipld/go-ipld-prime
+[6] https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/bind
+[7] https://pkg.go.dev/github.com/ipld/go-ipld-prime
+[8] https://docs.godotengine.org/en/stable/classes/class_callable.html
+[9] https://forums.developer.nvidia.com/t/get-rgb-and-depth-data-from-camera-prim/223716
+[10] https://docs.oracle.com/en/database/oracle/oracle-database/23/jaxml/index-all.html
+[11] https://com-lihaoyi.github.io/scalatags/
+[12] https://github.com/ipld/go-ipld-prime/blob/master/CHANGELOG.md
+[13] https://github.com/ipld/go-ipld-prime/releases
+</references>
