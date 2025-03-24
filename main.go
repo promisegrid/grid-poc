@@ -30,15 +30,15 @@ const (
 )
 
 // Go type definitions mirroring schema evolution
-type PersonV1 struct {  // Original schema (version 1)
+type PersonV1 struct { // Original schema (version 1)
 	Name string
 	Age  int64
 }
 
-type PersonV2 struct {  // Evolved schema (version 2)
+type PersonV2 struct { // Evolved schema (version 2)
 	Name  string
 	Age   int64
-	Email *string  # Nil pointer represents missing optional field (IPLD 'optional' type)
+	Email *string // Nil pointer represents missing optional field (IPLD 'optional' type)
 }
 
 func main() {
@@ -76,7 +76,7 @@ func loadSchema(schemaText, typeName string) *schema.TypeSystem {
 // encodeData serializes Go values using schema-specific representation
 func encodeData(data interface{}, ts *schema.TypeSystem) []byte {
 	schemaType := ts.TypeByName("Person")
-	node := bindnode.Wrap(data, schemaType)  # Bind Go type to schema node
+	node := bindnode.Wrap(data, schemaType) // Bind Go type to schema node
 
 	var buf bytes.Buffer
 	if err := dagjson.Encode(node.Representation(), &buf); err != nil {
@@ -98,6 +98,8 @@ func migrateData(encoded []byte, oldTS, newTS *schema.TypeSystem) *PersonV2 {
 	// Phase 2: Fallback to legacy schema parsing
 	personV1, ok := tryParse[PersonV1](encoded, oldTS)
 	if !ok {
+		// show the data as JSON for debugging
+		log.Printf("data: %s\n", string(encoded))
 		log.Fatal("data incompatible with all known schema versions")
 	}
 
@@ -105,7 +107,7 @@ func migrateData(encoded []byte, oldTS, newTS *schema.TypeSystem) *PersonV2 {
 	return &PersonV2{
 		Name:  personV1.Name,
 		Age:   personV1.Age,
-		Email: nil,  # Explicit default for new optional field
+		Email: nil, // Explicit default for new optional field
 	}
 }
 
@@ -113,7 +115,7 @@ func migrateData(encoded []byte, oldTS, newTS *schema.TypeSystem) *PersonV2 {
 func tryParse[T any](encoded []byte, ts *schema.TypeSystem) (*T, bool) {
 	nodeType := ts.TypeByName("Person")
 	proto := bindnode.Prototype((*T)(nil), nodeType)
-	builder := proto.NewBuilder()  # Schema-guided parser construction
+	builder := proto.NewBuilder() // Schema-guided parser construction
 
 	if err := dagjson.Decode(builder, bytes.NewReader(encoded)); err != nil {
 		return nil, false
