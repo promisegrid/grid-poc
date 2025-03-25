@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/ipld-path-cross-explore-patch/ipldpath.go
-```go
 package ipldpath
 
 import (
@@ -303,20 +301,3 @@ func fromJSONString(s string) ipld.Node {
 	}
 	return n
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/ipld-path-cross-explore-patch/ipldpath.go
-
-File: /home/stevegt/lab/grid-poc/x/ipld-path-cross-explore-patch/ipldpath_test.go
-```go
-package ipldpath
-
-import "testing"
-
-// TestRunDemo executes the demonstration to ensure no panics or errors occur.
-func TestRunDemo(t *testing.T) {
-	// Simply run the demo. Its output is printed to stdout.
-	// If any panic occurs, the test will fail.
-	RunDemo()
-}
-```
-EOF_/home/stevegt/lab/grid-poc/x/ipld-path-cross-explore-patch/ipldpath_test.go
