@@ -8,7 +8,7 @@ import (
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/linking"
-	"github.com/ipld/go-ipld-prime/linking/cidlink"
+	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/storage/memstore"
@@ -115,7 +115,7 @@ func RunDemo() {
 	fmt.Println("\n=== Applying Patches ===")
 	// applyPatches uses rootNode and writes an updated block.
 	// Note: For demonstration, we patch the in-memory copy.
-	patchedRoot := applyPatches(ls, rootNode)
+	_ = applyPatches(ls, rootNode)
 
 	// 4. Demonstrate post-patch navigation.
 	fmt.Println("\n=== Post-Patch Navigation ===")
@@ -127,9 +127,6 @@ func RunDemo() {
 	// 5. Explore modified structure.
 	fmt.Println("\n=== Patched Data Exploration ===")
 	exploreNode(ls, rootLink, 0)
-
-	// Prevent unused variable warning.
-	_ = patchedRoot
 }
 
 func navigate(ls linking.LinkSystem, startLink ipld.Link, pathStr string) {
