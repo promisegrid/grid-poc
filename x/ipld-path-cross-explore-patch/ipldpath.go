@@ -50,7 +50,7 @@ func RunDemo() {
 		cidlink.LinkPrototype{
 			Prefix: cid.Prefix{
 				Version:  1,
-				Codec:    0x71,
+				Codec:    0x0129, // Changed from 0x71 to DAG-JSON multicodec
 				MhType:   0x13,
 				MhLength: 32,
 			},
@@ -69,7 +69,7 @@ func RunDemo() {
 		cidlink.LinkPrototype{
 			Prefix: cid.Prefix{
 				Version:  1,
-				Codec:    0x71,
+				Codec:    0x0129, // Changed from 0x71 to DAG-JSON multicodec
 				MhType:   0x13,
 				MhLength: 32,
 			},
@@ -91,7 +91,7 @@ func RunDemo() {
 		cidlink.LinkPrototype{
 			Prefix: cid.Prefix{
 				Version:  1,
-				Codec:    0x71,
+				Codec:    0x0129, // Changed from 0x71 to DAG-JSON multicodec
 				MhType:   0x13,
 				MhLength: 32,
 			},
@@ -279,7 +279,7 @@ func applyPatches(ls linking.LinkSystem, rootNode ipld.Node) ipld.Node {
 		cidlink.LinkPrototype{
 			Prefix: cid.Prefix{
 				Version:  1,
-				Codec:    0x71,
+				Codec:    0x0129, // Changed from 0x71 to DAG-JSON multicodec
 				MhType:   0x13,
 				MhLength: 32,
 			},

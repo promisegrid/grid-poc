@@ -1,11 +1,29 @@
 ipld-path-cross-explore-patch: fix errors
 
-What is a NodeAssembler?  Where is it defined?  Do I need to convert
-the buf to a NodeAssembler, and if so, what is the correct way to do
-that?  Is that even the correct way to do what the code is trying
-to do?
+Why is this test failing?  
 
-vet: ./ipldpath.go:270:33: cannot use &buf (value of type *bytes.Buffer) as datamodel.NodeAssembler value in argument to dagjson.Decode: *bytes.Buffer does not implement datamodel.NodeAssembler (missing method AssignBool)
+=== RUN   TestRunDemo
+--- FAIL: TestRunDemo (0.00s)
+panic: could not choose an encoder: no encoder registered for multicodec code 113 (0x71) [recovered]
+	panic: could not choose an encoder: no encoder registered for multicodec code 113 (0x71)
+
+goroutine 17 [running]:
+testing.tRunner.func1.2({0x6273e0, 0xc0000ae000})
+	/home/stevegt/.goenv/versions/1.24.0/src/testing/testing.go:1734 +0x21c
+testing.tRunner.func1()
+	/home/stevegt/.goenv/versions/1.24.0/src/testing/testing.go:1737 +0x35e
+panic({0x6273e0?, 0xc0000ae000?})
+	/home/stevegt/.goenv/versions/1.24.0/src/runtime/panic.go:787 +0x132
+ipld-path-cross-explore-patch.RunDemo()
+	/home/stevegt/lab/grid-poc/x/ipld-path-cross-explore-patch/ipldpath.go:61 +0xaf1
+ipld-path-cross-explore-patch.TestRunDemo(0xc000003880?)
+	/home/stevegt/lab/grid-poc/x/ipld-path-cross-explore-patch/ipldpath_test.go:9 +0xf
+testing.tRunner(0xc000003880, 0x65c2a8)
+	/home/stevegt/.goenv/versions/1.24.0/src/testing/testing.go:1792 +0xf4
+created by testing.(*T).Run in goroutine 1
+	/home/stevegt/.goenv/versions/1.24.0/src/testing/testing.go:1851 +0x413
+exit status 2
+FAIL	ipld-path-cross-explore-patch	0.007s
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
