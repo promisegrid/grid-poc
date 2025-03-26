@@ -7,6 +7,7 @@ import (
 	"github.com/ipfs/go-cid"
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
+	"github.com/ipld/go-ipld-prime/datamodel"
 	"github.com/ipld/go-ipld-prime/linking"
 	cidlink "github.com/ipld/go-ipld-prime/linking/cid"
 	"github.com/ipld/go-ipld-prime/node/basicnode"
@@ -131,7 +132,7 @@ func RunDemo() {
 
 func navigate(ls linking.LinkSystem, startLink ipld.Link, pathStr string) {
 	fmt.Printf("Navigating: %s\n", pathStr)
-	path := traversal.ParsePath(pathStr)
+	path := datamodel.ParsePath(pathStr)
 
 	node, err := ls.Load(ipld.LinkContext{}, startLink, nil)
 	if err != nil {
@@ -246,12 +247,12 @@ func applyPatches(ls linking.LinkSystem, rootNode ipld.Node) ipld.Node {
 	ops := []patch.Operation{
 		{
 			Op:    patch.Op_Replace,
-			Path:  traversal.ParsePath("Profile/Age"),
+			Path:  datamodel.ParsePath("Profile/Age"),
 			Value: fromJSONString("31"),
 		},
 		{
 			Op:    patch.Op_Add,
-			Path:  traversal.ParsePath("Settings/Timeout"),
+			Path:  datamodel.ParsePath("Settings/Timeout"),
 			Value: fromJSONString("30"),
 		},
 	}

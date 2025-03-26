@@ -1,29 +1,9 @@
 ipld-path-cross-explore-patch: fix errors
 
-Where is cidlink? Was it ever at github.com/ipld/go-ipld-prime/linking/cidlink?
+What IPLD library and method are used for parsing and traversing IPLD
+paths?  
 
-go: finding module for package github.com/ipld/go-ipld-prime/linking
-go: finding module for package github.com/ipld/go-ipld-prime
-go: finding module for package github.com/ipfs/go-cid
-go: finding module for package github.com/ipld/go-ipld-prime/codec/dagjson
-go: finding module for package github.com/ipld/go-ipld-prime/linking/cidlink
-go: finding module for package github.com/ipld/go-ipld-prime/node/basicnode
-go: finding module for package github.com/ipld/go-ipld-prime/storage/memstore
-go: finding module for package github.com/ipld/go-ipld-prime/node/bindnode
-go: finding module for package github.com/ipld/go-ipld-prime/traversal
-go: finding module for package github.com/ipld/go-ipld-prime/traversal/patch
-go: found github.com/ipfs/go-cid in github.com/ipfs/go-cid v0.5.0
-go: found github.com/ipld/go-ipld-prime in github.com/ipld/go-ipld-prime v0.21.0
-go: found github.com/ipld/go-ipld-prime/codec/dagjson in github.com/ipld/go-ipld-prime v0.21.0
-go: found github.com/ipld/go-ipld-prime/linking in github.com/ipld/go-ipld-prime v0.21.0
-go: found github.com/ipld/go-ipld-prime/node/basicnode in github.com/ipld/go-ipld-prime v0.21.0
-go: found github.com/ipld/go-ipld-prime/node/bindnode in github.com/ipld/go-ipld-prime v0.21.0
-go: found github.com/ipld/go-ipld-prime/storage/memstore in github.com/ipld/go-ipld-prime v0.21.0
-go: found github.com/ipld/go-ipld-prime/traversal in github.com/ipld/go-ipld-prime v0.21.0
-go: found github.com/ipld/go-ipld-prime/traversal/patch in github.com/ipld/go-ipld-prime v0.21.0
-go: finding module for package github.com/ipld/go-ipld-prime/linking/cidlink
-go: ipld-path-cross-explore-patch imports
-	github.com/ipld/go-ipld-prime/linking/cidlink: module github.com/ipld/go-ipld-prime@latest found (v0.21.0), but does not contain package github.com/ipld/go-ipld-prime/linking/cidlink
+vet: ./ipldpath.go:134:20: undefined: traversal.ParsePath
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -32,7 +12,8 @@ Sysmsg:
   verify that the code compiles and runs without errors -- do not
   hallucinate library methods, structs, or functions that do not exist.
   Do not quote or escape single backticks in the code -- Go uses
-  backticks for raw string literals.  
+  backticks for raw string literals.  Do not remove or alter comments
+  unless they are incorrect or misleading.  
 In:
   x/ipld-path-cross-explore-patch/ipldpath.go
   x/ipld-path-cross-explore-patch/ipldpath_test.go
