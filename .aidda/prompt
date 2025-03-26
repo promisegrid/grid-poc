@@ -1,8 +1,10 @@
 ipld-path-cross-explore-patch: fix errors
 
-Where is IsEmpty defined in the IPLD libraries?  Do we need it?
+What is PopSegment supposed to do? If it exists in the IPLD libraries,
+where is it defined? If it doesn't exist, what is the correct way to
+do what the code is trying to do?
 
-vet: ./ipldpath.go:142:12: path.IsEmpty undefined (type datamodel.Path has no field or method IsEmpty)
+vet: ./ipldpath.go:143:31: path.PopSegment undefined (type datamodel.Path has no field or method PopSegment)
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

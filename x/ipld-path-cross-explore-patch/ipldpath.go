@@ -13,7 +13,6 @@ import (
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/storage/memstore"
-	"github.com/ipld/go-ipld-prime/traversal"
 	"github.com/ipld/go-ipld-prime/traversal/patch"
 )
 
@@ -140,7 +139,7 @@ func navigate(ls linking.LinkSystem, startLink ipld.Link, pathStr string) {
 	}
 
 	for path.Len() > 0 {
-		seg, remaining, err := path.PopSegment()
+		seg, remaining := path.Shift()
 		if err != nil {
 			panic(err)
 		}
@@ -219,7 +218,7 @@ func explore(n ipld.Node, indent int) {
 	case ipld.Kind_List:
 		fmt.Printf("%sList:\n", getIndent(indent))
 		for i := 0; ; i++ {
-			v, err := n.LookupByIndex(i)
+			v, err := n.LookupByIndex(int64(i))
 			if err != nil {
 				break
 			}
