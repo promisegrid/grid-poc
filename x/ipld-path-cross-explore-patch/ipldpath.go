@@ -139,7 +139,7 @@ func navigate(ls linking.LinkSystem, startLink ipld.Link, pathStr string) {
 		panic(err)
 	}
 
-	for !path.IsEmpty() {
+	for path.Len() > 0 {
 		seg, remaining, err := path.PopSegment()
 		if err != nil {
 			panic(err)

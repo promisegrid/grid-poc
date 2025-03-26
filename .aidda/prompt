@@ -1,9 +1,8 @@
 ipld-path-cross-explore-patch: fix errors
 
-What IPLD library and method are used for parsing and traversing IPLD
-paths?  
+Where is IsEmpty defined in the IPLD libraries?  Do we need it?
 
-vet: ./ipldpath.go:134:20: undefined: traversal.ParsePath
+vet: ./ipldpath.go:142:12: path.IsEmpty undefined (type datamodel.Path has no field or method IsEmpty)
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
