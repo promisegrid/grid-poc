@@ -267,10 +267,12 @@ func applyPatches(ls linking.LinkSystem, rootNode ipld.Node) ipld.Node {
 	if err != nil {
 		panic(err)
 	}
-	newNode, err := dagjson.Decode(&buf, basicnode.Prototype.Any)
-	if err != nil {
+	
+	nb := basicnode.Prototype.Any.NewBuilder()
+	if err := dagjson.Decode(nb, &buf); err != nil {
 		panic(err)
 	}
+	newNode := nb.Build()
 
 	_, err = ls.Store(
 		ipld.LinkContext{},
@@ -292,9 +294,9 @@ func applyPatches(ls linking.LinkSystem, rootNode ipld.Node) ipld.Node {
 }
 
 func fromJSONString(s string) ipld.Node {
-	n, err := dagjson.Decode(bytes.NewBufferString(s), basicnode.Prototype.Any)
-	if err != nil {
+	nb := basicnode.Prototype.Any.NewBuilder()
+	if err := dagjson.Decode(nb, bytes.NewBufferString(s)); err != nil {
 		panic(err)
 	}
-	return n
+	return nb.Build()
 }

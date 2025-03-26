@@ -1,10 +1,11 @@
 ipld-path-cross-explore-patch: fix errors
 
-What is PopSegment supposed to do? If it exists in the IPLD libraries,
-where is it defined? If it doesn't exist, what is the correct way to
-do what the code is trying to do?
+What is a NodeAssembler?  Where is it defined?  Do I need to convert
+the buf to a NodeAssembler, and if so, what is the correct way to do
+that?  Is that even the correct way to do what the code is trying
+to do?
 
-vet: ./ipldpath.go:143:31: path.PopSegment undefined (type datamodel.Path has no field or method PopSegment)
+vet: ./ipldpath.go:270:33: cannot use &buf (value of type *bytes.Buffer) as datamodel.NodeAssembler value in argument to dagjson.Decode: *bytes.Buffer does not implement datamodel.NodeAssembler (missing method AssignBool)
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
