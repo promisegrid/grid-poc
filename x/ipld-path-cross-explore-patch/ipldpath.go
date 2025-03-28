@@ -50,7 +50,7 @@ func RunDemo() {
 		cidlink.LinkPrototype{
 			Prefix: cid.Prefix{
 				Version:  1,
-				Codec:    0x0129, // Changed from 0x71 to DAG-JSON multicodec
+				Codec:    0x0129, // DAG-JSON multicodec
 				MhType:   0x13,
 				MhLength: 32,
 			},
@@ -69,7 +69,7 @@ func RunDemo() {
 		cidlink.LinkPrototype{
 			Prefix: cid.Prefix{
 				Version:  1,
-				Codec:    0x0129, // Changed from 0x71 to DAG-JSON multicodec
+				Codec:    0x0129, // DAG-JSON multicodec
 				MhType:   0x13,
 				MhLength: 32,
 			},
@@ -91,7 +91,7 @@ func RunDemo() {
 		cidlink.LinkPrototype{
 			Prefix: cid.Prefix{
 				Version:  1,
-				Codec:    0x0129, // Changed from 0x71 to DAG-JSON multicodec
+				Codec:    0x0129, // DAG-JSON multicodec
 				MhType:   0x13,
 				MhLength: 32,
 			},
@@ -104,8 +104,8 @@ func RunDemo() {
 
 	// 1. Demonstrate cross-block navigation.
 	fmt.Println("=== Initial Navigation ===")
-	navigate(ls, rootLink, "Profile/Age")     // Should show 30.
-	navigate(ls, rootLink, "Settings/Active") // Should show true.
+	navigate(ls, rootLink, "Profile/Age")     // Should show 30
+	navigate(ls, rootLink, "Settings/Active") // Should show true
 
 	// 2. Explore data structure.
 	fmt.Println("\n=== Data Exploration ===")
@@ -113,16 +113,12 @@ func RunDemo() {
 
 	// 3. Apply patches.
 	fmt.Println("\n=== Applying Patches ===")
-	// applyPatches uses rootNode and writes an updated block.
-	// Note: For demonstration, we patch the in-memory copy.
 	_ = applyPatches(ls, rootNode)
 
 	// 4. Demonstrate post-patch navigation.
 	fmt.Println("\n=== Post-Patch Navigation ===")
-	// The storage has been updated via applyPatches, so navigating from
-	// the same rootLink will now reflect patched changes.
-	navigate(ls, rootLink, "Profile/Age")      // Should show 31.
-	navigate(ls, rootLink, "Settings/Timeout") // New field.
+	navigate(ls, rootLink, "Profile/Age")      // Should show 31
+	navigate(ls, rootLink, "Settings/Timeout") // New field
 
 	// 5. Explore modified structure.
 	fmt.Println("\n=== Patched Data Exploration ===")
@@ -133,25 +129,23 @@ func navigate(ls linking.LinkSystem, startLink ipld.Link, pathStr string) {
 	fmt.Printf("Navigating: %s\n", pathStr)
 	path := datamodel.ParsePath(pathStr)
 
-	node, err := ls.Load(ipld.LinkContext{}, startLink, nil)
+	// Load initial node with prototype
+	node, err := ls.Load(ipld.LinkContext{}, startLink, basicnode.Prototype.Any)
 	if err != nil {
 		panic(err)
 	}
 
 	for path.Len() > 0 {
 		seg, remaining := path.Shift()
-		if err != nil {
-			panic(err)
-		}
 		path = remaining
 
-		// If the current node is a Link, follow it.
+		// Handle links before processing segments
 		if node.Kind() == ipld.Kind_Link {
 			link, err := node.AsLink()
 			if err != nil {
 				panic(err)
 			}
-			node, err = ls.Load(ipld.LinkContext{}, link, nil)
+			node, err = ls.Load(ipld.LinkContext{}, link, basicnode.Prototype.Any)
 			if err != nil {
 				panic(err)
 			}
@@ -160,26 +154,20 @@ func navigate(ls linking.LinkSystem, startLink ipld.Link, pathStr string) {
 		switch node.Kind() {
 		case ipld.Kind_Map:
 			node, err = node.LookupByString(seg.String())
-			if err != nil {
-				panic(err)
-			}
 		case ipld.Kind_List:
 			idx, err := seg.Index()
 			if err != nil {
 				panic(err)
 			}
 			node, err = node.LookupByIndex(idx)
-			if err != nil {
-				panic(err)
-			}
+		}
+		if err != nil {
+			panic(err)
 		}
 	}
 
 	fmt.Print("Found value: ")
-	err = dagjson.Encode(node, &noCloseWriter{})
-	if err != nil {
-		panic(err)
-	}
+	_ = dagjson.Encode(node, &noCloseWriter{})
 	fmt.Println()
 }
 
@@ -191,7 +179,7 @@ func (w *noCloseWriter) Write(p []byte) (int, error) {
 }
 
 func exploreNode(ls linking.LinkSystem, link ipld.Link, indent int) {
-	node, err := ls.Load(ipld.LinkContext{}, link, nil)
+	node, err := ls.Load(ipld.LinkContext{}, link, basicnode.Prototype.Any)
 	if err != nil {
 		panic(err)
 	}
@@ -228,10 +216,8 @@ func explore(n ipld.Node, indent int) {
 	case ipld.Kind_Link:
 		fmt.Printf("%sLink: %v\n", getIndent(indent), n)
 	default:
-		// Use dagjson to encode the node value.
 		var buf bytes.Buffer
-		err := dagjson.Encode(n, &buf)
-		if err != nil {
+		if err := dagjson.Encode(n, &buf); err != nil {
 			panic(err)
 		}
 		fmt.Printf("%sValue: %s\n", getIndent(indent), buf.String())
@@ -261,10 +247,8 @@ func applyPatches(ls linking.LinkSystem, rootNode ipld.Node) ipld.Node {
 		panic(err)
 	}
 
-	// Encode the patched node to JSON and decode it back as a node.
 	var buf bytes.Buffer
-	err = dagjson.Encode(patchedNode, &buf)
-	if err != nil {
+	if err := dagjson.Encode(patchedNode, &buf); err != nil {
 		panic(err)
 	}
 	
@@ -279,7 +263,7 @@ func applyPatches(ls linking.LinkSystem, rootNode ipld.Node) ipld.Node {
 		cidlink.LinkPrototype{
 			Prefix: cid.Prefix{
 				Version:  1,
-				Codec:    0x0129, // Changed from 0x71 to DAG-JSON multicodec
+				Codec:    0x0129,
 				MhType:   0x13,
 				MhLength: 32,
 			},
