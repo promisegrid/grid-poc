@@ -1,17 +1,7 @@
-ipld-path-cross-explore-patch: split into separate packages, add comments, fix errors
+ipld-path: remove extraneous code
 
-Split the code into three packages:
-- cross-block navigation in x/ipld-path-cross-explore-patch/cross/
-- data structure exploration in x/ipld-path-cross-explore-patch/explore/
-- patch application in x/ipld-path-cross-explore-patch/patch/
-
-Remove all code from ipldpath.go and ipldpath_test.go.  Move the
-code to the appropriate package.
-
-In explore(), when printing Link, decode the node and print it as JSON text.
-
-Ensure that the tests pass and that the code is well-structured and
-commented.  See the output of `go test -v` below.
+Remove all code from ipldpath.go and ipldpath_test.go that is not
+about demonstrating basic IPLD path traversal.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -23,19 +13,11 @@ Sysmsg:
   for raw string literals.  Do not remove or alter comments unless
   they are incorrect or misleading.  
 In:
-  .aidda/response
-  x/ipld-path-cross-explore-patch/ipldpath.go
-  x/ipld-path-cross-explore-patch/ipldpath_test.go
+  x/ipld-path/ipldpath.go
+  x/ipld-path/ipldpath_test.go
 Out:
-  x/ipld-path-cross-explore-patch/ipldpath.go
-  x/ipld-path-cross-explore-patch/ipldpath_test.go
-  x/ipld-path-cross-explore-patch/cross/cross.go
-  x/ipld-path-cross-explore-patch/cross/cross_test.go
-  x/ipld-path-cross-explore-patch/explore/explore.go
-  x/ipld-path-cross-explore-patch/explore/explore_test.go
-  x/ipld-path-cross-explore-patch/patch/patch.go
-  x/ipld-path-cross-explore-patch/patch/patch_test.go
-
+  x/ipld-path/ipldpath.go
+  x/ipld-path/ipldpath_test.go
 
 .stop
 
