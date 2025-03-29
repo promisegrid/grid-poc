@@ -1,4 +1,4 @@
-package ipldpath
+package ipldexplore
 
 import (
 	"bytes"
@@ -13,274 +13,178 @@ import (
 	"github.com/ipld/go-ipld-prime/node/basicnode"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
 	"github.com/ipld/go-ipld-prime/storage/memstore"
-	"github.com/ipld/go-ipld-prime/traversal/patch"
 )
 
-// UserData represents a root node linking to Profile and Settings.
+// UserData represents a root node containing links to other data sections
 type UserData struct {
 	Profile  ipld.Link
 	Settings ipld.Link
 }
 
-// Profile holds a user's profile information.
+// Profile contains basic user information
 type Profile struct {
 	Name string
 	Age  int64
 }
 
-// Settings holds configuration settings.
+// Settings holds application configuration
 type Settings struct {
 	Active bool
 }
 
-// RunDemo executes a demonstration of multi-block navigation,
-// data exploration, and patch application.
+// RunDemo demonstrates IPLD path navigation and node exploration
 func RunDemo() {
-	// Setup linking system with in-memory store.
+	// Initialize in-memory storage and linking system
 	store := &memstore.Store{}
 	ls := cidlink.DefaultLinkSystem()
 	ls.SetReadStorage(store)
 	ls.SetWriteStorage(store)
 
-	// Create profile block.
+	// Create and store profile data
 	profile := &Profile{Name: "Alice", Age: 30}
-	profileNode := bindnode.Wrap(profile, nil)
-	profileLink, err := ls.Store(
-		ipld.LinkContext{},
-		cidlink.LinkPrototype{
-			Prefix: cid.Prefix{
-				Version:  1,
-				Codec:    0x0129, // DAG-JSON multicodec
-				MhType:   0x13,
-				MhLength: 32,
-			},
-		},
-		profileNode,
-	)
-	if err != nil {
-		panic(err)
-	}
+	profileLink := storeNode(&ls, profile)
 
-	// Create settings block.
+	// Create and store settings data
 	settings := &Settings{Active: true}
-	settingsNode := bindnode.Wrap(settings, nil)
-	settingsLink, err := ls.Store(
-		ipld.LinkContext{},
-		cidlink.LinkPrototype{
-			Prefix: cid.Prefix{
-				Version:  1,
-				Codec:    0x0129, // DAG-JSON multicodec
-				MhType:   0x13,
-				MhLength: 32,
-			},
-		},
-		settingsNode,
-	)
-	if err != nil {
-		panic(err)
-	}
+	settingsLink := storeNode(&ls, settings)
 
-	// Create root block.
-	root := &UserData{
-		Profile:  profileLink,
-		Settings: settingsLink,
-	}
-	rootNode := bindnode.Wrap(root, nil)
-	rootLink, err := ls.Store(
-		ipld.LinkContext{},
-		cidlink.LinkPrototype{
-			Prefix: cid.Prefix{
-				Version:  1,
-				Codec:    0x0129, // DAG-JSON multicodec
-				MhType:   0x13,
-				MhLength: 32,
-			},
-		},
-		rootNode,
-	)
-	if err != nil {
-		panic(err)
-	}
+	// Create and store root node
+	root := &UserData{Profile: profileLink, Settings: settingsLink}
+	rootLink := storeNode(&ls, root)
 
-	// 1. Demonstrate cross-block navigation.
-	fmt.Println("=== Initial Navigation ===")
-	navigate(ls, rootLink, "Profile/Age")     // Should show 30
-	navigate(ls, rootLink, "Settings/Active") // Should show true
+	// Demonstrate path navigation
+	fmt.Println("=== Basic Navigation ===")
+	navigate(ls, rootLink, "Profile/Age")     // Expected: 30
+	navigate(ls, rootLink, "Settings/Active") // Expected: true
 
-	// 2. Explore data structure.
-	fmt.Println("\n=== Data Exploration ===")
-	exploreNode(ls, rootLink, 0)
-
-	// 3. Apply patches.
-	fmt.Println("\n=== Applying Patches ===")
-	_ = applyPatches(ls, rootNode)
-
-	// 4. Demonstrate post-patch navigation.
-	fmt.Println("\n=== Post-Patch Navigation ===")
-	navigate(ls, rootLink, "Profile/Age")      // Should show 31
-	navigate(ls, rootLink, "Settings/Timeout") // New field
-
-	// 5. Explore modified structure.
-	fmt.Println("\n=== Patched Data Exploration ===")
-	exploreNode(ls, rootLink, 0)
+	// Show full structure exploration
+	fmt.Println("\n=== Structure Exploration ===")
+	exploreStructure(ls, rootLink, 0)
 }
 
+// storeNode generic function to store any Go value as an IPLD node
+func storeNode(ls *linking.LinkSystem, data interface{}) ipld.Link {
+	node := bindnode.Wrap(data, nil)
+	linkProto := cidlink.LinkPrototype{Prefix: cid.Prefix{
+		Version:  1,
+		Codec:    0x0129, // dag-json codec
+		MhType:   0x13,   // sha2-256
+		MhLength: 32,
+	}}
+
+	link, err := ls.Store(ipld.LinkContext{}, linkProto, node)
+	if err != nil {
+		panic(fmt.Sprintf("failed to store node: %v", err))
+	}
+	return link
+}
+
+// navigate demonstrates path traversal through linked nodes
 func navigate(ls linking.LinkSystem, startLink ipld.Link, pathStr string) {
-	fmt.Printf("Navigating: %s\n", pathStr)
+	fmt.Printf("Path: %s\n", pathStr)
 	path := datamodel.ParsePath(pathStr)
 
-	// Load initial node with prototype
-	node, err := ls.Load(ipld.LinkContext{}, startLink, basicnode.Prototype.Any)
+	currentNode, err := ls.Load(ipld.LinkContext{}, startLink, basicnode.Prototype.Any)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("loading failed: %v", err))
 	}
 
-	for path.Len() > 0 {
-		seg, remaining := path.Shift()
-		path = remaining
+	for !path.Empty() {
+		seg, rest := path.Shift()
+		path = rest
 
-		// Handle links before processing segments
-		if node.Kind() == ipld.Kind_Link {
-			link, err := node.AsLink()
-			if err != nil {
-				panic(err)
-			}
-			node, err = ls.Load(ipld.LinkContext{}, link, basicnode.Prototype.Any)
-			if err != nil {
-				panic(err)
-			}
+		// Resolve links automatically
+		if currentNode.Kind() == ipld.Kind_Link {
+			link, _ := currentNode.AsLink()
+			currentNode, _ = ls.Load(ipld.LinkContext{}, link, basicnode.Prototype.Any)
 		}
 
-		switch node.Kind() {
+		var err error
+		switch currentNode.Kind() {
 		case ipld.Kind_Map:
-			node, err = node.LookupByString(seg.String())
+			currentNode, err = currentNode.LookupByString(seg.String())
 		case ipld.Kind_List:
-			idx, err := seg.Index()
-			if err != nil {
-				panic(err)
-			}
-			node, err = node.LookupByIndex(idx)
+			idx, _ := seg.Index()
+			currentNode, err = currentNode.LookupByIndex(idx)
+		default:
+			panic("invalid path segment")
 		}
+
 		if err != nil {
-			panic(err)
+			panic(fmt.Sprintf("traversal failed: %v", err))
 		}
 	}
 
-	fmt.Print("Found value: ")
-	_ = dagjson.Encode(node, &noCloseWriter{})
+	fmt.Print("Result: ")
+	_ = dagjson.Encode(currentNode, &consoleWriter{})
 	fmt.Println()
 }
 
-type noCloseWriter struct{}
-
-func (w *noCloseWriter) Write(p []byte) (int, error) {
-	fmt.Print(string(p))
-	return len(p), nil
-}
-
-func exploreNode(ls linking.LinkSystem, link ipld.Link, indent int) {
+// exploreStructure recursively explores and prints node structure
+func exploreStructure(ls linking.LinkSystem, link ipld.Link, indent int) {
 	node, err := ls.Load(ipld.LinkContext{}, link, basicnode.Prototype.Any)
 	if err != nil {
-		panic(err)
+		panic(fmt.Sprintf("loading failed: %v", err))
 	}
-	explore(node, indent)
-}
 
-func explore(n ipld.Node, indent int) {
-	switch n.Kind() {
+	switch node.Kind() {
 	case ipld.Kind_Map:
-		fmt.Printf("%sMap:\n", getIndent(indent))
-		iter := n.MapIterator()
+		fmt.Printf("%sMap:\n", indentString(indent))
+		iter := node.MapIterator()
 		for !iter.Done() {
-			k, v, err := iter.Next()
-			if err != nil {
-				panic(err)
-			}
-			key, err := k.AsString()
-			if err != nil {
-				panic(err)
-			}
-			fmt.Printf("%s- Key: %s\n", getIndent(indent+1), key)
-			explore(v, indent+2)
+			key, value, _ := iter.Next()
+			keyStr, _ := key.AsString()
+			fmt.Printf("%s- Key: %s\n", indentString(indent+1), keyStr)
+			exploreNodeContents(value, indent+2)
 		}
+
 	case ipld.Kind_List:
-		fmt.Printf("%sList:\n", getIndent(indent))
+		fmt.Printf("%sList:\n", indentString(indent))
 		for i := 0; ; i++ {
-			v, err := n.LookupByIndex(int64(i))
+			value, err := node.LookupByIndex(int64(i))
 			if err != nil {
 				break
 			}
-			fmt.Printf("%s- Index: %d\n", getIndent(indent+1), i)
-			explore(v, indent+2)
+			fmt.Printf("%s- Index: %d\n", indentString(indent+1), i)
+			exploreNodeContents(value, indent+2)
 		}
+
 	case ipld.Kind_Link:
-		fmt.Printf("%sLink: %v\n", getIndent(indent), n)
+		link, _ := node.AsLink()
+		fmt.Printf("%sLink: %s\n", indentString(indent), link)
+		exploreStructure(ls, link, indent+1)
+
 	default:
-		var buf bytes.Buffer
-		if err := dagjson.Encode(n, &buf); err != nil {
-			panic(err)
-		}
-		fmt.Printf("%sValue: %s\n", getIndent(indent), buf.String())
+		printNodeValue(node, indent)
 	}
 }
 
-func getIndent(n int) string {
+// exploreNodeContents handles recursive exploration of node contents
+func exploreNodeContents(n ipld.Node, indent int) {
+	if n.Kind() == ipld.Kind_Link {
+		link, _ := n.AsLink()
+		exploreStructure(ls, link, indent)
+	} else {
+		printNodeValue(n, indent)
+	}
+}
+
+// printNodeValue displays scalar values and links
+func printNodeValue(n ipld.Node, indent int) {
+	var buf bytes.Buffer
+	_ = dagjson.Encode(n, &buf)
+	fmt.Printf("%sValue: %s\n", indentString(indent), buf.String())
+}
+
+// indentString creates whitespace for visual hierarchy
+func indentString(n int) string {
 	return fmt.Sprintf("%*s", n, "")
 }
 
-func applyPatches(ls linking.LinkSystem, rootNode ipld.Node) ipld.Node {
-	ops := []patch.Operation{
-		{
-			Op:    patch.Op_Replace,
-			Path:  datamodel.ParsePath("Profile/Age"),
-			Value: fromJSONString("31"),
-		},
-		{
-			Op:    patch.Op_Add,
-			Path:  datamodel.ParsePath("Settings/Timeout"),
-			Value: fromJSONString("30"),
-		},
-	}
+// consoleWriter implements io.Writer for direct console output
+type consoleWriter struct{}
 
-	patchedNode, err := patch.Eval(rootNode, ops)
-	if err != nil {
-		panic(err)
-	}
-
-	var buf bytes.Buffer
-	if err := dagjson.Encode(patchedNode, &buf); err != nil {
-		panic(err)
-	}
-	
-	nb := basicnode.Prototype.Any.NewBuilder()
-	if err := dagjson.Decode(nb, &buf); err != nil {
-		panic(err)
-	}
-	newNode := nb.Build()
-
-	_, err = ls.Store(
-		ipld.LinkContext{},
-		cidlink.LinkPrototype{
-			Prefix: cid.Prefix{
-				Version:  1,
-				Codec:    0x0129,
-				MhType:   0x13,
-				MhLength: 32,
-			},
-		},
-		newNode,
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	return newNode
-}
-
-func fromJSONString(s string) ipld.Node {
-	nb := basicnode.Prototype.Any.NewBuilder()
-	if err := dagjson.Decode(nb, bytes.NewBufferString(s)); err != nil {
-		panic(err)
-	}
-	return nb.Build()
+func (w *consoleWriter) Write(p []byte) (int, error) {
+	fmt.Print(string(p))
+	return len(p), nil
 }

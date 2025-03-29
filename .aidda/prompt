@@ -1,10 +1,10 @@
-ipld-cross: remove extraneous code
+ipld-explore: remove extraneous code
 
-Remove all code that is not about demonstrating IPLD cross-block path
-traversal.  
+Remove all code that is not about demonstrating IPLD path and node
+exploration.  Remove all code that is not necessary for the
+demonstration.  Ensure that the code compiles and runs without errors.
 
-Ensure the code is well-commented and easy to understand.  Ensure that
-the code compiles and runs without errors.
+Ensure the code is well-commented and easy to understand.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -16,11 +16,11 @@ Sysmsg:
   for raw string literals.  Do not remove or alter comments unless
   they are incorrect or misleading.  
 In:
-  x/ipld-cross/ipldcross.go
-  x/ipld-cross/ipldcross_test.go
+  x/ipld-explore/ipldexplore.go
+  x/ipld-explore/ipldexplore_test.go
 Out:
-  x/ipld-cross/ipldcross.go
-  x/ipld-cross/ipldcross_test.go
+  x/ipld-explore/ipldexplore.go
+  x/ipld-explore/ipldexplore_test.go
 
 .stop
 

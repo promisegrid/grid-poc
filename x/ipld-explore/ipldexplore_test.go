@@ -1,14 +1,14 @@
-package ipldpath
+package ipldexplore
 
 import (
 	"testing"
 )
 
 func TestRunDemo(t *testing.T) {
-	// Capture potential panics
+	// Verify demo runs without panicking
 	defer func() {
 		if r := recover(); r != nil {
-			t.Fatalf("Demo panicked: %v", r)
+			t.Errorf("Demo panicked: %v", r)
 		}
 	}()
 
