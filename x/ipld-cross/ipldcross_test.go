@@ -5,12 +5,12 @@ import (
 )
 
 func TestRunDemo(t *testing.T) {
-	// Capture potential panics
+	// Verify the demo runs without errors
 	defer func() {
 		if r := recover(); r != nil {
-			t.Fatalf("Demo panicked: %v", r)
+			t.Fatalf("Cross-block traversal demo failed: %v", r)
 		}
 	}()
-
+	
 	RunDemo()
 }
