@@ -1,4 +1,4 @@
-package ipldpath
+package ipldpatch
 
 import (
 	"testing"
