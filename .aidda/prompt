@@ -1,3 +1,32 @@
+ipld-explore: remove extraneous code, improve code, fix errors
+
+Remove all code that is not about demonstrating recursively exploring
+and printing an IPLD node structure.    
+
+Ensure the code is well-commented and easy to understand.  
+
+Ensure that the code compiles and runs without errors.
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p,
+  prefer recent examples to avoid deprecated APIs.  Please verify that
+  the code compiles and runs without errors -- do not hallucinate
+  library methods, structs, or functions that do not exist. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file.
+In:
+  x/ipld-explore/ipldexplore.go
+  x/ipld-explore/ipldexplore_test.go
+Out:
+  x/ipld-explore/ipldexplore.go
+
+
+.stop
+
+
 ipld-explore: remove extraneous code
 
 Remove all code that is not about demonstrating IPLD path and node
