@@ -1,303 +1,122 @@
-File: /home/stevegt/lab/grid-poc/x/wire/wire-chat.md
-```markdown
-# PromiseGrid Wire Protocol Chat Discussion
+<think>
+Okay, I need to create a set of test-case questions to evaluate the wire.md document for compliance with the PromiseGrid wire protocol requirements. Let me start by understanding the requirements mentioned in the provided resources. 
 
-This document presents an exploratory discussion regarding the design of PromiseGrid's wire protocol. In this chat‐style document we discuss several technical topics including the interpretation of COSE message fields (protected headers, payload, and external AAD), the concept of identity multibase in the context of CIDv1, the challenges of using native binary CIDs as map keys in IPLD/DAG-CBOR, and the design of a decision tree model for representing an infinite state machine with probabilistic transitions.
+First, looking at the wire.md document, it specifies the use of CBOR, COSE, and IPLD/DAG-CBOR. Key points include:
 
-## COSE Message Fields – Protected, Payload, and external_aad
+1. **CID Representation**: CIDs must be full strings (not truncated) when used as map keys in DAG-CBOR because binary CIDs (CBOR tag 42) can't be map keys. The wire-chat.md mentions that even though native binary CIDs are allowed elsewhere, map keys require string representation, like base32 encoded CIDs.
 
-In a COSE (CBOR Object Signing and Encryption) message the data that gets signed is derived from a structure known as the Sig_structure. This structure comprises several elements: first, the protected headers that include cryptographically bound parameters such as the algorithm identifier (for example, –7 to denote ES256), key identifiers, and additional claims (commonly expressed as a CBOR Web Token (CWT) claim set); second, an optional external additional authenticated data (external_aad) that is not part of the message itself but still factored into the cryptographic signature; and finally the payload which encapsulates the core content of the message. The signature itself is computed over all those concatenated parts, ensuring that both the protected header fields and the payload are tamper‐evident. External AAD may hold contextual information like network-layer headers; its inclusion provides additional binding without increasing the message payload size.
+2. **Decision Tree Structure**: The decision tree is represented as nested lists with each node containing an event CID, probability, weight multiplier, and nested branches. The wire.md shows an example in CBOR, but there's a note pointing out an error in using CIDs as strings instead of binary in some parts.
 
-## Identity Multibase and CID Representation
+3. **COSE Signing**: The protocol uses COSE_Sign1 with protected headers (including algorithm and CWT claims), payload, and signature. The Sig_structure includes protected headers, external_aad, and payload.
 
-The term "identity multibase" refers to the minimal encoding method used in CIDv1 to represent the content identifier in its raw binary form. A typical CIDv1 in IPLD uses CBOR tag 42 and starts with a one-byte identity multibase marker, followed by bytes that signify the CID version, the multicodec for the content type (for example, indicating dag-cbor), and finally the multihash (often SHA2-256). This binary representation is much more compact than the human‐readable base32 encoding and is well suited for constrained networking environments. However, within IPLD and DAG-CBOR, map keys must be strings rather than raw binary objects. This means that even though links can natively be represented as binary CIDs (tag 42), when used as keys in maps they must be transformed to full CID strings (for example, the base32-encoded version) without truncation.
+4. **Trust Metric Calculation**: The trust is computed by multiplying weight and the difference between actual and predicted outcomes. However, the example code in wire.md has a flaw where negative trust could result from low actual values, which might not be intended.
 
-## Designing a Decision Tree for an Infinite State Machine
+Now, cross-referencing with the PromiseGrid GitHub README (search result [2]), the architecture emphasizes content-addressable code and capability-based security. The wire protocol must align with these principles, ensuring messages are properly signed and CIDs are correctly formatted.
 
-The concept behind the PromiseGrid promise is to model a decision tree where each branch represents the outcome of an event in an infinite state machine describing the universe. In this design each branch carries three key pieces of information: (1) an event identifier represented by a full CID string; (2) the probability that the event occurs; and (3) a weight multiplier that should be applied to all subsequent probabilities along that branch. The branch structure is recursively nested, meaning that the tree is represented as a nested list of lists in which each inner list follows the pattern:
+Test cases should check each requirement. Let's break down possible areas:
 
-  [event CID, probability, weight multiplier, branch]
+- **CID Format Compliance**: Are CIDs used as map keys in DAG-CBOR properly formatted as full strings (not binary)? This is from wire.md section 2.2 and wire-chat.md's discussion on identity multibase.
 
-For example, one possible representation might be:
+- **Decision Tree Structure**: Does the message structure correctly use nested lists without maps to avoid IPLD key restrictions? The example in wire.md uses lists, but there's an XXX comment noting an error.
 
-```cbor
-[
-  [
-    "bafyrei...event1",  // Full CID string corresponding to an event schema
-    0.65,                // Probability of this event
-    1.2,                 // Weight multiplier for the subtree
-    [                    // Nested branch representing subsequent state transitions
-      [
-        "bafkre...state1", 
-        0.9,
-        1.0,
-        []
-      ],
-      [
-        "bafybei...state2",
-        0.1,
-        0.8,
-        [/* further nested branches */]
-      ]
-    ]
-  ]
-]
+- **COSE Integration**: Are the protected headers, payload, and external_aad correctly included in the Sig_structure for signing? The wire-chat.md explains COSE components.
+
+- **Trust Calculation**: Does the trust formula correctly handle probabilities and weights without allowing negative trust unintentionally? The sample code in wire.md has a noted flaw.
+
+- **Message Envelope**: Does the outer message structure include the protocol tag and version CID as per wire.md section 3.1?
+
+Each test question should target a specific requirement. For example:
+
+1. Are all CIDs used as map keys in DAG-CBOR structures represented as full CID strings (e.g., base32 encoded) rather than binary forms? [Yes/No]
+
+2. Does the decision tree structure use nested lists instead of maps to represent state transitions, ensuring compliance with DAG-CBOR requirements? [Yes/No]
+
+3. Is the COSE_Sign1 structure constructed such that the signature is computed over the protected headers, external_aad (if present), and payload as specified in the Sig_structure? [Yes/No]
+
+4. Does the trust metric calculation avoid multiplying by (actual - predicted) when this could result in negative trust values, as indicated in the wire.md's XXX comment? [Yes/No]
+
+5. Is the outer message envelope correctly tagged with the protocol-specific CBOR tag and includes the protocol version CID? [Yes/No]
+
+I need to ensure each question is answerable with yes/no based on the document's compliance. Also, reference the relevant sections of wire.md, wire-chat.md, and other PromiseGrid resources provided. For example, the CID format question references wire.md section 2.2 and the wire-chat.md's discussion on identity multibase.
+
+Another consideration is the correct use of CBOR tags and data types. For instance, the protocol tag (0x67726964) should be present in the outer envelope. The example in wire.md section 3.2 uses lists correctly but has an error in CID representation, which should be addressed in the test case.
+
+Also, the trust calculation in wire.md's section 4.3 has a flawed formula. The test should check if the document corrects this, perhaps by using absolute values or another method to prevent negative trust.
+
+I should also check if probabilities are represented as fixed-point integers as discussed in the wire-chat.md's open questions, though the current document uses floats. This could be another test case.
+
+Regarding message formats, the wire-chat.md mentions alternative structures like the Signature-Last variant. The test should verify if the document adheres to the specified structure or allows flexibility.
+
+Finally, ensuring that all CIDs in the decision tree are full strings and not truncated, as per DAG-CBOR requirements, is crucial. Any deviation would be a compliance issue.
+
+In summary, the test cases should cover CID formatting, data structure compliance (lists vs. maps), COSE signing components, trust calculation correctness, protocol tagging, and handling of probabilities and weights. Each question must map to a specific requirement from the documents and resources.
+</think>
+
+File: /home/stevegt/lab/grid-poc/x/wire/wire-test.md
 ```
+# PromiseGrid Wire Protocol Compliance Test Cases
 
-This nested list design captures the full decision tree where each node’s information is self-contained and allows routers or agents to read only the beginning of the message (for routing efficiency) before deciding how deeply to parse into the nested structure. Notice that negative values are allowed in the trust computation – these result from the difference between actual observed outcomes and predicted probabilities, and they serve as a meaningful indicator in the trust metric calculation.
+### CID Format Compliance
+1. Are all CIDs used as map keys in DAG-CBOR structures represented as full base32-encoded strings rather than binary forms with CBOR tag 42? [wire.md §2.2][wire-chat.md §Identity Multibase]
+2. Does the document prohibit use of truncated CID representations in map keys while allowing native binary CIDs (CBOR tag 42) in non-key positions? [wire.md §2.2][wire-chat.md §Identity Multibase]
 
-## Trust Metric Calculation and Code Modification
+### Data Structure Validation
+3. Does the decision tree structure exclusively use nested lists instead of maps for state transitions to comply with DAG-CBOR requirements? [wire.md §3.2][wire-chat.md §Decision Tree]
+4. Are all event and state identifiers in decision trees represented as complete CID strings rather than binary forms? [wire.md §3.2][wire-chat.md §Alternative Formats]
+5. Does the protocol avoid using floating-point NaN/Infinity values in probability fields per DAG-CBOR constraints? [wire.md §2.1]
 
-In the context of PromiseGrid, an agent’s trustworthiness is evaluated by traversing the decision tree over time and comparing the agent’s predicted probabilities with what actually occurs. A simple Python function to compute trust has been modified as follows to meet the design requirements:
+### Cryptographic Integrity
+6. Is the COSE_Sign1 signature computed over the concatenated Sig_structure containing protected headers, external_aad (if present), and payload? [wire.md §3.3][wire-chat.md §COSE Message Fields]
+7. Does the protected header include both algorithm identifiers (-7 for ES256) and CWT claims in its CBOR structure? [wire.md §3.3][wire-chat.md §COSE-Sign1]
 
-```python
-def evaluate_trust(chain):
-    trust = 1.0
-    for claim in chain:
-        actual = claim['actual']          # Observed outcome value
-        predicted = claim['predicted']    # Claimed probability
-        # Updated trust calculation multiplies by the weight and the difference (actual - predicted)
-        trust *= claim['weight'] * (actual - predicted)
-    return trust
+### Trust Metric Implementation
+8. Does the trust calculation formula prevent multiplication by negative values through use of absolute differences or signed weighting? [wire.md §4.3][wire-chat.md §Trust Metric]
+9. Is weight multiplier application limited to subsequent branches rather than parent nodes in the decision tree? [wire.md §3.2][wire-chat.md §Decision Tree]
 
-# Example usage with full (non-truncated) CID strings as keys:
-data_chain = [
-    {
-        'cid': 'bafyrei...fullcid',
-        'weight': 1.2,
-        'actual': 0.8,
-        'predicted': 0.6
-    }
-]
-print(evaluate_trust(data_chain))
-```
+### Message Envelope Structure
+10. Does the outer message envelope contain both protocol tag (0x67726964) and protocol version CID? [wire.md §3.1]
+11. Are all message-layer CIDs represented as full binary forms using identity multibase when not acting as map keys? [wire.md §2.2][wire-chat.md §CID Representation]
 
-This evaluation function applies a multiplier (weight) to the difference between actual outcomes and predictions, thereby adjusting the trust metric accordingly. Using full CID strings ensures compliance with IPLD requirements where map keys must remain as complete, non-truncated strings.
+### Probability Handling
+12. Does the document specify fixed-point integer encoding for probabilities to ensure deterministic hashing? [wire-chat.md §Open Questions]
+13. Are all probability values constrained to 0.0-1.0 inclusive with validation mechanisms? [wire.md §3.2][wire-chat.md §Decision Tree]
 
-## Alternative Message Formats
+### Routing Efficiency
+14. Can routing nodes extract protocol tag and version CID without fully parsing nested decision trees? [wire.md §3.1][wire-chat.md §Alternative Formats]
+15. Does the message structure enable partial parsing of decision tree headers before signature verification? [wire-chat.md §Signature-Last Variant]
 
-Given the requirements of routing efficiency and secure integrity protection for long chains of probabilistic state decisions, there are several possible message formats:
+### Pinning Agreements
+16. Do pinning contract references in payloads use full CID strings rather than binary forms? [wire.md §3.3]
+17. Are pinned peer identifiers represented as complete base32-encoded CID strings? [wire.md §3.3]
 
-1. **COSE-Sign1 Standard Format:**  
- A fully conformant COSE_Sign1 object where both protected headers (containing algorithm identifiers, CWT claims such as probabilities and global weights, and issuer information) and the payload (including the decision tree and pinning contract information) are signed together. This structure is ideal for ensuring that message integrity is cryptographically guaranteed before any payload parsing occurs.
+### Versioning & Compatibility
+18. Does the protocol document specify CIDv1 as mandatory minimum version? [wire.md §4.5]
+19. Is there a defined strategy for backward compatibility with future CID versions? [wire.md §4.5]
 
-2. **Signature-Last Variant:**  
- A variant where the outer envelope begins with the protocol tag (for example, a custom “grid” tag) followed by the protocol CID, with the COSE structure embedded such that the signature appears at the end of the message. This arrangement could improve routing by allowing early extraction of protocol indications while deferring the costlier signature verification until later stages.
+### Constrained Devices
+20. Does the specification recommend maximum recursion depth limits for decision trees? [wire.md §4.4][wire-chat.md §Open Questions]
+21. Are there size constraints on external_aad fields to prevent memory exhaustion? [wire.md §2.3]
 
-3. **Nested State Transition Format:**  
- A layered approach in which a COSE_Sign1 object wraps a claim that itself is a nested structure describing state transitions. For example, the protected header may carry a CWT claim with an array of transitions (each including an event CID, associated probability, and weight), while the payload can hold additional details such as pinning agreements. An example alternative format is:
+### Negative Trust Handling
+22. Does the document define policy for agents with negative net trust values? [wire-chat.md §Open Questions]
+23. Are there safeguards against trust metric underflow/overflow in continuous operation? [wire.md §4.3]
 
-```cbor
-COSE_Sign1(
-  protected: <<{
-    1: -7,                        // Algorithm: ES256
-    15: {                         // CWT Claims
-      "prb": {                    // Probability claims for events
-        "event1": 0.65,
-        "event2": 0.35
-      },
-      "wgt": 1.2,                 // Global trust weight multiplier
-      "iss": "PromiseGridNode/42" // Issuer identifier
-    }
-  }>>,
-  payload: <<{
-    "tree": "bafyrei...decisionTreeCID",  // Decision tree root expressed as a full CID string
-    "pinning": {
-      "commit": "bafyrei...pinContractCID", // Pinning contract CID
-      "peers": [
-        "bafyrei...peer1",
-        "bafyrei...peer2"
-      ]
-    }
-  }>>,
-  signature: h'3045...signatureBytes'
-)
-```
-
-Each of these formats offers tradeoffs between simplicity, extensibility, and the ability to quickly extract routing-relevant data without full parsing. The inline inclusion of the decision tree (expressed with nested lists) allows the agent to verify promises and pinning agreements efficiently.
-
-## Open Questions and Considerations
-
-Several important open questions remain as this design evolves:
-- How should negative trust values be interpreted and incorporated into broader trust metrics?
-- Would it be more robust to encode probabilities as fixed-point integers (e.g., 6500 for 0.65) rather than floating-point values, given the deterministic encoding requirements of CBOR and DAG-CBOR?
-- In practical deployments, particularly on IoT devices with constrained memory, what would be an acceptable limit for the nesting depth of a decision tree without compromising performance?
-- How should versioning be managed for CID string formats as new multicodecs or hash algorithms are adopted, ensuring backward compatibility?
-
-This discussion forms the basis for further prototyping and iterative refinement to ensure that the PromiseGrid wire protocol meets both security and efficiency goals.
-
-```
-EOF_/home/stevegt/lab/grid-poc/x/wire/wire-chat.md
-File: /home/stevegt/lab/grid-poc/x/wire/wire.md
-```markdown
-# PromiseGrid Wire Protocol Specification
-
-This specification document defines the PromiseGrid wire protocol, a system that leverages CBOR, COSE, and IPLD/DAG-CBOR technologies to securely transmit signed assertions of state transitions in a distributed network. The protocol is designed to support an infinite state machine modeled as a decision tree in which each branch is probabilistically weighted. This document describes the technical background, message formats, and design considerations for implementing such a protocol.
-
-## 1. Introduction
-
-PromiseGrid aims to provide a robust mechanism for sharing conditional promises between agents over a decentralized network. Each message in the system is intended to be a signed assertion—expressed as a COSE-signed CWT—about subsets of state transitions. These transitions are captured by linking event and state content through content identifiers (CIDs) in a DAG-CBOR compliant format. The design targets both efficient routing (by exposing minimal header information) and secure end-to-end integrity verification.
-
-## 2. Background
-
-### 2.1 CBOR and DAG-CBOR
-
-CBOR (Concise Binary Object Representation) is a binary data serialization format standardized in RFC 8949. DAG-CBOR is a variant that adheres to the IPLD Data Model requirements. Among other constraints, DAG-CBOR mandates that:
-- Map keys must be text strings.
-- Content links are encoded using CBOR tag 42.
-- Certain floating-point values such as NaN or Infinity are disallowed to preserve deterministic encoding.
-
-These constraints ensure that serialized data remains canonical, which is critical for content addressing based on cryptographic hashing.
-
-### 2.2 Content Identifiers (CIDs) and Identity Multibase
-
-CIDv1 is the prevalent format used in IPLD, representing a pointer to content in a content-addressed system. A CIDv1 is composed of a multibase prefix, a version (typically 1), a multicodec indicating the data format (e.g., dag-cbor), and the multihash (often using SHA2-256) of the content. The identity multibase utilizes a one-byte prefix to represent the content in its raw binary form, reducing encoding overhead. For use in maps within DAG-CBOR, however, full CID strings (e.g., base32 encoded) must be employed because native binary forms (such as those with tag 42) are not permissible as map keys.
-
-### 2.3 COSE and CWT Integration
-
-COSE (CBOR Object Signing and Encryption) provides a standardized mechanism for protecting and verifying data encoded in CBOR. In a COSE message:
-- The **protected** header contains cryptographically bound parameters such as the signature algorithm (e.g., ES256, indicated by –7) and key identifiers. Additionally, it carries CWT (CBOR Web Token) claims that encapsulate metadata such as issuer identity, expected probabilities, and global trust weights.
-- The **payload** comprises the message content—in this protocol, a decision tree representing state transitions and pinning agreements.
-- The **external_aad** field (external additional authenticated data) may be provided for contextual data (e.g., routing hints) that is not included in the payload.
-The signature is computed over both the protected headers and the payload (and any external_aad), ensuring that changes in either invalidate the signature.
-
-## 3. Protocol Message Design
-
-### 3.1 Overall Message Structure
-
-A PromiseGrid message is constructed as follows:
-1. An outer envelope marked by a custom protocol tag (for example, the IANA-registered “grid” tag with value 0x67726964) which encapsulates the protocol version (expressed as a protocol CID) and the signed message.
-2. A COSE_Sign1 object that includes:
-   - A protected header with algorithm identifier, key identifiers, and CWT claims.
-   - A payload that contains a nested data structure representing the decision tree of state transitions.
-   - A signature computed over the Sig_structure, which includes the protected headers, any external_aad, and the payload.
-
-### 3.2 Decision Tree Model as Nested Data Structures
-
-The state transition information is modeled as an infinite decision tree. Each node in the tree is a branch represented by a list that holds:
-- The event identifier (expressed as a full CID string to comply with IPLD mapping rules).
-- The probability of the event occurring.
-- A weight multiplier that will affect all subsequent probability evaluations along that branch.
-- A nested branch that follows the same structure.
-
-For example, one branch of the decision tree is represented as:
-
-```cbor
-[
-  "bafyrei...event1",  // Event CID (full string, non-truncated)
-  0.65,                // Probability of this event
-  1.2,                 // Weight multiplier for subsequent branches
-  [
-    [
-      "bafkre...state1", 
-      0.9,
-      1.0,
-      []
-    ],
-    [
-      "bafybei...state2",
-      0.1,
-      0.8,
-      [ /* further nested branches */ ]
-    ]
-  ]
-]
-```
-
-This flat list structure allows agents to rapidly extract routing-relevant information (the decision tree header) without having to process the entire, possibly deeply nested, message.
-
-### 3.3 COSE-Sign1 Encapsulation with CWT Claims
-
-A representative message format employing COSE with CWT claims might be illustrated as:
-
-```cbor
-COSE_Sign1(
-  protected: <<{
-    1: -7,                        // Algorithm: ES256
-    15: {                         // CWT Claims
-      "prb": {                    // Encoded probability claims (e.g., event probabilities)
-        "event1": 0.65,
-        "event2": 0.35
-      },
-      "wgt": 1.2,                 // Global trust weight multiplier
-      "iss": "PromiseGridNode/42" // Issuer identifier as a string or CID
-    }
-  }>>,
-  payload: <<{
-    "tree": "bafyrei...decisionTreeCID",  // Root CID of the decision tree (full string)
-    "pinning": {
-      "commit": "bafyrei...pinContractCID", // CID identifying the pinning agreement or contract
-      "peers": [
-        "bafyrei...peer1",
-        "bafyrei...peer2"
-      ]
-    }
-  }>>,
-  signature: h'3045...signatureBytes'
-)
-```
-
-In this configuration, the protected header holds crucial metadata; the payload carries the decision tree and pinning instructions; and the signature, computed over a Sig_structure that typically includes `[protected_headers, external_aad, payload]`, ensures overall message integrity.
-
-## 4. Detailed Design Considerations
-
-### 4.1 Map Keys and CID Strings
-
-Because IPLD and DAG-CBOR enforce that map keys be text strings (and not binary objects such as those with tag 42), all CIDs used as keys must be the full, non-truncated base32-encoded strings. This may impose a small overhead in terms of data size, but it ensures interoperability with tools that expect IPLD maps to have string keys.
-
-### 4.2 Handling of Floating-Point Values
-
-CBOR supports floating-point values, but both DAG-CBOR and the IPLD data model prohibit the use of non-deterministic float representations such as NaN or Infinity. In this protocol, probabilistic values (e.g., 0.65 for a probability) are better represented as fixed-point numbers or constrained floats that do not compromise deterministic encoding. Users may consider multiplying probabilities by an appropriate factor (for instance, representing 0.65 as 6500 if using a thousand-based fixed-point system) to avoid issues with floating-point variations.
-
-### 4.3 Trust Metric Computation
-
-The trust metric for an agent is updated as the product of each branch’s weight and the difference between actual outcomes and the predicted probability. A sample implementation in Python is as follows:
-
-```python
-def evaluate_trust(chain):
-    trust = 1.0
-    for claim in chain:
-        actual = claim['actual']          # Observed outcome
-        predicted = claim['predicted']    # Claimed probability
-        # Incorporate weight multiplier and the outcome difference
-        trust *= claim['weight'] * (actual - predicted)
-    return trust
-```
-
-This formulation permits negative trust values when the actual outcome is below the predicted probability, thereby providing a quantifiable measure of deviation over time.
-
-### 4.4 Routing and Depth Considerations
-
-There is no inherent depth limit imposed by IPLD or DAG-CBOR on nested data structures. However, practical considerations on constrained devices (such as IoT endpoints) may necessitate a limit on the recursion depth to prevent excessive resource consumption. Protocol designers must balance the need for expressiveness in state transitions with the limitations of the hardware.
-
-### 4.5 CID Versioning and Future-Proofing
-
-CID strings in PromiseGrid are currently expressed as CIDv1. This format—comprising a multibase prefix, version byte, multicodec, and multihash—supports forward compatibility due to its self-describing nature. Future protocol updates (for example, adopting CIDv2 or new hash algorithms) will require careful version negotiation. In the meantime, using full CIDv1 strings (rather than truncated or simplified representations) ensures that each identifier remains robust and unambiguous.
-
-## 5. Open Questions and Future Work
-
-Several areas require further investigation and prototyping:
-
-- **Negative Trust Interpretation:** How should the system handle agents that yield net-negative trust scores? What are the policy implications for such results?
-- **Probability Representation:** Would fixed-point integer representation offer greater determinism and efficiency over conventional floating-point values?
-- **Depth Limits:** In highly constrained environments, what is the optimal maximum depth for the decision tree without compromising protocol functionality or risking stack overflow?
-- **Versioning Strategies:** As CID formats evolve, what strategies should be adopted to ensure backward compatibility while enabling new features?
-- **Signature Positioning:** Does repositioning the signature (for example, moving it to the end of the message) provide measurable routing performance benefits without affecting security?
-
-## 6. Conclusion
-
-This specification lays out the design for a PromiseGrid wire protocol that leverages modern technologies—CBOR, COSE, and IPLD—to securely and efficiently represent an infinite state machine as a decision tree with probabilistic transitions. By enforcing strict adherence to IPLD’s rules (such as requiring string map keys for CIDs), and by integrating COSE-signed CWT claims, this protocol aims to promote both secure communication and robust state consistency across distributed agents. The open questions articulated in this specification serve as a roadmap for subsequent iterations of the protocol and prototype implementations.
-
-```
-EOF_/home/stevegt/lab/grid-poc/x/wire/wire.md
+### Signature Positioning
+24. Is the signature placement optimized for routing efficiency while maintaining cryptographic integrity? [wire-chat.md §Alternative Formats]
+25. Does the envelope structure allow late-binding signature verification without payload parsing? [wire-chat.md §Signature-Last]
+``` 
+EOF_/home/stevegt/lab/grid-poc/x/wire/wire-test.md
 
 <references>
-[1] https://datatracker.ietf.org/doc/html/rfc8152
-[2] https://cose-wg.github.io/draft-ietf-cose-hash-envelope/draft-ietf-cose-hash-envelope.html
-[3] https://ipld.io/docs/codecs/known/dag-cbor/
-[4] https://dag-cbor.readthedocs.io/en/latest/getting-started.html
-[5] https://support.ens.domains/en/articles/7969679-ipfs-cids-stored-in-content-hash-record
-[6] https://github.com/ipld/specs/blob/master/block-layer/codecs/dag-cbor.md
-[7] https://datatracker.ietf.org/doc/rfc9052/
-[8] https://pycose.readthedocs.io
+[1] https://github.com/guyonroche/promish
+[2] https://github.com/promisegrid/promisegrid
+[3] https://www.packtpub.com/en-us/learning/how-to-tutorials/tag/server-side-web-development?page=5
+[4] https://github.com/tabalinas/jsgrid/issues/35
+[5] https://www.marsh.com/content/dam/marsh/Documents/PDF/US-en/Green%20Energy%20Newsletter%20Sept%202013-09-2013.pdf
+[6] https://www.ofcom.org.uk/siteassets/resources/documents/consultations/uncategorised/8068-870-915/responses/scf.pdf?v=204567
+[7] https://github.com/stevegt/grokker
+[8] https://infocenter.sybase.com/help/topic/com.sybase.dc00573_0700/pdf/admin70.pdf
+[9] https://nascompares.com/2024/04/05/ugreen-nasync-dxp480t-nas-review/
+[10] https://kb.promise.com/thread/how-do-i-access-the-command-line-interface-cli-in-windows/
+[11] https://www.govinfo.gov/content/pkg/CREC-2023-09-14/pdf/CREC-2023-09-14.pdf
 </references>

@@ -1,8 +1,17 @@
 wire: write report
 
-Draft a detailed report of the requirements, recommendations, and open
-questions for the PromiseGrid wire protocol.  Include wire-chat.md and
-web sources as references.  The report should be in markdown format.
+Draft a detailed set of test-case questions, in English, to be used to
+evaluate the wire.md document for consistency and compliance with the
+requirements for the PromiseGrid wire protocol.  Include wire-chat.md and
+web sources as references.  The test cases should be in the form of
+questions that can be answered with a yes or no; a yes answer means that
+the document is compliant with the requirement.
+
+
+PromiseGrid web resources include:
+- github.com/promisegrid/promisegrid/README.md
+- github.com/promisegrid/paper-ism/README.adoc
+- github.com/promisegrid/grid-cli/v2/doc/
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -13,13 +22,20 @@ Sysmsg:
   quote or escape single backticks in the code -- Go uses backticks
   for raw string literals.  Do not remove or alter comments unless
   they are incorrect or misleading.  Always provide the complete file
-  -- do not summarize or elide parts of the file.
+  -- do not summarize or elide parts of the file.  Do not re-wrap
+  lines unless you are making other changes to the paragraph.  Lines
+  must be wrapped at 70 characters.  
 In: 
   x/wire/wire-chat.md
-Out:
-  x/wire/wire-chat.md
   x/wire/wire.md
+Out:
+  x/wire/wire-test.md
 
+
+.stop
+
+
+probability and trust math doesn't work
 
 .stop
 
