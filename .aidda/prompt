@@ -1,12 +1,8 @@
-ipld-patch: remove extraneous code, improve code, fix errors
+wire: write report
 
-Remove all code that is not about demonstrating patching an IPLD node
-and printing the before and after node structures.  Borrow code from
-ipldexplore.go to print the before and after node structures.  
-
-Ensure the code is well-commented and easy to understand.  
-
-Ensure that the code compiles and runs without errors.
+Draft a detailed report of the requirements, recommendations, and open
+questions for the PromiseGrid wire protocol.  Include wire-chat.md and
+web sources as references.  The report should be in markdown format.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -18,12 +14,11 @@ Sysmsg:
   for raw string literals.  Do not remove or alter comments unless
   they are incorrect or misleading.  Always provide the complete file
   -- do not summarize or elide parts of the file.
-In:
-  x/ipld-explore/ipldexplore.go
-  x/ipld-patch/ipldpatch.go
-  x/ipld-patch/ipldpatch_test.go
+In: 
+  x/wire/wire-chat.md
 Out:
-  x/ipld-patch/ipldpatch.go
+  x/wire/wire-chat.md
+  x/wire/wire.md
 
 
 .stop
