@@ -4,15 +4,21 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/ipld/go-ipld-prime"
 	"github.com/ipld/go-ipld-prime/codec/dagcbor"
 	"github.com/ipld/go-ipld-prime/codec/dagjson"
 	"github.com/ipld/go-ipld-prime/node/bindnode"
+
+	// import fxamacker/cbor/v2 for CBOR encoding/decoding and diagnostic output
+
+	"github.com/stevegt/cbordiag"
 )
 
 // Define Go structures that match our schema
 type Person struct {
+	Hash    []byte
 	Name    string
 	Age     int
 	Friends []string
@@ -22,6 +28,7 @@ func main() {
 	// --- Tuple Representation Example ---
 	// Define an IPLD Schema with tuple representation.
 	schema := `type Person struct {
+		hash Bytes
 		name String
 		age Int
 		friends [String]
@@ -29,6 +36,7 @@ func main() {
 
 	// Create a Person instance.
 	person := &Person{
+		Hash:    []byte{0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0},
 		Name:    "Alice",
 		Age:     34,
 		Friends: []string{"Bob", "Charlie"},
@@ -89,6 +97,7 @@ func main() {
 
 	// The empty Person struct has now been populated.
 	fmt.Println("Decoded person (DAG-JSON, tuple):")
+	fmt.Printf("Hash: %x\n", newPerson.Hash)
 	fmt.Printf("Name: %s\n", newPerson.Name)
 	fmt.Printf("Age: %d\n", newPerson.Age)
 	fmt.Printf("Friends: %v\n", newPerson.Friends)
@@ -100,6 +109,17 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println()
+
+	// Show the encoded bytes as a hex dump
+	fmt.Println("\nEncoded data (DAG-CBOR representation, LongBytes):")
+	fmt.Printf("%x\n", bufCBOR)
+
+	// display the diagnostic output of the encoded bytes
+	fmt.Println("Diagnostic of Encoded data (DAG-CBOR representation, tuple):")
+	annotated := cbordiag.Annotate(bufCBOR)
+	fmt.Println(strings.Join(annotated, "\n"))
+	fmt.Println()
 
 	// For demonstration, create a new empty Person to decode DAG-CBOR content.
 	newPersonCBOR := &Person{}
@@ -121,6 +141,7 @@ func main() {
 
 	// Output the decoded Person from the DAG-CBOR encoding.
 	fmt.Println("Decoded person (DAG-CBOR, tuple):")
+	fmt.Printf("Hash: %x\n", newPersonCBOR.Hash)
 	fmt.Printf("Name: %s\n", newPersonCBOR.Name)
 	fmt.Printf("Age: %d\n", newPersonCBOR.Age)
 	fmt.Printf("Friends: %v\n", newPersonCBOR.Friends)
@@ -128,6 +149,7 @@ func main() {
 	// --- Map Representation Example ---
 	// Define a new IPLD Schema with map representation.
 	mapSchema := `type Person struct {
+		hash Bytes
 		name String
 		age Int
 		friends [String]
@@ -180,7 +202,53 @@ func main() {
 
 	// Output the decoded Person from the DAG-CBOR encoding.
 	fmt.Println("Decoded person (DAG-CBOR, map):")
+	fmt.Printf("Hash: %x\n", newPersonMap.Hash)
 	fmt.Printf("Name: %s\n", newPersonMap.Name)
 	fmt.Printf("Age: %d\n", newPersonMap.Age)
 	fmt.Printf("Friends: %v\n", newPersonMap.Friends)
+
+	// simple example of a single-element tuple containing a long byte array
+	byteSchema := `type LongBytes struct {
+		data Bytes
+		} representation tuple`
+
+	type LongBytes struct {
+		Data []byte
+	}
+
+	// Create a LongBytes instance.
+	longBytes := &LongBytes{
+		Data: []byte{
+			0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+			0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+			0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+			0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+		},
+	}
+
+	// Load the byte schema.
+	tsByte, err := ipld.LoadSchemaBytes([]byte(byteSchema))
+	if err != nil {
+		panic(err)
+	}
+
+	// Get the LongBytes type from the schema.
+	longBytesType := tsByte.TypeByName("LongBytes")
+	// Bind our Go struct to the IPLD schema type.
+	nodeLongBytes := bindnode.Wrap(longBytes, longBytesType)
+	// Get the representation according to the tuple schema.
+	nodeLongBytesRepr := nodeLongBytes.Representation()
+	// Encode using DAG-CBOR.
+	var bufLongBytesCBOR []byte
+	bufLongBytesCBOR, err = ipld.Encode(nodeLongBytesRepr, dagcbor.Encode)
+	if err != nil {
+		panic(err)
+	}
+
+	// Show the diagnostic output of the encoded bytes
+	fmt.Println("\nDiagnostic of Encoded data (DAG-CBOR representation, LongBytes):")
+	annotatedLongBytes := cbordiag.Annotate(bufLongBytesCBOR)
+	fmt.Println(strings.Join(annotatedLongBytes, "\n"))
+	fmt.Println()
+
 }
