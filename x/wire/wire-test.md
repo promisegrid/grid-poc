@@ -1,32 +1,38 @@
 # PromiseGrid Wire Protocol Compliance Test Cases
 
 ### CID Format Compliance
-1. Are all CIDs used as map keys in DAG-CBOR structures represented as full base32-encoded strings rather than binary forms with CBOR tag 42? [wire.md §2.2][wire-chat.md §Identity Multibase]
-2. Does the document prohibit use of truncated CID representations in map keys while allowing native binary CIDs (CBOR tag 42) in non-key positions? [wire.md §2.2][wire-chat.md §Identity Multibase]
+1. Are all CIDs used as map keys in DAG-CBOR structures represented as
+   full base32-encoded strings rather than binary forms with CBOR tag
+   42? 
+2. Does the document prohibit use of truncated CID representations in
+   map keys while allowing native binary CIDs (CBOR tag 42) in non-key
+   positions? 
 
 ### Data Structure Validation
-3. Does the decision tree structure exclusively use nested lists instead of maps for state transitions to comply with DAG-CBOR requirements? [wire.md §3.2][wire-chat.md §Decision Tree]
-4. Are all event and state identifiers in decision trees represented as complete CID strings rather than binary forms? [wire.md §3.2][wire-chat.md §Alternative Formats]
-5. Does the protocol avoid using floating-point NaN/Infinity values in probability fields per DAG-CBOR constraints? [wire.md §2.1]
-
-### Cryptographic Integrity
-6. Is the COSE_Sign1 signature computed over the concatenated Sig_structure containing protected headers, external_aad (if present), and payload? [wire.md §3.3][wire-chat.md §COSE Message Fields]
-7. Does the protected header include both algorithm identifiers (-7 for ES256) and CWT claims in its CBOR structure? [wire.md §3.3][wire-chat.md §COSE-Sign1]
+3. Does the decision tree structure exclusively use nested lists
+   instead of maps for state transitions to avoid needing to use 
+   string map keys?
+4. Are all event and state identifiers in decision trees represented
+   as binary forms? 
+5. Does the protocol avoid using floating-point NaN/Infinity values in
+   probability fields per DAG-CBOR constraints? 
 
 ### Trust Metric Implementation
-8. Does the trust calculation formula prevent multiplication by negative values through use of absolute differences or signed weighting? [wire.md §4.3][wire-chat.md §Trust Metric]
-9. Is weight multiplier application limited to subsequent branches rather than parent nodes in the decision tree? [wire.md §3.2][wire-chat.md §Decision Tree]
+9. Is weight multiplier application limited to subsequent branches
+   rather than parent nodes in the decision tree? 
 
 ### Message Envelope Structure
-10. Does the outer message envelope contain both protocol tag (0x67726964) and protocol version CID? [wire.md §3.1]
-11. Are all message-layer CIDs represented as full binary forms using identity multibase when not acting as map keys? [wire.md §2.2][wire-chat.md §CID Representation]
+10. Do the leading bytes of the message contain protocol tag, 
+    protocol version CID, and the sequence of events and states?
+11. Are all CIDs represented as binary encodings?
 
 ### Probability Handling
-12. Does the document specify fixed-point integer encoding for probabilities to ensure deterministic hashing? [wire-chat.md §Open Questions]
-13. Are all probability values constrained to 0.0-1.0 inclusive with validation mechanisms? [wire.md §3.2][wire-chat.md §Decision Tree]
+12. Does the document specify fixed-point integer encoding, rather than float, to ensure deterministic hashing? 
+13. Are all probability values constrained to 0.0-1.0 inclusive with validation mechanisms? 
 
 ### Routing Efficiency
-14. Can routing nodes extract protocol tag and version CID without fully parsing nested decision trees? [wire.md §3.1][wire-chat.md §Alternative Formats]
+14. Can routing nodes extract protocol CID, and the beginning of the
+    sequence of events and states without fully parsing the message?
 15. Does the message structure enable partial parsing of decision tree headers before signature verification? [wire-chat.md §Signature-Last Variant]
 
 ### Pinning Agreements
