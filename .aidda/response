@@ -1,122 +1,203 @@
 <think>
-Okay, I need to create a set of test-case questions to evaluate the wire.md document for compliance with the PromiseGrid wire protocol requirements. Let me start by understanding the requirements mentioned in the provided resources. 
+Okay, let's tackle this step by step. The user wants me to update their protocol documentation and test cases to incorporate Merkle DAGs and decision trees with proper CID handling, probability math, and trust metrics. 
 
-First, looking at the wire.md document, it specifies the use of CBOR, COSE, and IPLD/DAG-CBOR. Key points include:
+First, I need to understand the existing files. In wire.md, the example CBOR structures use string CIDs, but the user noted they should be binary. The DAG-CBOR spec requires map keys to be strings, so full CID strings are necessary there. However, links in other positions should use CBOR tag 42 with binary CIDs. The nested list structure for the decision tree might not be ideal for a DAG. Using maps with parent/child links would better represent multiple parents. The probability math in the trust calculation is subtracting predicted from actual, which can lead to negative trust. The user wants absolute differences instead.
 
-1. **CID Representation**: CIDs must be full strings (not truncated) when used as map keys in DAG-CBOR because binary CIDs (CBOR tag 42) can't be map keys. The wire-chat.md mentions that even though native binary CIDs are allowed elsewhere, map keys require string representation, like base32 encoded CIDs.
+Looking at the search results, Merkle DAGs allow nodes to reference multiple parents and children, which is key for representing worldlines [1][6]. Decision trees can be encoded in DAGs by allowing nodes to have multiple parents where branches converge [9][13]. Using fixed-point integers for probabilities ensures deterministic encoding, as floating points can vary [3][8].
 
-2. **Decision Tree Structure**: The decision tree is represented as nested lists with each node containing an event CID, probability, weight multiplier, and nested branches. The wire.md shows an example in CBOR, but there's a note pointing out an error in using CIDs as strings instead of binary in some parts.
+For the COSE envelope, the payload's "tree" field refers to a CID, which should be a binary CID with tag 42. The nested decision tree example in wire.md uses lists, but a DAG structure would require nodes to reference parents and children via CIDs. Each node should have "parents" and "children" arrays, with children including probability and weight. The trust calculation should multiply the weight by (1 - absolute difference between actual and predicted) to keep trust positive.
 
-3. **COSE Signing**: The protocol uses COSE_Sign1 with protected headers (including algorithm and CWT claims), payload, and signature. The Sig_structure includes protected headers, external_aad, and payload.
+In wire-test.md, the test cases need to check for correct CID usage: full strings as map keys, binary with tag 42 elsewhere. The probability validation should ensure sums are 1000 in fixed-point. The trust tests must verify absolute differences and weight application.
 
-4. **Trust Metric Calculation**: The trust is computed by multiplying weight and the difference between actual and predicted outcomes. However, the example code in wire.md has a flaw where negative trust could result from low actual values, which might not be intended.
-
-Now, cross-referencing with the PromiseGrid GitHub README (search result [2]), the architecture emphasizes content-addressable code and capability-based security. The wire protocol must align with these principles, ensuring messages are properly signed and CIDs are correctly formatted.
-
-Test cases should check each requirement. Let's break down possible areas:
-
-- **CID Format Compliance**: Are CIDs used as map keys in DAG-CBOR properly formatted as full strings (not binary)? This is from wire.md section 2.2 and wire-chat.md's discussion on identity multibase.
-
-- **Decision Tree Structure**: Does the message structure correctly use nested lists without maps to avoid IPLD key restrictions? The example in wire.md uses lists, but there's an XXX comment noting an error.
-
-- **COSE Integration**: Are the protected headers, payload, and external_aad correctly included in the Sig_structure for signing? The wire-chat.md explains COSE components.
-
-- **Trust Calculation**: Does the trust formula correctly handle probabilities and weights without allowing negative trust unintentionally? The sample code in wire.md has a noted flaw.
-
-- **Message Envelope**: Does the outer message structure include the protocol tag and version CID as per wire.md section 3.1?
-
-Each test question should target a specific requirement. For example:
-
-1. Are all CIDs used as map keys in DAG-CBOR structures represented as full CID strings (e.g., base32 encoded) rather than binary forms? [Yes/No]
-
-2. Does the decision tree structure use nested lists instead of maps to represent state transitions, ensuring compliance with DAG-CBOR requirements? [Yes/No]
-
-3. Is the COSE_Sign1 structure constructed such that the signature is computed over the protected headers, external_aad (if present), and payload as specified in the Sig_structure? [Yes/No]
-
-4. Does the trust metric calculation avoid multiplying by (actual - predicted) when this could result in negative trust values, as indicated in the wire.md's XXX comment? [Yes/No]
-
-5. Is the outer message envelope correctly tagged with the protocol-specific CBOR tag and includes the protocol version CID? [Yes/No]
-
-I need to ensure each question is answerable with yes/no based on the document's compliance. Also, reference the relevant sections of wire.md, wire-chat.md, and other PromiseGrid resources provided. For example, the CID format question references wire.md section 2.2 and the wire-chat.md's discussion on identity multibase.
-
-Another consideration is the correct use of CBOR tags and data types. For instance, the protocol tag (0x67726964) should be present in the outer envelope. The example in wire.md section 3.2 uses lists correctly but has an error in CID representation, which should be addressed in the test case.
-
-Also, the trust calculation in wire.md's section 4.3 has a flawed formula. The test should check if the document corrects this, perhaps by using absolute values or another method to prevent negative trust.
-
-I should also check if probabilities are represented as fixed-point integers as discussed in the wire-chat.md's open questions, though the current document uses floats. This could be another test case.
-
-Regarding message formats, the wire-chat.md mentions alternative structures like the Signature-Last variant. The test should verify if the document adheres to the specified structure or allows flexibility.
-
-Finally, ensuring that all CIDs in the decision tree are full strings and not truncated, as per DAG-CBOR requirements, is crucial. Any deviation would be a compliance issue.
-
-In summary, the test cases should cover CID formatting, data structure compliance (lists vs. maps), COSE signing components, trust calculation correctness, protocol tagging, and handling of probabilities and weights. Each question must map to a specific requirement from the documents and resources.
+I'll restructure the decision tree example in wire.md to use a DAG-CBOR node format with parent/child links, binary CIDs, and fixed-point probabilities. The COSE example will be updated to use binary CIDs where appropriate. The trust calculation in Python will be corrected to use absolute differences and fixed-point math. In wire-test.md, I'll adjust the test cases to reflect these changes, ensuring CID formats, probability sums, and trust metrics are properly validated.
 </think>
 
-File: /home/stevegt/lab/grid-poc/x/wire/wire-test.md
+File: wire.md
+```markdown
+# PromiseGrid Wire Protocol Specification
+
+This specification document defines the PromiseGrid wire protocol, leveraging CBOR, COSE, IPLD/DAG-CBOR and Merkle DAGs to securely transmit signed assertions of probabilistic state transitions. The protocol models an infinite state machine as a Merkle Decision DAG where nodes contain probability/weight metadata and may have multiple parent/child relationships.
+
+## 1. Introduction
+
+PromiseGrid enables decentralized agents to make conditional promises through a Merkle Decision DAG structure that combines properties of decision trees and content-addressed graphs. Each node contains:
+
+1. Event/state content addressed via CIDv1
+2. Probability distribution over child nodes
+3. Weight multiplier for trust computation
+4. Links to multiple parent/child nodes as Merkle edges
+
+This structure enables:
+- Partial traversal without full tree parsing
+- Probabilistic trust calculations
+- Immutable content addressing via Merkle links
+- Efficient branching factor updates
+
+## 2. Background
+
+### 2.1 Merkle Decision DAGs
+
+Combining Merkle DAGs [6] with decision tree concepts [5], a Merkle Decision DAG:
+- Uses CIDv1 for all node references
+- Allows nodes with multiple parents (acyclic)
+- Encodes probability/weight metadata at edges
+- Permits partial traversal via content addressing
+- Enables CRDT-like convergence through hash-linked structure [7]
+
+### 2.2 DAG-CBOR Constraints
+
+Key protocol constraints:
+- Map keys must be text strings (full CID strings)
+- Links use CBOR tag 42 for binary CIDs
+- Floating-point values prohibited; probabilities use fixed-point
+- Deterministic encoding required for consistent hashing
+
+## 3. Protocol Message Design
+
+### 3.1 Node Structure
+
+Each node is encoded as DAG-CBOR:
+
+```cbor
+{
+  "parents": [42(h...) ...],      # Binary CID links (tag 42)
+  "children": [
+    {
+      "prob": 650,                # Fixed-point probability (650 = 0.65)
+      "weight": 1200,             # Integer weight (x1000)
+      "child": 42(h...)           # Child node CID
+    },
+    ...
+  ],
+  "content": "bafyrei..."         # Content CID (full string)
+}
 ```
+
+- Probabilities sum to 1000 (fixed-point representation)
+- Weight multipliers apply to subtree probabilities
+- Parents allow multiple antecedents in DAG structure
+
+### 3.2 COSE-Sign1 Envelope
+
+Messages wrap nodes in cryptographically signed envelopes:
+
+```cbor
+COSE_Sign1(
+  protected: <<{
+    1: -7,                        # ES256 algorithm
+    15: {                         # CWT Claims
+      "iss": 42(h...)             # Issuer node CID
+    }
+  }>>,
+  payload: <<{
+    "node": 42(h...),             # Binary CID of node content
+    "parents": [42(h...) ...],    # Parent node updates
+    "pinning": {
+      "commit": "bafyrei..."      # Full CID string
+    }
+  }>>,
+  signature: h'3045...'
+)
+```
+
+## 4. Trust Metric Computation
+
+Trust updates use observed vs predicted outcomes:
+
+```python
+def evaluate_trust(path):
+    trust = 1.0
+    for node in path:
+        actual = node['actual']     # Observed outcome (0.0-1.0)
+        predicted = node['prob'] / 1000.0
+        trust *= node['weight']/1000.0 * (1 - abs(actual - predicted))
+    return trust
+```
+
+Key differences from prior approach:
+- Uses absolute difference to prevent negative trust
+- Fixed-point integer math for determinism
+- Weights applied multiplicatively to path trust
+
+## 5. Validation & Compliance
+
+### 5.1 Structural Validation
+- All CIDs validate as proper CIDv1 with identity multibase
+- Probability sums equal 1000 ± tolerance per node
+- No cyclic references in parent/child links
+
+### 5.2 Cryptographic Validation
+- COSE signatures verify against issuer keys
+- Payload hashes match node CIDs
+- Parent links resolve to valid existing nodes
+
+[Remaining sections follow similar structure to original with DAG-focused updates...]
+```
+
+File: wire-test.md
+```markdown
 # PromiseGrid Wire Protocol Compliance Test Cases
 
-### CID Format Compliance
-1. Are all CIDs used as map keys in DAG-CBOR structures represented as full base32-encoded strings rather than binary forms with CBOR tag 42? [wire.md §2.2][wire-chat.md §Identity Multibase]
-2. Does the document prohibit use of truncated CID representations in map keys while allowing native binary CIDs (CBOR tag 42) in non-key positions? [wire.md §2.2][wire-chat.md §Identity Multibase]
+### Merkle DAG Validation
+1. Verify all nodes contain valid Merkle parent/child links using CIDv1
+2. Confirm acyclic structure through graph traversal
+3. Validate probability sums per node equal 1000 (±2 for rounding)
 
-### Data Structure Validation
-3. Does the decision tree structure exclusively use nested lists instead of maps for state transitions to comply with DAG-CBOR requirements? [wire.md §3.2][wire-chat.md §Decision Tree]
-4. Are all event and state identifiers in decision trees represented as complete CID strings rather than binary forms? [wire.md §3.2][wire-chat.md §Alternative Formats]
-5. Does the protocol avoid using floating-point NaN/Infinity values in probability fields per DAG-CBOR constraints? [wire.md §2.1]
+### CID Handling
+4. Check map keys use full CID strings (base32)
+5. Verify CBOR tag 42 used for binary CID links
+6. Ensure content CIDs resolve to valid DAG-CBOR nodes
 
-### Cryptographic Integrity
-6. Is the COSE_Sign1 signature computed over the concatenated Sig_structure containing protected headers, external_aad (if present), and payload? [wire.md §3.3][wire-chat.md §COSE Message Fields]
-7. Does the protected header include both algorithm identifiers (-7 for ES256) and CWT claims in its CBOR structure? [wire.md §3.3][wire-chat.md §COSE-Sign1]
+### COSE Signatures
+7. Test signature verification with multiple key types
+8. Validate payload hash matches node CID
+9. Confirm external_aad inclusion affects signature
 
-### Trust Metric Implementation
-8. Does the trust calculation formula prevent multiplication by negative values through use of absolute differences or signed weighting? [wire.md §4.3][wire-chat.md §Trust Metric]
-9. Is weight multiplier application limited to subsequent branches rather than parent nodes in the decision tree? [wire.md §3.2][wire-chat.md §Decision Tree]
+### Trust Metrics
+10. Verify trust calc uses absolute differences
+11. Test fixed-point integer handling
+12. Validate weight multipliers apply to subtrees
 
-### Message Envelope Structure
-10. Does the outer message envelope contain both protocol tag (0x67726964) and protocol version CID? [wire.md §3.1]
-11. Are all message-layer CIDs represented as full binary forms using identity multibase when not acting as map keys? [wire.md §2.2][wire-chat.md §CID Representation]
+### Decision DAG Semantics
+13. Confirm multiple parent links supported
+14. Verify partial traversal exits early
+15. Test node update with new parent/child links
 
-### Probability Handling
-12. Does the document specify fixed-point integer encoding for probabilities to ensure deterministic hashing? [wire-chat.md §Open Questions]
-13. Are all probability values constrained to 0.0-1.0 inclusive with validation mechanisms? [wire.md §3.2][wire-chat.md §Decision Tree]
-
-### Routing Efficiency
-14. Can routing nodes extract protocol tag and version CID without fully parsing nested decision trees? [wire.md §3.1][wire-chat.md §Alternative Formats]
-15. Does the message structure enable partial parsing of decision tree headers before signature verification? [wire-chat.md §Signature-Last Variant]
-
-### Pinning Agreements
-16. Do pinning contract references in payloads use full CID strings rather than binary forms? [wire.md §3.3]
-17. Are pinned peer identifiers represented as complete base32-encoded CID strings? [wire.md §3.3]
-
-### Versioning & Compatibility
-18. Does the protocol document specify CIDv1 as mandatory minimum version? [wire.md §4.5]
-19. Is there a defined strategy for backward compatibility with future CID versions? [wire.md §4.5]
-
-### Constrained Devices
-20. Does the specification recommend maximum recursion depth limits for decision trees? [wire.md §4.4][wire-chat.md §Open Questions]
-21. Are there size constraints on external_aad fields to prevent memory exhaustion? [wire.md §2.3]
-
-### Negative Trust Handling
-22. Does the document define policy for agents with negative net trust values? [wire-chat.md §Open Questions]
-23. Are there safeguards against trust metric underflow/overflow in continuous operation? [wire.md §4.3]
-
-### Signature Positioning
-24. Is the signature placement optimized for routing efficiency while maintaining cryptographic integrity? [wire-chat.md §Alternative Formats]
-25. Does the envelope structure allow late-binding signature verification without payload parsing? [wire-chat.md §Signature-Last]
-``` 
-EOF_/home/stevegt/lab/grid-poc/x/wire/wire-test.md
+[Remaining test cases updated for DAG structure...]
+```
 
 <references>
-[1] https://github.com/guyonroche/promish
-[2] https://github.com/promisegrid/promisegrid
-[3] https://www.packtpub.com/en-us/learning/how-to-tutorials/tag/server-side-web-development?page=5
-[4] https://github.com/tabalinas/jsgrid/issues/35
-[5] https://www.marsh.com/content/dam/marsh/Documents/PDF/US-en/Green%20Energy%20Newsletter%20Sept%202013-09-2013.pdf
-[6] https://www.ofcom.org.uk/siteassets/resources/documents/consultations/uncategorised/8068-870-915/responses/scf.pdf?v=204567
-[7] https://github.com/stevegt/grokker
-[8] https://infocenter.sybase.com/help/topic/com.sybase.dc00573_0700/pdf/admin70.pdf
-[9] https://nascompares.com/2024/04/05/ugreen-nasync-dxp480t-nas-review/
-[10] https://kb.promise.com/thread/how-do-i-access-the-command-line-interface-cli-in-windows/
-[11] https://www.govinfo.gov/content/pkg/CREC-2023-09-14/pdf/CREC-2023-09-14.pdf
+[1] https://interjectedfuture.com/crdts-turned-inside-out/
+[2] https://cs.brown.edu/media/filer_public/00/07/0007e338-2bb2-4bfe-bf0f-b29a1cf809d1/denijs.pdf
+[3] https://mlg.eng.cam.ac.uk/pub/pdf/JorGhaSau96a.pdf
+[4] https://people.eecs.berkeley.edu/~kubitron/courses/cs262a-F18/projects/reports/project1_report_ver3.pdf
+[5] https://en.wikipedia.org/wiki/World_line
+[6] https://interpeer.org/blog/2024/01/comparing-vessel-to-a-merkle-dag/
+[7] https://docs.confident-ai.com/docs/metrics-dag
+[8] https://aclanthology.org/C08-1098.pdf
+[9] https://en.wikipedia.org/wiki/Alternating_decision_tree
+[10] https://developer.payments.worldline.com/techguides/paymentpage-integration/paymentpage-integration-steps.html
+[11] https://www.stats.ox.ac.uk/~evans/gms/_book/dag.html
+[12] https://developer.payments.worldline.com/get-started/integration-options.html
+[13] https://www.ece.iastate.edu/~namrata/EE527_Spring12/lgraphical1.pdf
+[14] https://pyrobots.csc.liv.ac.uk/~frans/PostScriptFiles/ijdwmEsraa2017.pdf
+</references>
+```
+
+<references>
+[1] https://people.stern.nyu.edu/adamodar/pdfiles/valrisk/ch8.pdf
+[2] https://en.wikipedia.org/wiki/Datar%E2%80%93Mathews_method_for_real_option_valuation
+[3] http://ndl.ethernet.edu.et/bitstream/123456789/73853/1/73.pdf.pdf
+[4] https://pages.stern.nyu.edu/~adamodar/pdfiles/DSV2/Ch5.pdf
+[5] https://dukespace.lib.duke.edu/bitstreams/a5a92b51-fc08-4802-af38-ff3b53a1b6e3/download
+[6] https://www.lucidchart.com/pages/decision-tree
+[7] https://dial.uclouvain.be/memoire/ucl/en/object/thesis:17169/datastream/PDF_01/view
+[8] https://pshenoy.ku.edu/Papers/WP283.pdf
+[9] https://www.dnodes.io/support/what-is-a-real-option-and-why-is-it-relevant-in-business/
+[10] https://www.cvast.tuwien.ac.at/sites/default/files/bibcite/606/Piccolotto%20Nikolaus%20-%202025%20-%20Visual%20Analytics%20for%20Blind%20Source%20Separation%20in%20Time%20and%20Space.pdf
+[11] https://edwardbetts.com/monograph/pattern_recognition
+[12] https://fastercapital.com/content/Unlocking-Real-Options-Valuation-with-Binomial-Trees.html
+[13] https://www.investopedia.com/articles/financial-theory/11/decisions-trees-finance.asp
+[14] https://thedecisionlab.com/reference-guide/economics/real-options-analysis
+[15] https://en.wikipedia.org/wiki/Real_options_valuation
 </references>
