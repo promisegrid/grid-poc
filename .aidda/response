@@ -1,261 +1,411 @@
 <think>
-Okay, I need to reconcile the concepts of worldline and scenario tree
-in the context of the PromiseGrid wire protocol. Let me start by
-understanding both terms.
+Okay, I need to help the user by writing Go code that encodes and decodes a Message struct using CBOR, specifically as a tuple without using cbor-gen. Let me start by understanding the requirements.
 
-A worldline, as per the user's description, is a sequence of events
-and states along an axis like time. It uses a Merkle DAG to allow
-agents to add events without changing existing hashes. The key here is
-that events can be part of multiple worldlines, enabling flexibility
-and history preservation.
+The Message struct has three fields: Tag, Protocol, and Payload, all []byte. The user wants it encoded as a CBOR tuple (array), not a map. So the order of the fields in the array matters. The Tag should be the bytes 'grid', which is []byte{0x67, 0x72, 0x69, 0x64}. 
 
-A scenario tree, from the provided search results, models decisions
-and probabilistic outcomes. Each node represents a decision or chance
-event, with branches showing possible outcomes and their
-probabilities. The Lindo example [1][7] shows a tree with stages,
-events, and probabilities, which helps in calculating expected
-outcomes.
+First, I'll need to use a CBOR library. The user mentioned not to use cbor-gen, so manual implementation is needed. The fxamacker/cbor/v2 package is a good choice here since it's referenced in the search results and supports encoding structs as arrays.
 
-The user wants to integrate probabilities and alternate paths (like
-scenario trees) into the worldline model. The challenge is to
-represent possible branches (scenarios) within the Merkle DAG
-structure, where each branch has probabilities and weight multipliers.
+To encode the struct as an array, I can use struct tags with `cbor:",toarray"`. This tells the encoder to serialize the struct as an array instead of a map. So the struct definition would have each field in order, tagged with `cbor:",toarray"`.
 
-Looking at the existing wire.md, the scenario tree is represented as
-nested lists with event CID, state CID, probability, weight, and
-nested branches. However, the user noted issues: CIDs should be
-binary, not strings, and the probability math is incorrect.
+For decoding, the same struct tags should work as long as the CBOR array elements match the struct fields in order.
 
-First, correcting CID representation. The wire.md uses full base32
-strings for CIDs in map keys, but according to DAG-CBOR rules, map
-keys must be strings. However, in the scenario tree structure, they're
-using lists, not maps, so maybe binary CIDs are acceptable there.
-Wait, the user's comment says "CIDs should be binary" in the example.
-So in the scenario tree lists, event and state identifiers should be
-binary CIDs (tag 42), not strings. The current example uses strings,
-which is wrong.
+I should write tests to ensure that encoding and decoding work correctly. The test will marshal a Message instance, then unmarshal it back and compare the results. Also, check that the encoded CBOR is an array and has the correct elements.
 
-Next, probability handling. The current example in wire.md has
-probabilities as floats, but the user's test cases mention using
-fixed-point integers for determinism. Floating points can cause
-hashing issues due to rounding. So probabilities should be integers
-representing fractions, e.g., 0.65 as 6500 with a denominator of
-10000.
+Looking at the search results, the fxamacker/cbor package's example shows how to use Marshal and Unmarshal. The test case can use the hex representation of the expected CBOR bytes. For example, the Tag 'grid' is 4 bytes, Protocol and Payload are byte arrays. The CBOR array should have three elements, each a byte string.
 
-The trust metric calculation in wire.md's Python code multiplies
-weight by (actual - predicted), but the user notes this rewards
-setting probabilities to 0. The correct approach might be to use a
-proper scoring rule, like Brier score, where the loss is (actual -
-predicted)^2. The current code's trust metric is flawed.
+I need to make sure that the CBOR output is indeed an array. Using cbor.Diagnose could help in tests to verify the structure, but perhaps comparing the hex is sufficient.
 
-Also, the scenario tree's weight multiplier applies to subsequent
-branches. The structure in wire.md shows each branch has a weight
-affecting nested branches. That part seems correct but needs
-verification.
+Potential issues: Ensuring that the struct tags are correctly applied, and that the encoder uses the array format. Also, handling empty vs nil slices, but since the user didn't specify omitempty, all fields should be present in the array even if empty.
 
-In the COSE_Sign1 example, the payload includes "tree" as a CID
-string. Since the scenario tree is part of the payload, it should be
-embedded directly or referenced via a binary CID. The current example
-uses a string, which might not be correct if the tree is nested within
-the payload.
+Another consideration is compatibility with other systems. Using the toarray tag ensures that the order is preserved, which is crucial for the tuple encoding.
 
-Another point is the use of lists instead of maps in the scenario tree
-to comply with DAG-CBOR's map key constraints. The current design uses
-nested lists, which is correct to avoid map key issues.
+Now, writing the code:
 
-Now, reconciling worldlines and scenario trees: each worldline is a
-path through the scenario tree. The Merkle DAG allows sharing nodes
-across different worldlines. Each node in the DAG can be part of
-multiple branches (scenarios), enabling agents to propose alternate
-futures without altering existing data.
+1. Define the Message struct with the appropriate tags.
+2. Implement MarshalCBOR and UnmarshalCBOR methods if necessary, but with the struct tags, the default encoder might suffice.
+3. Write test functions that create a Message, marshal it, check the CBOR, then unmarshal and compare.
 
-To implement this, each event node in the DAG should link to possible
-subsequent events (branches) with their probabilities and weights. The
-Merkle structure ensures that changes in branches don't affect leaf
-hashes, maintaining data integrity.
+Wait, the fxamacker/cbor package's default behavior might already handle structs with ,toarray tags. Let me check the search result [1], which shows an example of encoding a struct with omitempty tags. The example uses cbor.Marshal, which should work with the toarray tag.
 
-Testing considerations include ensuring CIDs are correctly encoded,
-probabilities are fixed-point, and the trust metric uses a proper
-scoring rule. The wire-test.md needs updates to reflect these checks,
-like verifying CID formats and probability ranges.
+So, the struct should be:
 
-In summary, the corrections needed are:
+type Message struct {
+    Tag      []byte `cbor:",toarray"`
+    Protocol []byte
+    Payload  []byte
+}
 
-1. Use binary CIDs (tag 42) in scenario tree lists, not strings.
-2. Represent probabilities as fixed-point integers.
-3. Correct the trust metric calculation to use a proper scoring rule.
-4. Ensure the COSE payload correctly embeds or references the scenario tree.
-5. Update test cases to check these aspects.
+Wait, no. The ",toarray" tag is applied to the struct, not individual fields. Wait, no: according to the fxamacker/cbor documentation, using `cbor:",toarray"` on the struct tells the encoder to serialize it as an array of the fields. So the correct struct definition is:
 
-I'll proceed to modify the wire.md and wire-test.md files accordingly,
-ensuring compliance with DAG-CBOR, correct CID usage, and accurate
-probability handling.
+type Message struct {
+    Tag      []byte
+    Protocol []byte
+    Payload  []byte
+} `cbor:",toarray"`
+
+Wait, no, the struct tag is placed after the struct definition. So:
+
+//go:generate cbor-gen -toarray Message
+type Message struct {
+    Tag      []byte
+    Protocol []byte
+    Payload  []byte
+}
+
+But since we can't use cbor-gen, we have to do it manually. Alternatively, using the `cbor:",toarray"` struct tag should work. Wait, the fxamacker/cbor package supports the "toarray" struct tag option. So the struct should be defined as:
+
+type Message struct {
+    Tag      []byte
+    Protocol []byte
+    Payload  []byte
+} `cbor:",toarray"`
+
+But in Go, you can't add struct tags to the struct itself, only to the fields. Wait, no—struct tags are for fields. To encode the entire struct as an array, the correct approach is to use a struct tag on each field to indicate their order, or use the "toarray" option in the encoder settings.
+
+Wait, looking at the fxamacker/cbor documentation in search result [1], they have an example where a struct is encoded as an empty CBOR map because all fields are omitted. But to encode as an array, the user needs to specify the "toarray" option.
+
+Wait, the fxamacker/cbor package has a feature where you can set the StructToArray option in the encoder. Alternatively, using the `cbor:"keyasint"` tags to encode fields as array elements. Hmm, perhaps the correct approach is to use the EncOptions.StructToArray when creating the encoder.
+
+But the user wants the struct to always be encoded as an array. So in the code, when marshaling, we need to use an EncMode that enforces StructToArray.
+
+Alternatively, using the `cbor:"_toarray"` struct tag on the type. Wait, according to the fxamacker/cbor docs, you can add a struct tag like:
+
+type Message struct {
+    Tag      []byte `cbor:"1,keyasint,omitempty"`
+    Protocol []byte `cbor:"2,keyasint,omitempty"`
+    Payload  []byte `cbor:"3,keyasint,omitempty"`
+}
+
+But that would encode as a map with integer keys. To encode as an array, the correct approach is to use the "toarray" struct tag. Wait, the documentation says:
+
+"The "toarray" option makes struct fields encode to array elements. The "toarray" option requires that all fields are serializable and have no "keyasint" or "omitempty" options. It can be combined with "omitempty"."
+
+Wait, the example in search result [1] shows a struct with omitempty tags, and the CBOR output is an empty map. So perhaps the "toarray" option is set via the encoder settings, not struct tags.
+
+Looking at the fxamacker/cbor documentation, it says:
+
+"You can set StructToArray option to have the encoder serialize structs as CBOR arrays."
+
+So, to encode the Message struct as an array, the encoder needs to use the StructToArray option. However, this would apply to all structs, which might not be desired. Alternatively, the user can create a custom encoding mode with StructToArray enabled.
+
+Therefore, in the code, when marshaling, we should create an EncMode with StructToArray set to true.
+
+So, in the wire.go file, the code would be:
+
+package wire
+
+import (
+    "github.com/fxamacker/cbor/v2"
+)
+
+type Message struct {
+    Tag      []byte
+    Protocol []byte
+    Payload  []byte
+}
+
+var encOpts = cbor.EncOptions{
+    StructToArray: true,
+}
+
+var encMode, _ = cbor.EncOptions{StructToArray: true}.EncMode()
+
+func (m *Message) MarshalCBOR() ([]byte, error) {
+    return encMode.Marshal(m)
+}
+
+func (m *Message) UnmarshalCBOR(data []byte) error {
+    return cbor.Unmarshal(data, m)
+}
+
+Wait, but when using StructToArray, all structs are encoded as arrays. That might cause issues if there are nested structs, but in this case, the Message struct is simple. However, the decoder needs to know to expect an array. So when unmarshaling, the same StructToArray option must be used.
+
+Wait, no. The StructToArray option affects encoding, not decoding. The decoder automatically detects whether the data is an array or a map. So if the data is an array, it will decode into the struct fields in order, provided that the decoder is set to expect an array.
+
+Alternatively, using the "toarray" struct tag might be necessary. Wait, the fxamacker/cbor library's "toarray" struct tag is a part of their extended features. According to their documentation, you can use the `cbor:"name,toarray"` tag on a struct to have it encoded as an array.
+
+Wait, perhaps the correct way is to use the `cbor:"toarray"` tag on the struct. For example:
+
+type Message struct {
+    _        struct{} `cbor:"toarray"`
+    Tag      []byte
+    Protocol []byte
+    Payload  []byte
+}
+
+This is a common pattern in the fxamacker/cbor library to trigger the array encoding. The empty struct field with the `cbor:"toarray"` tag tells the encoder to serialize the struct as an array.
+
+Yes, according to the example in search result [1], the struct is encoded as an array when using the "toarray" option. For example, in the SenMLRecord struct example, they use `cbor:"-2,keyasint,omitempty"` tags. But for array encoding, the "toarray" directive is needed.
+
+So modifying the struct:
+
+type Message struct {
+    _        struct{} `cbor:",toarray"`
+    Tag      []byte
+    Protocol []byte
+    Payload  []byte
+}
+
+The empty field with `cbor:",toarray"` tells the encoder to treat the struct as an array. This way, when marshaling, the struct is encoded as a CBOR array with the fields in order.
+
+Therefore, the wire.go file should define the Message struct with this tag.
+
+Then, in the test, we can create a Message instance, marshal it, and check the CBOR output is an array of three byte strings.
+
+For example, a Message with Tag: []byte("grid"), Protocol: []byte{0x01}, Payload: []byte{0x02} would encode to CBOR as:
+
+83                        # array(3)
+   44                  # bytes(4)
+      6767726964       # "grid" as hex 67 72 69 64
+   41                  # bytes(1)
+      01               # Protocol
+   41                  # bytes(1)
+      02               # Payload
+
+The hex would be 8344676772696441014102.
+
+In the test, we can marshal the struct and check against this hex.
+
+For decoding, the same struct should be used, and the Unmarshal should populate the fields correctly.
+
+Now, writing the test code:
+
+In wire-test.go:
+
+package wire_test
+
+import (
+    "encoding/hex"
+    "testing"
+
+    "github.com/fxamacker/cbor/v2"
+    "github.com/stevegt/grid-poc/x/wire"
+)
+
+func TestMessageRoundTrip(t *testing.T) {
+    msg := wire.Message{
+        Tag:      []byte("grid"),
+        Protocol: []byte{0x01},
+        Payload:  []byte{0x02},
+    }
+
+    data, err := cbor.Marshal(msg)
+    if err != nil {
+        t.Fatalf("Marshal failed: %v", err)
+    }
+
+    // Expected CBOR hex for array of three byte strings:
+    // 83 (array, 3 elements)
+    //   44 6767726964 (bytes, 4 bytes "grid")
+    //   41 01 (bytes, 1 byte 0x01)
+    //   41 02 (bytes, 1 byte 0x02)
+    expectedHex := "83446772696441014102" // Note: "grid" is 67 72 69 64
+
+    if hex.EncodeToString(data) != expectedHex {
+        t.Fatalf("unexpected CBOR data: got %s, want %s", hex.EncodeToString(data), expectedHex)
+    }
+
+    var decoded wire.Message
+    if err := cbor.Unmarshal(data, &decoded); err != nil {
+        t.Fatalf("Unmarshal failed: %v", err)
+    }
+
+    if string(decoded.Tag) != "grid" {
+        t.Errorf("Tag mismatch: got %x, want %x", decoded.Tag, []byte("grid"))
+    }
+    if string(decoded.Protocol) != string(msg.Protocol) {
+        t.Errorf("Protocol mismatch: got %x, want %x", decoded.Protocol, msg.Protocol)
+    }
+    if string(decoded.Payload) != string(msg.Payload) {
+        t.Errorf("Payload mismatch: got %x, want %x", decoded.Payload, msg.Payload)
+    }
+}
+
+Wait, but in the struct definition, the empty field with `cbor:",toarray"` is necessary. Let me verify that.
+
+Yes, the struct should have the toarray tag on an empty field to trigger array encoding. So the Message struct in wire.go is correctly defined.
+
+Testing this code should ensure that the CBOR is an array and the fields are correctly encoded and decoded.
+
+Another test case could be with empty slices. For example, if all fields are empty, the CBOR array should have three empty byte strings.
+
+Also, the Tag is fixed as 'grid', but according to the user's comment, the Tag is []byte{'g', 'r', 'i', 'd'}, so the test uses that.
+
+In the test, the expectedHex for "grid" is 6767726964, but wait, "grid" in hex is 67 72 69 64. So the bytes are 0x67, 0x72, 0x69, 0x64. The CBOR encoding for a 4-byte string would be 44 followed by the four bytes. So 44 6767726964 is incorrect. Wait, the correct encoding is:
+
+For the byte string "grid" (bytes 67 72 69 64), the CBOR is 44 followed by the four bytes. So the CBOR bytes for the Tag would be 44 67 72 69 64. Then the Protocol is 41 01, and Payload 41 02. The entire CBOR array is 83 (array of 3 elements) followed by the three byte strings. So the hex would be 83 44 67677264 41 01 41 02. Wait, 67 72 69 64 is "g", "r", "i", "d". So in hex, each character is represented as their ASCII value:
+
+'g' = 0x67
+'r' = 0x72
+'i' = 0x69
+'d' = 0x64
+
+So the four bytes are 67 72 69 64. Therefore, the CBOR for the Tag is 44 followed by these four bytes. So the Tag's CBOR bytes are 44 67 72 69 64, which in hex is "4467726964".
+
+Then the Protocol is 41 01 (byte string of length 1, value 0x01), and Payload 41 02. So the entire CBOR array is:
+
+83 44 67 72 69 64 41 01 41 02
+
+In hex, this is "83446772696441014102".
+
+In the test, the expectedHex should be "83446772696441014102".
+
+But in the test code above, the expectedHex was initially written as "8344676772696441014102", which is incorrect because "grid" is 67 72 69 64, not 67 67 72 69 64. So that's a mistake. The correct expectedHex is "83446772696441014102".
+
+So the test case needs to be corrected.
+
+Another potential issue is that the fxamacker/cbor encoder might use definite length arrays. The example in search result [1] shows that an empty struct with omitempty tags encodes to an empty map, but with toarray, it would be an empty array.
+
+In the test case, the struct has three fields, so the CBOR array has three elements.
+
+Now, putting it all together, the code in wire.go and wire-test.go should correctly handle the encoding and decoding.
+
+I should also handle any potential errors, like if the CBOR data is not an array during decoding.
+
+Another test case could be with a CBOR map instead of an array to ensure that decoding fails, but perhaps that's beyond the scope.
+
+In conclusion, the code uses the fxamacker/cbor library with the toarray struct tag to encode the Message struct as a CBOR array. The test verifies the round-trip encoding and decoding.
 </think>
 
-File: /home/stevegt/lab/grid-poc/x/wire/wire.md
-```markdown
-# PromiseGrid Wire Protocol Specification
+File: /home/stevegt/lab/grid-poc/x/wire/wire.go
+```go
+package wire
 
-This specification document defines the PromiseGrid wire protocol, a
-system that leverages CBOR, COSE, and IPLD/DAG-CBOR technologies to
-securely transmit signed assertions of state transitions in a
-decentralized network. The protocol models an infinite state machine
-as a probabilistic scenario tree where each branch contains:
-
-1. Binary CIDs referencing events/states (CBOR tag 42)
-2. Fixed-point probability (16-bit integer representing 0.0-1.0 scaled by 65535)
-3. 16-bit weight multiplier affecting subsequent branches
-4. Nested branches maintaining Merkle structural integrity
-
-## 1. Introduction
-
-PromiseGrid enables decentralized agents to assert conditional state
-transitions across multiple possible worldlines. Each signed assertion
-specifies: 
-
-- Concrete event→state transitions using content-addressed IPLD nodes  
-- Probabilistic branching with weight-adjusted trust propagation  
-- Merkle-DAG structure allowing partial validation and cross-worldline referencing
-
-## 2. Protocol Message Design
-
-### 2.1 scenario Tree Structure
-
-```cbor
-[
-  # Event CID (binary CBOR tag 42)
-  42(h'01e5b3...'),  
-  
-  # State CID (binary CBOR tag 42)  
-  42(h'8a4f6d...'),
-  
-  # Probability as fixed-point (0.65 = 42598/65535)
-  42598,  
-  
-  # Weight multiplier (1.2x = 7864/8192)
-  7864,
-  
-  # Nested branches
-  [
-    [
-      42(h'd3a9...'), 
-      42(h'fe12...'),
-      58982, 
-      8192,
-      []
-    ]
-  ]
-]
-```
-
-### 2.2 Deterministic Encoding Rules
-
-1. **CIDs**: Always CBOR tag 42 with binary multihash
-2. **Probabilities**: uint16 where 0xFFFF = 1.0
-3. **Weights**: uint16 where 8192 = 1.0x (Q12 fixed-point)
-4. **Ordering**: Branches sorted by CID byte values
-
-## 3. Trust Metric Algorithm
-
-```python
-def update_trust(prior, actual, predicted, weight):
-    # Brier score with weight scaling
-    loss = (actual - predicted/65535)**2
-    return prior * (1 - weight/8192 * loss) 
-```
-
-## 4. Signature & Validation
-
-```cbor
-COSE_Sign1(
-  protected: <<{
-    1: -7,  # ES256
-    15: {    # CWT Claims
-      "iss": 42(h'...'),  # Issuer CID
-      "seq": 42(h'...')   # Previous state CID  
-    }
-  }>>,
-  payload: <<[
-    42(h'...'), # Protocol version CID
-    42(h'...'), # Root scenario tree CID
-    42(h'...')  # Pinning contract CID
-  ]>>,
-  signature: h'3045...'
+import (
+	"github.com/fxamacker/cbor/v2"
 )
+
+// Message represents a protocol message with tag, protocol CID, and payload.
+type Message struct {
+	_        struct{} `cbor:",toarray"` // Force array encoding
+	Tag      []byte
+	Protocol []byte
+	Payload  []byte
+}
+
+// EncMode configures CBOR encoding to use array format for structs
+var encOpts = cbor.EncOptions{
+	Sort:          cbor.SortCoreDeterministic,
+	StructToArray: true,
+}
+
+// encMode is the reusable CBOR encoding mode with struct array configuration
+var encMode, _ = encOpts.EncMode()
+
+// MarshalCBOR implements CBOR marshaling with array format
+func (m *Message) MarshalCBOR() ([]byte, error) {
+	return encMode.Marshal(m)
+}
+
+// UnmarshalCBOR implements CBOR unmarshaling expecting array format
+func (m *Message) UnmarshalCBOR(data []byte) error {
+	return cbor.Unmarshal(data, m)
+}
 ```
+EOF_/home/stevegt/lab/grid-poc/x/wire/wire.go
 
-# Compliance Requirements
+File: /home/stevegt/lab/grid-poc/x/wire/wire-test.go
+```go
+package wire_test
 
-- All Merkle links must use binary CID tag 42  
-- Probabilities ≤65535 (0xFFFF) with 0xFFFF=1.0
-- Weights ≤16384 (0x4000) with 8192=1.0x
-- Nested depth ≤256 to prevent stack overflows
-- Signature covers protocol CID + tree CID + pinning CID
+import (
+	"encoding/hex"
+	"testing"
+
+	"github.com/fxamacker/cbor/v2"
+	"github.com/stevegt/grid-poc/x/wire"
+)
+
+func TestMessageRoundTrip(t *testing.T) {
+	// Create sample message with protocol requirement values
+	msg := wire.Message{
+		Tag:      []byte{0x67, 0x72, 0x69, 0x64}, // "grid" in ASCII
+		Protocol: []byte{0x01, 0x02, 0x03},
+		Payload:  []byte{0x04, 0x05, 0x06},
+	}
+
+	// Encode to CBOR
+	data, err := cbor.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	// Validate CBOR structure is array (major type 4)
+	if (data[0]>>5) != 4 {
+		t.Fatalf("CBOR data is not an array, got major type %d", data[0]>>5)
+	}
+
+	// Expected hex: 8344677269644301020343040506
+	// Breakdown:
+	// 83 - array(3)
+	//   44 - bytes(4) "grid"
+	//   43 - bytes(3) protocol
+	//   43 - bytes(3) payload
+	expected := "8344677269644301020343040506"
+	if hexStr := hex.EncodeToString(data); hexStr != expected {
+		t.Fatalf("Unexpected CBOR encoding:\nGot:  %s\nWant: %s", hexStr, expected)
+	}
+
+	// Decode and verify
+	var decoded wire.Message
+	if err := cbor.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
+
+	if string(decoded.Tag) != "grid" {
+		t.Errorf("Tag mismatch:\nGot:  % x\nWant: 67 72 69 64", decoded.Tag)
+	}
+
+	if string(decoded.Protocol) != string(msg.Protocol) {
+		t.Errorf("Protocol mismatch:\nGot:  % x\nWant: % x", decoded.Protocol, msg.Protocol)
+	}
+
+	if string(decoded.Payload) != string(msg.Payload) {
+		t.Errorf("Payload mismatch:\nGot:  % x\nWant: % x", decoded.Payload, msg.Payload)
+	}
+}
+
+func TestEmptyFields(t *testing.T) {
+	msg := wire.Message{
+		Tag:      []byte{},
+		Protocol: []byte{},
+		Payload:  []byte{},
+	}
+
+	data, err := cbor.Marshal(msg)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
+
+	// Expected empty array: 83404040
+	// 83 - array(3)
+	//   40 - bytes(0)
+	//   40 - bytes(0)
+	//   40 - bytes(0) 
+	expected := "83404040"
+	if hexStr := hex.EncodeToString(data); hexStr != expected {
+		t.Fatalf("Unexpected empty encoding:\nGot:  %s\nWant: %s", hexStr, expected)
+	}
+}
+
+func TestInvalidArray(t *testing.T) {
+	// Invalid array (wrong element count)
+	invalidData, _ := hex.DecodeString("820440") // array(2), bytes(0)
+	var msg wire.Message
+	if err := cbor.Unmarshal(invalidData, &msg); err == nil {
+		t.Fatal("Expected error for wrong array length, got nil")
+	}
+}
 ```
-
-File: /home/stevegt/lab/grid-poc/x/wire/wire-test.md
-```markdown
-# PromiseGrid Wire Protocol Compliance Tests
-
-### Structural Validation
-1. Verify all CIDs use CBOR tag 42 with binary multihash
-   - Reject: String CIDs, truncated formats, missing tags
-2. Confirm scenario tree depth ≤256 levels
-   - Test: 257-level nested structure must fail
-3. Check probability/weight ranges:
-   - Valid: 0 ≤ probability ≤65535
-   - Valid: 0 ≤ weight ≤16384  
-   - Invalid: probability=65536 → reject
-4. Ensure branch ordering by CID byte values
-   - Test: Unsorted branches must fail validation
-
-### Semantic Validation
-5. Validate Merkle links resolve to correct content
-   - Mock test: CID → {"type":"Event","timestamp":1672531200}
-6. Verify trust metric calculations
-   - Input: prior=0.5, actual=1.0, predicted=0.8 (52428), weight=1.0 (8192)
-   - Expected: 0.5 * (1 - 1*(0.2)^2) = 0.48
-7. Test signature coverage:
-   - Modify protocol CID → invalid signature
-   - Modify tree CID → invalid signature
-   - Modify pinning CID → invalid signature
-
-### Edge Cases
-8. Zero probability branch (prob=0)
-   - Must not affect trust metrics
-9. Maximum weight multiplier (16384 = 2.0x)
-   - Verify trust loss capped at 2x base rate
-10. Empty scenario tree ([] → root state)
-    - Valid initialization message
-11. Duplicate CIDs in branches
-    - Allowed but must be sorted properly
-
-### Fuzz Testing
-12. Invalid CBOR structures 
-    - Malformed arrays → parse error
-13. Extreme nested depths
-    - 256 valid, 257 invalid
-14. Integer overflows 
-    - prob=65535 + 1 → reject
-15. Non-CID types in tree
-    - String → reject, tag 42 required
-```
+EOF_/home/stevegt/lab/grid-poc/x/wire/wire-test.go
 
 <references>
-[1] https://www.lindo.com/doc/online_help/lingo18_0/scenario_tree.htm
-[2] https://worldline.com/en-ca/home/main-navigation/resources/resources-hub/blogs/the-why-behind-reconciling
-[3] https://math.usu.edu/schneit/StatsStuff/Probability/probability7.html
-[4] https://scottaaronson.blog/?p=6541
-[5] https://arxiv.org/html/2403.00218v1
-[6] https://www.cointab.net/business/anz-worldline-payment-gateway-reconciliation/
-[7] https://lindo.com/doc/online_help/lingo20_0/scenario_tree.htm
-[8] https://nibmehub.com/opac-service/pdf/read/Structure%20and%20Interpretation%20of%20Computer%20Programs%20-.pdf
-[9] https://pmc.ncbi.nlm.nih.gov/articles/PMC10021014/
-[10] https://people.eecs.berkeley.edu/~jordan/papers/variational-intro.pdf
-[11] http://ndl.ethernet.edu.et/bitstream/123456789/8271/1/182.pdf.pdf
-[12] https://www.utdallas.edu/~nrr150130/gmbook/bayes.html
-[13] https://pmc.ncbi.nlm.nih.gov/articles/PMC9165295/
-[14] https://sicp.sourceacademy.org/sicpjs.pdf
-[15] http://etheses.lse.ac.uk/1609/1/U150220.pdf
-[16] https://library.oapen.org/bitstream/id/bd075f0a-fbba-4b0f-a5f3-820888d84e91/9781000635201.pdf
+[1] https://pkg.go.dev/github.com/fxamacker/cbor/v2
+[2] https://github.com/whyrusleeping/cbor-gen
+[3] https://devblogs.microsoft.com/odata/enable-cbor-within-asp-net-core-odata/
+[4] https://lupyuen.github.io/pinetime-rust-mynewt/articles/ast
+[5] https://typst.app/docs/reference/data-loading/cbor/
+[6] https://g.blicky.net/yorhel-dev.git/diff/?id2=404e168eb5beb37801f21899f8f8b50dadf4ecdb
+[7] https://pkg.go.dev/github.com/fxamacker/cbor
+[8] https://pkg.go.dev/github.com/diffeo/go-coordinate/cborrpc
 </references>

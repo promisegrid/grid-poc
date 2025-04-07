@@ -1,14 +1,40 @@
-wire: WIP wire.md and wire-test.md
+wire: start work on example code
 
-Checkpoint what we have before switching to work on example code.
+Write a test case and code that generates and parses a CBOR message
+that matches this structure:
 
+```go
+type Message struct {
+  // 'grid' tag (67 72 69 64)
+  Tag []byte
+  // binary CID of document that describes the protocol
+  Protocol []byte
+  // binary payload
+  Payload []byte
+}
+
+Encode as a tuple, not a map.  Do not use cborgen -- we're writing the
+code ourselves.
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p,
+  prefer recent examples to avoid deprecated APIs.  Please verify that
+  the code compiles and runs without errors -- do not hallucinate
+  library methods, structs, or functions that do not exist. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file.  Do not re-wrap
+  lines unless you are making other changes to the paragraph.  Lines
+  must be wrapped at 70 characters.  
 In: 
   x/wire/scenario-trees.md
   x/wire/wire.md
   x/wire/wire-test.md
 Out:
-  x/wire/wire.md
-  x/wire/wire-test.md
+  x/wire/wire.go
+  x/wire/wire-test.go
 
 .stop
 

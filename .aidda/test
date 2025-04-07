@@ -1,0 +1,14 @@
+
+
+stdout:
+FAIL	github.com/stevegt/grid-poc/x/wire [build failed]
+
+
+stderr:# github.com/stevegt/grid-poc/x/wire
+./wire.go:18:2: unknown field StructToArray in struct literal of type cbor.EncOptions
+./wire-test.go:12:9: undefined: wire
+./wire-test.go:41:14: undefined: wire
+./wire-test.go:60:9: undefined: wire
+./wire-test.go:85:10: undefined: wire
+
+
