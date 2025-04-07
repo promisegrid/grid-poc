@@ -1,4 +1,33 @@
-wire: add scenario-trees.md
+wire: WIP wire.md and wire-test.md
+
+Checkpoint what we have before switching to work on example code.
+
+In: 
+  x/wire/scenario-trees.md
+  x/wire/wire.md
+  x/wire/wire-test.md
+Out:
+  x/wire/wire.md
+  x/wire/wire-test.md
+
+.stop
+
+
+wire: reconcile worldline and scenario tree
+
+A worldline is a set of events that are related to each other
+on an axis such as time.  A goal of the system is to be able to
+discover a worldline, enabling agents to fill in events and states
+anywhere along the worldline's axis; if the axis is time, then the
+worldline is a timeline, and agents are asserting ot promising events
+and resulting states both past and future.  Using a Merkle DAG to
+order events and states along a worldline's axis enables the same
+events or states to be used in multiple worldlines, and enables
+adding, removing, or replacing events and states without changing the
+hash of the event or state leaf nodes.  This is a key feature of the
+system.  We need to figure out how probabilities and alternate paths
+fit into this model.  
+
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -13,23 +42,16 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
-  .aidda/response
+  x/wire/scenario-trees.md
   x/wire/wire.md
+  x/wire/wire-test.md
+Out:
+  x/wire/wire.md
+  x/wire/wire-test.md
 
 .stop
 
-Wait.  A worldline is a set of events that are related to each other
-on an axis such as time.  A goal of the system is to be able to
-discover a worldline, enabling agents to fill in events and states
-anywhere along the worldline's axis; if the axis is time, then the
-worldline is a timeline, and agents are asserting ot promising events
-and resulting states both past and future.  Using a Merkle DAG to
-order events and states along a worldline's axis enables the same
-events or states to be used in multiple worldlines, and enables
-adding, removing, or replacing events and states without changing the
-hash of the event or state leaf nodes.  This is a key feature of the
-system.  We need to figure out how probabilities and alternate paths
-fit into this model.  
+  .aidda/response
 
 Wait.  I think we need to rethink the tree and message structure.  A
 goal was to be able to use merkle DAGs to represent worldlines;
@@ -41,14 +63,14 @@ the event or state leaf nodes.  This contrasts with a pure hash chain,
 where each event includes the hash of the previous state, and each
 state includes the hash of the previous event.  
 
-But this newer idea of a decision tree is interesting, because it lets
+But this newer idea of a scenario tree is interesting, because it lets
 an agent express a set of possible outcomes, with probabilities, and
 others can evaluate the agent's accuracy by comparing the agent's
 predictions to the actual outcomes.  
 
-Is the idea of a DAG compatible with the idea of a decision tree?  Is
+Is the idea of a DAG compatible with the idea of a scenario tree?  Is
 it conceivable that a DAG can also incorporate the probabilities and
-alternate paths of a decision tree?  Is there a way to combine the two
+alternate paths of a scenario tree?  Is there a way to combine the two
 ideas?  
 .stop
 

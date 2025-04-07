@@ -1,4 +1,8 @@
-# PromiseGrid Wire Protocol Compliance Test Cases
+# PromiseGrid Wire Protocol Document Test Cases
+
+These test cases are not for the protocol itself or for code that
+implements the protocol. They are here to test the wire protocol
+document, and are intended to be evaluated by an LLM or similar tool.
 
 ### CID Format Compliance
 1. Are all CIDs used as map keys in DAG-CBOR structures represented as

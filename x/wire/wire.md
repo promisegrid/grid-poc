@@ -3,6 +3,107 @@
 This specification document defines the PromiseGrid wire protocol, a
 system that leverages CBOR, COSE, and IPLD/DAG-CBOR technologies to
 securely transmit signed assertions of state transitions in a
+decentralized network. The protocol models an infinite state machine
+as a probabilistic scenario tree where each branch contains:
+
+1. Binary CIDs referencing events/states (CBOR tag 42)
+2. Fixed-point probability (16-bit integer representing 0.0-1.0 scaled by 65535)
+3. 16-bit weight multiplier affecting subsequent branches
+4. Nested branches maintaining Merkle structural integrity
+
+## 1. Introduction
+
+PromiseGrid enables decentralized agents to assert conditional state
+transitions across multiple possible worldlines. Each signed assertion
+specifies: 
+
+- Concrete event→state transitions using content-addressed IPLD nodes  
+- Probabilistic branching with weight-adjusted trust propagation  
+- Merkle-DAG structure allowing partial validation and cross-worldline referencing
+
+## 2. Protocol Message Design
+
+### 2.1 scenario Tree Structure
+
+```cbor
+[
+  # Event CID (binary CBOR tag 42)
+  42(h'01e5b3...'),  
+  
+  # State CID (binary CBOR tag 42)  
+  42(h'8a4f6d...'),
+  
+  # Probability as fixed-point (0.65 = 42598/65535)
+  42598,  
+  
+  # Weight multiplier (1.2x = 7864/8192)
+  7864,
+  
+  # Nested branches
+  [
+    [
+      42(h'd3a9...'), 
+      42(h'fe12...'),
+      58982, 
+      8192,
+      []
+    ]
+  ]
+]
+```
+
+### 2.2 Deterministic Encoding Rules
+
+1. **CIDs**: Always CBOR tag 42 with binary multihash
+2. **Probabilities**: uint16 where 0xFFFF = 1.0
+3. **Weights**: uint16 where 8192 = 1.0x (Q12 fixed-point)
+4. **Ordering**: Branches sorted by CID byte values
+
+## 3. Trust Metric Algorithm
+
+```python
+def update_trust(prior, actual, predicted, weight):
+    # Brier score with weight scaling
+    loss = (actual - predicted/65535)**2
+    return prior * (1 - weight/8192 * loss) 
+```
+
+## 4. Signature & Validation
+
+```cbor
+COSE_Sign1(
+  protected: <<{
+    1: -7,  # ES256
+    15: {    # CWT Claims
+      "iss": 42(h'...'),  # Issuer CID
+      "seq": 42(h'...')   # Previous state CID  
+    }
+  }>>,
+  payload: <<[
+    42(h'...'), # Protocol version CID
+    42(h'...'), # Root scenario tree CID
+    42(h'...')  # Pinning contract CID
+  ]>>,
+  signature: h'3045...'
+)
+```
+
+# Compliance Requirements
+
+- All Merkle links must use binary CID tag 42  
+- Probabilities ≤65535 (0xFFFF) with 0xFFFF=1.0
+- Weights ≤16384 (0x4000) with 8192=1.0x
+- Nested depth ≤256 to prevent stack overflows
+- Signature covers protocol CID + tree CID + pinning CID
+
+
+previous version: 
+
+# PromiseGrid Wire Protocol Specification
+
+This specification document defines the PromiseGrid wire protocol, a
+system that leverages CBOR, COSE, and IPLD/DAG-CBOR technologies to
+securely transmit signed assertions of state transitions in a
 decentralized network. The protocol is designed to support an infinite
 state machine modeled as a decision tree in which each branch is
 assigned a probability and a weight multiplier. The decision tree is

@@ -1,203 +1,261 @@
 <think>
-Okay, let's tackle this step by step. The user wants me to update their protocol documentation and test cases to incorporate Merkle DAGs and decision trees with proper CID handling, probability math, and trust metrics. 
+Okay, I need to reconcile the concepts of worldline and scenario tree
+in the context of the PromiseGrid wire protocol. Let me start by
+understanding both terms.
 
-First, I need to understand the existing files. In wire.md, the example CBOR structures use string CIDs, but the user noted they should be binary. The DAG-CBOR spec requires map keys to be strings, so full CID strings are necessary there. However, links in other positions should use CBOR tag 42 with binary CIDs. The nested list structure for the decision tree might not be ideal for a DAG. Using maps with parent/child links would better represent multiple parents. The probability math in the trust calculation is subtracting predicted from actual, which can lead to negative trust. The user wants absolute differences instead.
+A worldline, as per the user's description, is a sequence of events
+and states along an axis like time. It uses a Merkle DAG to allow
+agents to add events without changing existing hashes. The key here is
+that events can be part of multiple worldlines, enabling flexibility
+and history preservation.
 
-Looking at the search results, Merkle DAGs allow nodes to reference multiple parents and children, which is key for representing worldlines [1][6]. Decision trees can be encoded in DAGs by allowing nodes to have multiple parents where branches converge [9][13]. Using fixed-point integers for probabilities ensures deterministic encoding, as floating points can vary [3][8].
+A scenario tree, from the provided search results, models decisions
+and probabilistic outcomes. Each node represents a decision or chance
+event, with branches showing possible outcomes and their
+probabilities. The Lindo example [1][7] shows a tree with stages,
+events, and probabilities, which helps in calculating expected
+outcomes.
 
-For the COSE envelope, the payload's "tree" field refers to a CID, which should be a binary CID with tag 42. The nested decision tree example in wire.md uses lists, but a DAG structure would require nodes to reference parents and children via CIDs. Each node should have "parents" and "children" arrays, with children including probability and weight. The trust calculation should multiply the weight by (1 - absolute difference between actual and predicted) to keep trust positive.
+The user wants to integrate probabilities and alternate paths (like
+scenario trees) into the worldline model. The challenge is to
+represent possible branches (scenarios) within the Merkle DAG
+structure, where each branch has probabilities and weight multipliers.
 
-In wire-test.md, the test cases need to check for correct CID usage: full strings as map keys, binary with tag 42 elsewhere. The probability validation should ensure sums are 1000 in fixed-point. The trust tests must verify absolute differences and weight application.
+Looking at the existing wire.md, the scenario tree is represented as
+nested lists with event CID, state CID, probability, weight, and
+nested branches. However, the user noted issues: CIDs should be
+binary, not strings, and the probability math is incorrect.
 
-I'll restructure the decision tree example in wire.md to use a DAG-CBOR node format with parent/child links, binary CIDs, and fixed-point probabilities. The COSE example will be updated to use binary CIDs where appropriate. The trust calculation in Python will be corrected to use absolute differences and fixed-point math. In wire-test.md, I'll adjust the test cases to reflect these changes, ensuring CID formats, probability sums, and trust metrics are properly validated.
+First, correcting CID representation. The wire.md uses full base32
+strings for CIDs in map keys, but according to DAG-CBOR rules, map
+keys must be strings. However, in the scenario tree structure, they're
+using lists, not maps, so maybe binary CIDs are acceptable there.
+Wait, the user's comment says "CIDs should be binary" in the example.
+So in the scenario tree lists, event and state identifiers should be
+binary CIDs (tag 42), not strings. The current example uses strings,
+which is wrong.
+
+Next, probability handling. The current example in wire.md has
+probabilities as floats, but the user's test cases mention using
+fixed-point integers for determinism. Floating points can cause
+hashing issues due to rounding. So probabilities should be integers
+representing fractions, e.g., 0.65 as 6500 with a denominator of
+10000.
+
+The trust metric calculation in wire.md's Python code multiplies
+weight by (actual - predicted), but the user notes this rewards
+setting probabilities to 0. The correct approach might be to use a
+proper scoring rule, like Brier score, where the loss is (actual -
+predicted)^2. The current code's trust metric is flawed.
+
+Also, the scenario tree's weight multiplier applies to subsequent
+branches. The structure in wire.md shows each branch has a weight
+affecting nested branches. That part seems correct but needs
+verification.
+
+In the COSE_Sign1 example, the payload includes "tree" as a CID
+string. Since the scenario tree is part of the payload, it should be
+embedded directly or referenced via a binary CID. The current example
+uses a string, which might not be correct if the tree is nested within
+the payload.
+
+Another point is the use of lists instead of maps in the scenario tree
+to comply with DAG-CBOR's map key constraints. The current design uses
+nested lists, which is correct to avoid map key issues.
+
+Now, reconciling worldlines and scenario trees: each worldline is a
+path through the scenario tree. The Merkle DAG allows sharing nodes
+across different worldlines. Each node in the DAG can be part of
+multiple branches (scenarios), enabling agents to propose alternate
+futures without altering existing data.
+
+To implement this, each event node in the DAG should link to possible
+subsequent events (branches) with their probabilities and weights. The
+Merkle structure ensures that changes in branches don't affect leaf
+hashes, maintaining data integrity.
+
+Testing considerations include ensuring CIDs are correctly encoded,
+probabilities are fixed-point, and the trust metric uses a proper
+scoring rule. The wire-test.md needs updates to reflect these checks,
+like verifying CID formats and probability ranges.
+
+In summary, the corrections needed are:
+
+1. Use binary CIDs (tag 42) in scenario tree lists, not strings.
+2. Represent probabilities as fixed-point integers.
+3. Correct the trust metric calculation to use a proper scoring rule.
+4. Ensure the COSE payload correctly embeds or references the scenario tree.
+5. Update test cases to check these aspects.
+
+I'll proceed to modify the wire.md and wire-test.md files accordingly,
+ensuring compliance with DAG-CBOR, correct CID usage, and accurate
+probability handling.
 </think>
 
-File: wire.md
+File: /home/stevegt/lab/grid-poc/x/wire/wire.md
 ```markdown
 # PromiseGrid Wire Protocol Specification
 
-This specification document defines the PromiseGrid wire protocol, leveraging CBOR, COSE, IPLD/DAG-CBOR and Merkle DAGs to securely transmit signed assertions of probabilistic state transitions. The protocol models an infinite state machine as a Merkle Decision DAG where nodes contain probability/weight metadata and may have multiple parent/child relationships.
+This specification document defines the PromiseGrid wire protocol, a
+system that leverages CBOR, COSE, and IPLD/DAG-CBOR technologies to
+securely transmit signed assertions of state transitions in a
+decentralized network. The protocol models an infinite state machine
+as a probabilistic scenario tree where each branch contains:
+
+1. Binary CIDs referencing events/states (CBOR tag 42)
+2. Fixed-point probability (16-bit integer representing 0.0-1.0 scaled by 65535)
+3. 16-bit weight multiplier affecting subsequent branches
+4. Nested branches maintaining Merkle structural integrity
 
 ## 1. Introduction
 
-PromiseGrid enables decentralized agents to make conditional promises through a Merkle Decision DAG structure that combines properties of decision trees and content-addressed graphs. Each node contains:
+PromiseGrid enables decentralized agents to assert conditional state
+transitions across multiple possible worldlines. Each signed assertion
+specifies: 
 
-1. Event/state content addressed via CIDv1
-2. Probability distribution over child nodes
-3. Weight multiplier for trust computation
-4. Links to multiple parent/child nodes as Merkle edges
+- Concrete event→state transitions using content-addressed IPLD nodes  
+- Probabilistic branching with weight-adjusted trust propagation  
+- Merkle-DAG structure allowing partial validation and cross-worldline referencing
 
-This structure enables:
-- Partial traversal without full tree parsing
-- Probabilistic trust calculations
-- Immutable content addressing via Merkle links
-- Efficient branching factor updates
+## 2. Protocol Message Design
 
-## 2. Background
-
-### 2.1 Merkle Decision DAGs
-
-Combining Merkle DAGs [6] with decision tree concepts [5], a Merkle Decision DAG:
-- Uses CIDv1 for all node references
-- Allows nodes with multiple parents (acyclic)
-- Encodes probability/weight metadata at edges
-- Permits partial traversal via content addressing
-- Enables CRDT-like convergence through hash-linked structure [7]
-
-### 2.2 DAG-CBOR Constraints
-
-Key protocol constraints:
-- Map keys must be text strings (full CID strings)
-- Links use CBOR tag 42 for binary CIDs
-- Floating-point values prohibited; probabilities use fixed-point
-- Deterministic encoding required for consistent hashing
-
-## 3. Protocol Message Design
-
-### 3.1 Node Structure
-
-Each node is encoded as DAG-CBOR:
+### 2.1 scenario Tree Structure
 
 ```cbor
-{
-  "parents": [42(h...) ...],      # Binary CID links (tag 42)
-  "children": [
-    {
-      "prob": 650,                # Fixed-point probability (650 = 0.65)
-      "weight": 1200,             # Integer weight (x1000)
-      "child": 42(h...)           # Child node CID
-    },
-    ...
-  ],
-  "content": "bafyrei..."         # Content CID (full string)
-}
+[
+  # Event CID (binary CBOR tag 42)
+  42(h'01e5b3...'),  
+  
+  # State CID (binary CBOR tag 42)  
+  42(h'8a4f6d...'),
+  
+  # Probability as fixed-point (0.65 = 42598/65535)
+  42598,  
+  
+  # Weight multiplier (1.2x = 7864/8192)
+  7864,
+  
+  # Nested branches
+  [
+    [
+      42(h'd3a9...'), 
+      42(h'fe12...'),
+      58982, 
+      8192,
+      []
+    ]
+  ]
+]
 ```
 
-- Probabilities sum to 1000 (fixed-point representation)
-- Weight multipliers apply to subtree probabilities
-- Parents allow multiple antecedents in DAG structure
+### 2.2 Deterministic Encoding Rules
 
-### 3.2 COSE-Sign1 Envelope
+1. **CIDs**: Always CBOR tag 42 with binary multihash
+2. **Probabilities**: uint16 where 0xFFFF = 1.0
+3. **Weights**: uint16 where 8192 = 1.0x (Q12 fixed-point)
+4. **Ordering**: Branches sorted by CID byte values
 
-Messages wrap nodes in cryptographically signed envelopes:
+## 3. Trust Metric Algorithm
+
+```python
+def update_trust(prior, actual, predicted, weight):
+    # Brier score with weight scaling
+    loss = (actual - predicted/65535)**2
+    return prior * (1 - weight/8192 * loss) 
+```
+
+## 4. Signature & Validation
 
 ```cbor
 COSE_Sign1(
   protected: <<{
-    1: -7,                        # ES256 algorithm
-    15: {                         # CWT Claims
-      "iss": 42(h...)             # Issuer node CID
+    1: -7,  # ES256
+    15: {    # CWT Claims
+      "iss": 42(h'...'),  # Issuer CID
+      "seq": 42(h'...')   # Previous state CID  
     }
   }>>,
-  payload: <<{
-    "node": 42(h...),             # Binary CID of node content
-    "parents": [42(h...) ...],    # Parent node updates
-    "pinning": {
-      "commit": "bafyrei..."      # Full CID string
-    }
-  }>>,
+  payload: <<[
+    42(h'...'), # Protocol version CID
+    42(h'...'), # Root scenario tree CID
+    42(h'...')  # Pinning contract CID
+  ]>>,
   signature: h'3045...'
 )
 ```
 
-## 4. Trust Metric Computation
+# Compliance Requirements
 
-Trust updates use observed vs predicted outcomes:
-
-```python
-def evaluate_trust(path):
-    trust = 1.0
-    for node in path:
-        actual = node['actual']     # Observed outcome (0.0-1.0)
-        predicted = node['prob'] / 1000.0
-        trust *= node['weight']/1000.0 * (1 - abs(actual - predicted))
-    return trust
+- All Merkle links must use binary CID tag 42  
+- Probabilities ≤65535 (0xFFFF) with 0xFFFF=1.0
+- Weights ≤16384 (0x4000) with 8192=1.0x
+- Nested depth ≤256 to prevent stack overflows
+- Signature covers protocol CID + tree CID + pinning CID
 ```
 
-Key differences from prior approach:
-- Uses absolute difference to prevent negative trust
-- Fixed-point integer math for determinism
-- Weights applied multiplicatively to path trust
-
-## 5. Validation & Compliance
-
-### 5.1 Structural Validation
-- All CIDs validate as proper CIDv1 with identity multibase
-- Probability sums equal 1000 ± tolerance per node
-- No cyclic references in parent/child links
-
-### 5.2 Cryptographic Validation
-- COSE signatures verify against issuer keys
-- Payload hashes match node CIDs
-- Parent links resolve to valid existing nodes
-
-[Remaining sections follow similar structure to original with DAG-focused updates...]
-```
-
-File: wire-test.md
+File: /home/stevegt/lab/grid-poc/x/wire/wire-test.md
 ```markdown
-# PromiseGrid Wire Protocol Compliance Test Cases
+# PromiseGrid Wire Protocol Compliance Tests
 
-### Merkle DAG Validation
-1. Verify all nodes contain valid Merkle parent/child links using CIDv1
-2. Confirm acyclic structure through graph traversal
-3. Validate probability sums per node equal 1000 (±2 for rounding)
+### Structural Validation
+1. Verify all CIDs use CBOR tag 42 with binary multihash
+   - Reject: String CIDs, truncated formats, missing tags
+2. Confirm scenario tree depth ≤256 levels
+   - Test: 257-level nested structure must fail
+3. Check probability/weight ranges:
+   - Valid: 0 ≤ probability ≤65535
+   - Valid: 0 ≤ weight ≤16384  
+   - Invalid: probability=65536 → reject
+4. Ensure branch ordering by CID byte values
+   - Test: Unsorted branches must fail validation
 
-### CID Handling
-4. Check map keys use full CID strings (base32)
-5. Verify CBOR tag 42 used for binary CID links
-6. Ensure content CIDs resolve to valid DAG-CBOR nodes
+### Semantic Validation
+5. Validate Merkle links resolve to correct content
+   - Mock test: CID → {"type":"Event","timestamp":1672531200}
+6. Verify trust metric calculations
+   - Input: prior=0.5, actual=1.0, predicted=0.8 (52428), weight=1.0 (8192)
+   - Expected: 0.5 * (1 - 1*(0.2)^2) = 0.48
+7. Test signature coverage:
+   - Modify protocol CID → invalid signature
+   - Modify tree CID → invalid signature
+   - Modify pinning CID → invalid signature
 
-### COSE Signatures
-7. Test signature verification with multiple key types
-8. Validate payload hash matches node CID
-9. Confirm external_aad inclusion affects signature
+### Edge Cases
+8. Zero probability branch (prob=0)
+   - Must not affect trust metrics
+9. Maximum weight multiplier (16384 = 2.0x)
+   - Verify trust loss capped at 2x base rate
+10. Empty scenario tree ([] → root state)
+    - Valid initialization message
+11. Duplicate CIDs in branches
+    - Allowed but must be sorted properly
 
-### Trust Metrics
-10. Verify trust calc uses absolute differences
-11. Test fixed-point integer handling
-12. Validate weight multipliers apply to subtrees
-
-### Decision DAG Semantics
-13. Confirm multiple parent links supported
-14. Verify partial traversal exits early
-15. Test node update with new parent/child links
-
-[Remaining test cases updated for DAG structure...]
+### Fuzz Testing
+12. Invalid CBOR structures 
+    - Malformed arrays → parse error
+13. Extreme nested depths
+    - 256 valid, 257 invalid
+14. Integer overflows 
+    - prob=65535 + 1 → reject
+15. Non-CID types in tree
+    - String → reject, tag 42 required
 ```
 
 <references>
-[1] https://interjectedfuture.com/crdts-turned-inside-out/
-[2] https://cs.brown.edu/media/filer_public/00/07/0007e338-2bb2-4bfe-bf0f-b29a1cf809d1/denijs.pdf
-[3] https://mlg.eng.cam.ac.uk/pub/pdf/JorGhaSau96a.pdf
-[4] https://people.eecs.berkeley.edu/~kubitron/courses/cs262a-F18/projects/reports/project1_report_ver3.pdf
-[5] https://en.wikipedia.org/wiki/World_line
-[6] https://interpeer.org/blog/2024/01/comparing-vessel-to-a-merkle-dag/
-[7] https://docs.confident-ai.com/docs/metrics-dag
-[8] https://aclanthology.org/C08-1098.pdf
-[9] https://en.wikipedia.org/wiki/Alternating_decision_tree
-[10] https://developer.payments.worldline.com/techguides/paymentpage-integration/paymentpage-integration-steps.html
-[11] https://www.stats.ox.ac.uk/~evans/gms/_book/dag.html
-[12] https://developer.payments.worldline.com/get-started/integration-options.html
-[13] https://www.ece.iastate.edu/~namrata/EE527_Spring12/lgraphical1.pdf
-[14] https://pyrobots.csc.liv.ac.uk/~frans/PostScriptFiles/ijdwmEsraa2017.pdf
-</references>
-```
-
-<references>
-[1] https://people.stern.nyu.edu/adamodar/pdfiles/valrisk/ch8.pdf
-[2] https://en.wikipedia.org/wiki/Datar%E2%80%93Mathews_method_for_real_option_valuation
-[3] http://ndl.ethernet.edu.et/bitstream/123456789/73853/1/73.pdf.pdf
-[4] https://pages.stern.nyu.edu/~adamodar/pdfiles/DSV2/Ch5.pdf
-[5] https://dukespace.lib.duke.edu/bitstreams/a5a92b51-fc08-4802-af38-ff3b53a1b6e3/download
-[6] https://www.lucidchart.com/pages/decision-tree
-[7] https://dial.uclouvain.be/memoire/ucl/en/object/thesis:17169/datastream/PDF_01/view
-[8] https://pshenoy.ku.edu/Papers/WP283.pdf
-[9] https://www.dnodes.io/support/what-is-a-real-option-and-why-is-it-relevant-in-business/
-[10] https://www.cvast.tuwien.ac.at/sites/default/files/bibcite/606/Piccolotto%20Nikolaus%20-%202025%20-%20Visual%20Analytics%20for%20Blind%20Source%20Separation%20in%20Time%20and%20Space.pdf
-[11] https://edwardbetts.com/monograph/pattern_recognition
-[12] https://fastercapital.com/content/Unlocking-Real-Options-Valuation-with-Binomial-Trees.html
-[13] https://www.investopedia.com/articles/financial-theory/11/decisions-trees-finance.asp
-[14] https://thedecisionlab.com/reference-guide/economics/real-options-analysis
-[15] https://en.wikipedia.org/wiki/Real_options_valuation
+[1] https://www.lindo.com/doc/online_help/lingo18_0/scenario_tree.htm
+[2] https://worldline.com/en-ca/home/main-navigation/resources/resources-hub/blogs/the-why-behind-reconciling
+[3] https://math.usu.edu/schneit/StatsStuff/Probability/probability7.html
+[4] https://scottaaronson.blog/?p=6541
+[5] https://arxiv.org/html/2403.00218v1
+[6] https://www.cointab.net/business/anz-worldline-payment-gateway-reconciliation/
+[7] https://lindo.com/doc/online_help/lingo20_0/scenario_tree.htm
+[8] https://nibmehub.com/opac-service/pdf/read/Structure%20and%20Interpretation%20of%20Computer%20Programs%20-.pdf
+[9] https://pmc.ncbi.nlm.nih.gov/articles/PMC10021014/
+[10] https://people.eecs.berkeley.edu/~jordan/papers/variational-intro.pdf
+[11] http://ndl.ethernet.edu.et/bitstream/123456789/8271/1/182.pdf.pdf
+[12] https://www.utdallas.edu/~nrr150130/gmbook/bayes.html
+[13] https://pmc.ncbi.nlm.nih.gov/articles/PMC9165295/
+[14] https://sicp.sourceacademy.org/sicpjs.pdf
+[15] http://etheses.lse.ac.uk/1609/1/U150220.pdf
+[16] https://library.oapen.org/bitstream/id/bd075f0a-fbba-4b0f-a5f3-820888d84e91/9781000635201.pdf
 </references>
