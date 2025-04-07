@@ -1,9 +1,6 @@
 package wire
 
 import (
-	"bytes"
-	"fmt"
-
 	"github.com/fxamacker/cbor/v2"
 )
 
@@ -38,15 +35,12 @@ func init() {
 	}
 }
 
-// MarshalCBOR encodes Message to CBOR using array format.
-func (m *Message) MarshalCBOR() ([]byte, error) {
-	var buf bytes.Buffer
-	enc := em.NewEncoder(&buf)
-	err := enc.Encode(m)
-	return buf.Bytes(), err
+// MarshalBinary implements encoding.BinaryMarshaler
+func (m *Message) MarshalBinary() ([]byte, error) {
+	return cbor.Marshal(m)
 }
 
-// UnmarshalCBOR decodes CBOR to Message using array format.
-func (m *Message) UnmarshalCBOR(data []byte) error {
-	return dm.Unmarshal(data, m)
+// UnmarshalBinary implements encoding.BinaryUnmarshaler
+func (m *Message) UnmarshalBinary(data []byte) error {
+	return cbor.Unmarshal(data, m)
 }

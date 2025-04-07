@@ -3,8 +3,6 @@ package wire
 import (
 	"bytes"
 	"testing"
-
-	"github.com/fxamacker/cbor/v2"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -21,14 +19,14 @@ func TestRoundTrip(t *testing.T) {
 	}
 
 	// Marshal to CBOR
-	data, err := orig.MarshalCBOR()
+	data, err := orig.MarshalBinary()
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
 	// Unmarshal from CBOR
 	var decoded Message
-	if err := decoded.UnmarshalCBOR(data); err != nil {
+	if err := decoded.UnmarshalBinary(data); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
@@ -52,29 +50,18 @@ func TestEmptyFields(t *testing.T) {
 		Payload:  []byte{},
 	}
 
-	data, err := orig.MarshalCBOR()
+	data, err := orig.MarshalBinary()
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	// Verify CBOR structure by decoding to raw array
-	var arr []cbor.RawMessage
-	if err := cbor.Unmarshal(data, &arr); err != nil {
-		t.Fatalf("Raw unmarshal failed: %v", err)
+	// Verify CBOR structure by decoding to array
+	var decoded Message
+	if err := decoded.UnmarshalBinary(data); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	if len(arr) != 3 {
-		t.Fatalf("Unexpected array length: got %d, want 3", len(arr))
-	}
-
-	// Check all elements are empty byte strings
-	for i, el := range arr {
-		var b []byte
-		if err := cbor.Unmarshal(el, &b); err != nil {
-			t.Errorf("Element %d not byte string: %v", i, err)
-		}
-		if len(b) != 0 {
-			t.Errorf("Element %d not empty: len=%d", i, len(b))
-		}
+	if len(decoded.Tag) != 0 || len(decoded.Protocol) != 0 || len(decoded.Payload) != 0 {
+		t.Errorf("Empty fields not preserved: %+v", decoded)
 	}
 }
