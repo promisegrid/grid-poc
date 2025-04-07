@@ -8,12 +8,10 @@ import (
 )
 
 func TestRoundTrip(t *testing.T) {
-	tag := []byte{0x67, 0x72, 0x69, 0x64} // 'grid' tag
 	protocol := []byte{0x01, 0x02, 0x03}
 	payload := []byte{0x04, 0x05, 0x06}
 
 	orig := Message{
-		Tag:      tag,
 		Protocol: protocol,
 		Payload:  payload,
 	}
@@ -23,12 +21,11 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	// Verify CBOR array structure (0x83 = array(3), 0x44 = bytes(4), etc.)
 	expectedPrefix := []byte{
 		0x83,       // array(3)
-		0x44, 0x67, 0x72, 0x69, 0x64,  // bytes(4) "grid"
-		0x43, 0x01, 0x02, 0x03,        // bytes(3) protocol
-		0x43, 0x04, 0x05, 0x06,        // bytes(3) payload
+		0x44, 0x67, 0x72, 0x69, 0x64,  // grid tag bytes
+		0x43, 0x01, 0x02, 0x03,        // protocol bytes
+		0x43, 0x04, 0x05, 0x06,        // payload bytes
 	}
 	if !bytes.HasPrefix(data, expectedPrefix) {
 		t.Errorf("Invalid CBOR structure\nGot:  %x\nWant prefix: %x", data, expectedPrefix)
@@ -39,9 +36,6 @@ func TestRoundTrip(t *testing.T) {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	if !bytes.Equal(decoded.Tag, tag) {
-		t.Errorf("Tag mismatch\nGot:  %x\nWant: %x", decoded.Tag, tag)
-	}
 	if !bytes.Equal(decoded.Protocol, protocol) {
 		t.Errorf("Protocol mismatch\nGot:  %x\nWant: %x", decoded.Protocol, protocol)
 	}
@@ -58,13 +52,23 @@ func TestEmptyMessage(t *testing.T) {
 	}{
 		{
 			"empty fields",
-			Message{Tag: []byte{}, Protocol: []byte{}, Payload: []byte{}},
-			[]byte{0x83, 0x40, 0x40, 0x40}, // [bstr(), bstr(), bstr()]
+			Message{Protocol: []byte{}, Payload: []byte{}},
+			[]byte{
+				0x83,                   // array(3)
+				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
+				0x40, // empty protocol bytes
+				0x40, // empty payload bytes
+			},
 		},
 		{
 			"nil fields",
-			Message{Tag: nil, Protocol: nil, Payload: nil},
-			[]byte{0x83, 0xF6, 0xF6, 0xF6}, // [null, null, null]
+			Message{Protocol: nil, Payload: nil},
+			[]byte{
+				0x83,                   // array(3)
+				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
+				0x40, // nil protocol (encoded as empty bytes)
+				0x40, // nil payload (encoded as empty bytes)
+			},
 		},
 	}
 
@@ -82,6 +86,13 @@ func TestEmptyMessage(t *testing.T) {
 			var decoded Message
 			if err := cbor.Unmarshal(data, &decoded); err != nil {
 				t.Fatalf("Unmarshal failed: %v", err)
+			}
+
+			if len(decoded.Protocol) != 0 {
+				t.Errorf("Expected empty protocol, got %x", decoded.Protocol)
+			}
+			if len(decoded.Payload) != 0 {
+				t.Errorf("Expected empty payload, got %x", decoded.Payload)
 			}
 		})
 	}
