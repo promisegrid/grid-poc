@@ -1,21 +1,5 @@
 wire: start work on example code
 
-Write a test case and code that generates and parses a CBOR message
-that matches this structure:
-
-```go
-type Message struct {
-  // 'grid' tag (67 72 69 64)
-  Tag []byte
-  // binary CID of document that describes the protocol
-  Protocol []byte
-  // binary payload
-  Payload []byte
-}
-
-Encode as a tuple, not a map.  Do not use cborgen -- we're writing the
-code ourselves.
-
 Fix test errors.
 
 Sysmsg: 

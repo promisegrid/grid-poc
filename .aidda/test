@@ -1,11 +1,17 @@
 
 
 stdout:
-FAIL	github.com/stevegt/grid-poc/x/wire [build failed]
+=== RUN   TestRoundTrip
+--- PASS: TestRoundTrip (0.00s)
+=== RUN   TestEmptyMessage
+=== RUN   TestEmptyMessage/empty_fields
+=== RUN   TestEmptyMessage/nil_fields
+--- PASS: TestEmptyMessage (0.00s)
+    --- PASS: TestEmptyMessage/empty_fields (0.00s)
+    --- PASS: TestEmptyMessage/nil_fields (0.00s)
+PASS
+ok  	github.com/stevegt/grid-poc/x/wire	0.003s
 
 
-stderr:# github.com/stevegt/grid-poc/x/wire [github.com/stevegt/grid-poc/x/wire.test]
-./wire.go:29:9: undefined: fmt
-./wire.go:34:9: undefined: fmt
-
+stderr:
 

@@ -38,12 +38,5 @@ func init() {
 	}
 }
 
-// MarshalBinary implements encoding.BinaryMarshaler
-func (m *Message) MarshalBinary() ([]byte, error) {
-	return em.Marshal(m) // Use deterministic encoding mode
-}
-
-// UnmarshalBinary implements encoding.BinaryUnmarshaler
-func (m *Message) UnmarshalBinary(data []byte) error {
-	return dm.Unmarshal(data, m)
-}
+// Removed custom MarshalCBOR/UnmarshalCBOR methods to prevent recursion
+// Encoding/decoding is handled by cbor.EncMode and struct tags

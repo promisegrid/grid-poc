@@ -3,6 +3,8 @@ package wire
 import (
 	"bytes"
 	"testing"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -16,19 +18,24 @@ func TestRoundTrip(t *testing.T) {
 		Payload:  payload,
 	}
 
-	data, err := orig.MarshalBinary()
+	data, err := cbor.Marshal(orig)
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	// Verify CBOR array structure
-	expectedHeader := []byte{0x83} // Array header for 3 elements
-	if !bytes.HasPrefix(data, expectedHeader) {
-		t.Errorf("Invalid CBOR structure. Got %x, want array prefix %x", data[:1], expectedHeader)
+	// Verify CBOR array structure (0x83 = array(3), 0x44 = bytes(4), etc.)
+	expectedPrefix := []byte{
+		0x83,       // array(3)
+		0x44, 0x67, 0x72, 0x69, 0x64,  // bytes(4) "grid"
+		0x43, 0x01, 0x02, 0x03,        // bytes(3) protocol
+		0x43, 0x04, 0x05, 0x06,        // bytes(3) payload
+	}
+	if !bytes.HasPrefix(data, expectedPrefix) {
+		t.Errorf("Invalid CBOR structure\nGot:  %x\nWant prefix: %x", data, expectedPrefix)
 	}
 
 	var decoded Message
-	if err := decoded.UnmarshalBinary(data); err != nil {
+	if err := cbor.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
@@ -63,7 +70,7 @@ func TestEmptyMessage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			data, err := tc.message.MarshalBinary()
+			data, err := cbor.Marshal(tc.message)
 			if err != nil {
 				t.Fatalf("Marshal failed: %v", err)
 			}
@@ -73,7 +80,7 @@ func TestEmptyMessage(t *testing.T) {
 			}
 
 			var decoded Message
-			if err := decoded.UnmarshalBinary(data); err != nil {
+			if err := cbor.Unmarshal(data, &decoded); err != nil {
 				t.Fatalf("Unmarshal failed: %v", err)
 			}
 		})

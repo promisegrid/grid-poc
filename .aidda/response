@@ -1,26 +1,41 @@
 <think>
-Okay, let's tackle this problem. The user is working on a Go project and encountered compilation errors in their wire package. The errors are about fmt being undefined in wire.go. The goal is to fix these errors and ensure the CBOR encoding/decoding works correctly for the Message struct as specified.
+Okay, I need to fix the test errors in the wire package. Let's look at the problem. The test TestRoundTrip is failing with a stack overflow error. The stack trace shows that it's happening in MarshalCBOR, which is causing an infinite recursion.
 
-First, looking at the provided wire.go code, I notice that the init function uses fmt.Sprintf in the panic statements. However, the import for "fmt" is missing in the imports list. That's definitely causing the undefined: fmt errors. So the immediate fix is to add "fmt" to the import section.
+Hmm, the Message struct has a custom MarshalCBOR method that uses the encMode's Marshal. Wait, looking at the code:
 
-Next, I'll check the CBOR encoding setup. The user wants the Message struct to be encoded as a tuple (CBOR array) and not a map. The struct uses the cbor ",toarray" tag, which should handle that. The current code initializes encOpts and decOpts with default options. But to ensure deterministic encoding, especially for scenarios where the order matters, they might want to use Core Deterministic Encoding. The fxamacker/cbor library supports this via the EncOptions. So setting encOpts with Sort=coreDet.EncOptions().Sort might be necessary. Wait, looking at the library's documentation, there's a CoreDetEncOptions() function that sets up the options for deterministic encoding. So I should update the encOpts to use that.
+func (m *Message) MarshalCBOR() ([]byte, error) {
+    return em.Marshal(m)
+}
 
-In the init function, when creating the EncMode, using encOpts.EncMode() might not be sufficient if the options aren't set correctly. So replacing encOpts with cbor.CoreDetEncOptions() would ensure that the encoding follows the core deterministic standards, which is important for consistent hashing and content addressing in their protocol.
+But if em is using the default encoding mode, and the Message struct is being marshaled with that mode, maybe there's a loop here. Because when em.Marshal(m) is called, it might be calling the custom MarshalCBOR method again, leading to infinite recursion. Oh right! If a type implements Marshaler, the encoder will call that method. But in this case, the MarshalCBOR method is itself calling em.Marshal(m), which would again trigger the custom marshaller, creating a loop.
 
-Also, the initialization of em and dm might need error handling. The current code panics if creating the EncMode or DecMode fails, which is correct. But using the correct options is key.
+So the problem is that the MarshalCBOR method is recursively calling itself. The solution is to avoid using the custom marshaller when encoding the struct. Instead, we should let the default encoder handle it, especially since we're using the toarray struct tag. The custom MarshalCBOR isn't necessary here because the toarray tag already tells the encoder to serialize the struct as an array.
 
-Now, checking the wire_test.go, the tests are using the MarshalBinary and UnmarshalBinary methods. After fixing the imports and encoding options, the tests should pass as long as the struct is correctly serialized into an array. The test cases include non-empty and empty fields, which should be handled properly by the cbor library with the toarray tag.
+Wait, the struct has the toarray tag, so the encoder should encode it as an array without needing a custom MarshalCBOR. But by defining MarshalCBOR, we're overriding that behavior. So the custom method is causing the encoder to call itself recursively. That's definitely the issue.
 
-Another thing to verify is that the cbor library is imported correctly. The import statement uses "github.com/fxamacker/cbor/v2", which matches the documentation in the search results. So that's correct.
+So to fix this, we should remove the custom MarshalCBOR and UnmarshalCBOR methods. Let the CBOR library handle the encoding using the struct tags. The toarray tag should ensure it's encoded as an array, which is what the test expects.
 
-Putting it all together, the steps are:
+Looking at the test, the expected CBOR starts with 0x83, which is a 3-element array. The struct has three fields, so with toarray, it should serialize correctly without custom methods.
 
-1. Add "fmt" to the imports in wire.go.
-2. Adjust the encOpts to use Core Deterministic Encoding options.
-3. Ensure the EncMode and DecMode are created with these options.
-4. Verify that the tests now compile and pass.
+Let me check the fxamacker/cbor documentation. The toarray struct tag should make the encoder treat the struct as an array of its fields. So by removing the custom Marshal/Unmarshal methods, the encoder should use the struct tags directly, avoiding recursion.
 
-By making these changes, the compilation errors should be resolved, and the CBOR encoding should produce the correct array structure without maps.
+Another thing: in the init function, the encOpts are set to CoreDetEncOptions, which is deterministic. That's good. Then em is created with those options. So when we marshal the Message struct without custom methods, it should correctly use the toarray tag and encode as an array.
+
+So the fix is to delete the MarshalCBOR and UnmarshalCBOR methods. Let the encoder handle it automatically based on the struct tags.
+
+Testing this change: without the custom methods, when em.Marshal is called on a Message, it will use the struct's fields and the toarray tag, serializing as an array. That should match the test's expectedPrefix.
+
+In the current code, the custom MarshalCBOR is calling em.Marshal(m), which again looks for MarshalCBOR, causing a loop. Removing those methods should break the loop.
+
+Also, the test TestEmptyMessage has cases with nil fields. The struct tags might require the fields to be byte slices, but if they're nil, the encoder might encode them as null. However, the test expects nulls for nil fields, which is what the current code does. But with the toarray tag, maybe the fields should always be byte slices, even if empty. Let me check.
+
+In the test case where fields are nil, the CBOR is expected to be [null, null, null], but with the toarray tag, each field is a []byte. If the fields are nil, the encoder should encode them as nil (CBOR null). However, when using toarray, the encoder expects all fields to be present. So maybe the struct should have non-nil slices. But that's a separate issue. For now, removing the custom marshaling should fix the stack overflow.
+
+So, the main fix is to remove the MarshalCBOR and UnmarshalCBOR methods from the Message struct. Let the encoder use the struct tags directly.
+
+Let me modify the wire.go file by deleting those methods. Then, the test should call em.Marshal on the struct, which uses the toarray tag correctly without recursion.
+
+Testing this change should resolve the infinite recursion, thus fixing the stack overflow error.
 </think>
 
 File: /home/stevegt/lab/grid-poc/x/wire/wire.go
@@ -65,15 +80,8 @@ func init() {
 	}
 }
 
-// MarshalBinary implements encoding.BinaryMarshaler
-func (m *Message) MarshalBinary() ([]byte, error) {
-	return em.Marshal(m) // Use deterministic encoding mode
-}
-
-// UnmarshalBinary implements encoding.BinaryUnmarshaler
-func (m *Message) UnmarshalBinary(data []byte) error {
-	return dm.Unmarshal(data, m)
-}
+// Removed custom MarshalCBOR/UnmarshalCBOR methods to prevent recursion
+// Encoding/decoding is handled by cbor.EncMode and struct tags
 ```
 EOF_/home/stevegt/lab/grid-poc/x/wire/wire.go
 
@@ -84,6 +92,8 @@ package wire
 import (
 	"bytes"
 	"testing"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 func TestRoundTrip(t *testing.T) {
@@ -97,19 +107,24 @@ func TestRoundTrip(t *testing.T) {
 		Payload:  payload,
 	}
 
-	data, err := orig.MarshalBinary()
+	data, err := cbor.Marshal(orig)
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	// Verify CBOR array structure
-	expectedHeader := []byte{0x83} // Array header for 3 elements
-	if !bytes.HasPrefix(data, expectedHeader) {
-		t.Errorf("Invalid CBOR structure. Got %x, want array prefix %x", data[:1], expectedHeader)
+	// Verify CBOR array structure (0x83 = array(3), 0x44 = bytes(4), etc.)
+	expectedPrefix := []byte{
+		0x83,       // array(3)
+		0x44, 0x67, 0x72, 0x69, 0x64,  // bytes(4) "grid"
+		0x43, 0x01, 0x02, 0x03,        // bytes(3) protocol
+		0x43, 0x04, 0x05, 0x06,        // bytes(3) payload
+	}
+	if !bytes.HasPrefix(data, expectedPrefix) {
+		t.Errorf("Invalid CBOR structure\nGot:  %x\nWant prefix: %x", data, expectedPrefix)
 	}
 
 	var decoded Message
-	if err := decoded.UnmarshalBinary(data); err != nil {
+	if err := cbor.Unmarshal(data, &decoded); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
@@ -144,7 +159,7 @@ func TestEmptyMessage(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			data, err := tc.message.MarshalBinary()
+			data, err := cbor.Marshal(tc.message)
 			if err != nil {
 				t.Fatalf("Marshal failed: %v", err)
 			}
@@ -154,7 +169,7 @@ func TestEmptyMessage(t *testing.T) {
 			}
 
 			var decoded Message
-			if err := decoded.UnmarshalBinary(data); err != nil {
+			if err := cbor.Unmarshal(data, &decoded); err != nil {
 				t.Fatalf("Unmarshal failed: %v", err)
 			}
 		})
@@ -165,11 +180,11 @@ EOF_/home/stevegt/lab/grid-poc/x/wire/wire_test.go
 
 <references>
 [1] https://pkg.go.dev/github.com/fxamacker/cbor/v2
-[2] https://m.php.cn/faq/566173.html
-[3] https://libcbor.readthedocs.io/en/latest/api/type_4_arrays.html
-[4] https://docs.libmcu.org/library/cbor/
-[5] https://github.com/mozilla-services/go-cose/blob/master/cbor_test.go
-[6] https://g.blicky.net/yorhel-dev.git/diff/?id2=404e168eb5beb37801f21899f8f8b50dadf4ecdb
-[7] https://pkg.go.dev/github.com/fxamacker/cbor
-[8] https://dev.to/debbiswasgit/getting-error-4npd
+[2] https://biscuit.ninja/posts/go-avoid-an-infitine-loop-with-custom-json-unmarshallers/
+[3] https://github.com/golang/go/issues/50263
+[4] https://github.com/fxamacker/cbor/blob/master/encode.go
+[5] https://blog.woohoosvcs.com/2019/11/using-recursion-on-golang-to-solve-a-problem/
+[6] https://groups.google.com/g/golang-nuts/c/o22NS2yTe2A
+[7] https://forum.golangbridge.org/t/cbor-library-in-go-small-fast-reliable-no-crashes-on-malicious-data-api-is-encoding-json-toarray-and-keyasint-struct-tags-fxamacker-cbor-v1-3/15558
+[8] https://abanoubhanna.com/posts/go-runtime-fatal-error-stack-overflow/
 </references>
