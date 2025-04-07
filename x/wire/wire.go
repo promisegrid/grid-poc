@@ -1,12 +1,14 @@
 package wire
 
 import (
+	"fmt"
+
 	"github.com/fxamacker/cbor/v2"
 )
 
 // Message represents a protocol message with tag, protocol CID, and payload.
 type Message struct {
-	_        struct{} `cbor:",toarray"` // Enable CBOR array encoding
+	_        struct{} `cbor:",toarray"` // Force array encoding
 	Tag      []byte
 	Protocol []byte
 	Payload  []byte
@@ -21,7 +23,8 @@ var (
 
 func init() {
 	var err error
-	encOpts = cbor.EncOptions{}
+	// Use Core Deterministic Encoding for consistent serialization
+	encOpts = cbor.CoreDetEncOptions()
 	decOpts = cbor.DecOptions{}
 
 	em, err = encOpts.EncMode()
@@ -29,7 +32,7 @@ func init() {
 		panic(fmt.Sprintf("failed to create CBOR enc mode: %v", err))
 	}
 
-	dm, err = decOpts.DecMode()
+	dm, err = decOpts.DecMode() 
 	if err != nil {
 		panic(fmt.Sprintf("failed to create CBOR dec mode: %v", err))
 	}
@@ -37,10 +40,10 @@ func init() {
 
 // MarshalBinary implements encoding.BinaryMarshaler
 func (m *Message) MarshalBinary() ([]byte, error) {
-	return cbor.Marshal(m)
+	return em.Marshal(m) // Use deterministic encoding mode
 }
 
 // UnmarshalBinary implements encoding.BinaryUnmarshaler
 func (m *Message) UnmarshalBinary(data []byte) error {
-	return cbor.Unmarshal(data, m)
+	return dm.Unmarshal(data, m)
 }
