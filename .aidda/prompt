@@ -16,6 +16,8 @@ type Message struct {
 Encode as a tuple, not a map.  Do not use cborgen -- we're writing the
 code ourselves.
 
+Fix test errors.
+
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
   to the given code or documentation. For IPFS, IPLD, or libp2p,
@@ -31,10 +33,11 @@ Sysmsg:
 In: 
   x/wire/scenario-trees.md
   x/wire/wire.md
-  x/wire/wire-test.md
+  x/wire/wire.go
+  x/wire/wire_test.go
 Out:
   x/wire/wire.go
-  x/wire/wire-test.go
+  x/wire/wire_test.go
 
 .stop
 

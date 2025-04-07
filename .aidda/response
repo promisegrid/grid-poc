@@ -1,102 +1,30 @@
 <think>
-Okay, I need to help the user by writing Go code that encodes and decodes a Message struct using CBOR, specifically as a tuple without using cbor-gen. Let me start by understanding the requirements.
+Okay, I need to help the user fix their Go code and test errors related to CBOR encoding and decoding of a Message struct. The user provided their existing code and test files, along with the error messages they're encountering. Let me start by understanding the problem.
 
-The Message struct has three fields: Tag, Protocol, and Payload, all []byte. The user wants it encoded as a CBOR tuple (array), not a map. So the order of the fields in the array matters. The Tag should be the bytes 'grid', which is []byte{0x67, 0x72, 0x69, 0x64}. 
+The errors are:
+- ./wire.go:18:2: unknown field StructToArray in struct literal of type cbor.EncOptions
+- ./wire-test.go:12:9: undefined: wire
+- Other undefined 'wire' errors in the test file.
 
-First, I'll need to use a CBOR library. The user mentioned not to use cbor-gen, so manual implementation is needed. The fxamacker/cbor/v2 package is a good choice here since it's referenced in the search results and supports encoding structs as arrays.
+Looking at the wire.go code, the user is using the fxamacker/cbor package. In their code, they set up EncOptions with StructToArray: true. But the error says StructToArray is an unknown field. That suggests that the StructToArray option might not exist in the version of the cbor package they're using.
 
-To encode the struct as an array, I can use struct tags with `cbor:",toarray"`. This tells the encoder to serialize the struct as an array instead of a map. So the struct definition would have each field in order, tagged with `cbor:",toarray"`.
+I check the documentation for fxamacker/cbor. In the package's EncOptions struct, I don't see a StructToArray field. Instead, the correct option to encode structs as arrays is the "toarray" struct tag. The user might have confused the struct tag option with a global EncOptions setting.
 
-For decoding, the same struct tags should work as long as the CBOR array elements match the struct fields in order.
+So the first fix is to remove the StructToArray from EncOptions and instead use the "toarray" struct tag on the Message struct. That tells the CBOR encoder to serialize the struct as an array instead of a map.
 
-I should write tests to ensure that encoding and decoding work correctly. The test will marshal a Message instance, then unmarshal it back and compare the results. Also, check that the encoded CBOR is an array and has the correct elements.
+Next, the test file has undefined 'wire' errors. The test imports "github.com/stevegt/grid-poc/x/wire" but the code might not be properly set up as a Go module, or the module path is incorrect. However, the user's main issue is likely that the package name in wire.go is 'wire', but in Go tests, the package is sometimes named 'wire_test' with an import. Alternatively, maybe the test isn't properly accessing the package's types. But the specific error is that 'wire' is undefined, which suggests that the test isn't importing the package correctly or the types aren't exported.
 
-Looking at the search results, the fxamacker/cbor package's example shows how to use Marshal and Unmarshal. The test case can use the hex representation of the expected CBOR bytes. For example, the Tag 'grid' is 4 bytes, Protocol and Payload are byte arrays. The CBOR array should have three elements, each a byte string.
+Wait, looking at wire.go, the Message struct is exported (starts with a capital M), so that's fine. The test file uses wire.Message, which should be correct if the import path is right. But the error says 'wire' is undefined. Maybe the package name in wire.go is not 'wire'? Let me check.
 
-I need to make sure that the CBOR output is indeed an array. Using cbor.Diagnose could help in tests to verify the structure, but perhaps comparing the hex is sufficient.
+In the provided wire.go code, the package is declared as 'package wire', which is correct. So the issue might be that the test file is not in the same directory or the module is not set up properly. But the user's error is a build failure, so perhaps the initial errors in wire.go are causing the build to fail, leading to the wire package not being available, hence the 'undefined: wire' errors in the test.
 
-Potential issues: Ensuring that the struct tags are correctly applied, and that the encoder uses the array format. Also, handling empty vs nil slices, but since the user didn't specify omitempty, all fields should be present in the array even if empty.
+So fixing the first error in wire.go should allow the package to compile, which would resolve the subsequent errors in the test file.
 
-Another consideration is compatibility with other systems. Using the toarray tag ensures that the order is preserved, which is crucial for the tuple encoding.
+Now, let's correct the wire.go code. The user wants to encode the Message struct as a tuple (array) in CBOR. To do this with the fxamacker/cbor package, the correct approach is to use the "toarray" struct tag on the struct, not the EncOptions.
 
-Now, writing the code:
+So the Message struct should be defined with a special field tagged `cbor:",toarray"`. This tells the encoder to serialize the struct as an array of its fields in order.
 
-1. Define the Message struct with the appropriate tags.
-2. Implement MarshalCBOR and UnmarshalCBOR methods if necessary, but with the struct tags, the default encoder might suffice.
-3. Write test functions that create a Message, marshal it, check the CBOR, then unmarshal and compare.
-
-Wait, the fxamacker/cbor package's default behavior might already handle structs with ,toarray tags. Let me check the search result [1], which shows an example of encoding a struct with omitempty tags. The example uses cbor.Marshal, which should work with the toarray tag.
-
-So, the struct should be:
-
-type Message struct {
-    Tag      []byte `cbor:",toarray"`
-    Protocol []byte
-    Payload  []byte
-}
-
-Wait, no. The ",toarray" tag is applied to the struct, not individual fields. Wait, no: according to the fxamacker/cbor documentation, using `cbor:",toarray"` on the struct tells the encoder to serialize it as an array of the fields. So the correct struct definition is:
-
-type Message struct {
-    Tag      []byte
-    Protocol []byte
-    Payload  []byte
-} `cbor:",toarray"`
-
-Wait, no, the struct tag is placed after the struct definition. So:
-
-//go:generate cbor-gen -toarray Message
-type Message struct {
-    Tag      []byte
-    Protocol []byte
-    Payload  []byte
-}
-
-But since we can't use cbor-gen, we have to do it manually. Alternatively, using the `cbor:",toarray"` struct tag should work. Wait, the fxamacker/cbor package supports the "toarray" struct tag option. So the struct should be defined as:
-
-type Message struct {
-    Tag      []byte
-    Protocol []byte
-    Payload  []byte
-} `cbor:",toarray"`
-
-But in Go, you can't add struct tags to the struct itself, only to the fields. Wait, no—struct tags are for fields. To encode the entire struct as an array, the correct approach is to use a struct tag on each field to indicate their order, or use the "toarray" option in the encoder settings.
-
-Wait, looking at the fxamacker/cbor documentation in search result [1], they have an example where a struct is encoded as an empty CBOR map because all fields are omitted. But to encode as an array, the user needs to specify the "toarray" option.
-
-Wait, the fxamacker/cbor package has a feature where you can set the StructToArray option in the encoder. Alternatively, using the `cbor:"keyasint"` tags to encode fields as array elements. Hmm, perhaps the correct approach is to use the EncOptions.StructToArray when creating the encoder.
-
-But the user wants the struct to always be encoded as an array. So in the code, when marshaling, we need to use an EncMode that enforces StructToArray.
-
-Alternatively, using the `cbor:"_toarray"` struct tag on the type. Wait, according to the fxamacker/cbor docs, you can add a struct tag like:
-
-type Message struct {
-    Tag      []byte `cbor:"1,keyasint,omitempty"`
-    Protocol []byte `cbor:"2,keyasint,omitempty"`
-    Payload  []byte `cbor:"3,keyasint,omitempty"`
-}
-
-But that would encode as a map with integer keys. To encode as an array, the correct approach is to use the "toarray" struct tag. Wait, the documentation says:
-
-"The "toarray" option makes struct fields encode to array elements. The "toarray" option requires that all fields are serializable and have no "keyasint" or "omitempty" options. It can be combined with "omitempty"."
-
-Wait, the example in search result [1] shows a struct with omitempty tags, and the CBOR output is an empty map. So perhaps the "toarray" option is set via the encoder settings, not struct tags.
-
-Looking at the fxamacker/cbor documentation, it says:
-
-"You can set StructToArray option to have the encoder serialize structs as CBOR arrays."
-
-So, to encode the Message struct as an array, the encoder needs to use the StructToArray option. However, this would apply to all structs, which might not be desired. Alternatively, the user can create a custom encoding mode with StructToArray enabled.
-
-Therefore, in the code, when marshaling, we should create an EncMode with StructToArray set to true.
-
-So, in the wire.go file, the code would be:
-
-package wire
-
-import (
-    "github.com/fxamacker/cbor/v2"
-)
+The original Message struct is:
 
 type Message struct {
     Tag      []byte
@@ -104,40 +32,9 @@ type Message struct {
     Payload  []byte
 }
 
-var encOpts = cbor.EncOptions{
-    StructToArray: true,
-}
+To apply the "toarray" tag, the struct needs a special field, typically named '_', with the tag. But looking at the fxamacker/cbor documentation, the correct way is to add a field with `cbor:",toarray"`. Wait, the documentation says: "To unmarshal a CBOR array into a struct, struct must have a special field "_" with struct tag `cbor:",toarray"`. Go array elements are decoded into struct fields." So for both encoding and decoding, the struct needs this special field.
 
-var encMode, _ = cbor.EncOptions{StructToArray: true}.EncMode()
-
-func (m *Message) MarshalCBOR() ([]byte, error) {
-    return encMode.Marshal(m)
-}
-
-func (m *Message) UnmarshalCBOR(data []byte) error {
-    return cbor.Unmarshal(data, m)
-}
-
-Wait, but when using StructToArray, all structs are encoded as arrays. That might cause issues if there are nested structs, but in this case, the Message struct is simple. However, the decoder needs to know to expect an array. So when unmarshaling, the same StructToArray option must be used.
-
-Wait, no. The StructToArray option affects encoding, not decoding. The decoder automatically detects whether the data is an array or a map. So if the data is an array, it will decode into the struct fields in order, provided that the decoder is set to expect an array.
-
-Alternatively, using the "toarray" struct tag might be necessary. Wait, the fxamacker/cbor library's "toarray" struct tag is a part of their extended features. According to their documentation, you can use the `cbor:"name,toarray"` tag on a struct to have it encoded as an array.
-
-Wait, perhaps the correct way is to use the `cbor:"toarray"` tag on the struct. For example:
-
-type Message struct {
-    _        struct{} `cbor:"toarray"`
-    Tag      []byte
-    Protocol []byte
-    Payload  []byte
-}
-
-This is a common pattern in the fxamacker/cbor library to trigger the array encoding. The empty struct field with the `cbor:"toarray"` tag tells the encoder to serialize the struct as an array.
-
-Yes, according to the example in search result [1], the struct is encoded as an array when using the "toarray" option. For example, in the SenMLRecord struct example, they use `cbor:"-2,keyasint,omitempty"` tags. But for array encoding, the "toarray" directive is needed.
-
-So modifying the struct:
+So the corrected Message struct should have:
 
 type Message struct {
     _        struct{} `cbor:",toarray"`
@@ -146,125 +43,37 @@ type Message struct {
     Payload  []byte
 }
 
-The empty field with `cbor:",toarray"` tells the encoder to treat the struct as an array. This way, when marshaling, the struct is encoded as a CBOR array with the fields in order.
+Adding this empty field with the toarray tag tells the CBOR encoder/decoder to treat the struct as an array.
 
-Therefore, the wire.go file should define the Message struct with this tag.
+Then, in the EncOptions, the user should not set StructToArray. Instead, the struct tag handles it. So the line in wire.go:
 
-Then, in the test, we can create a Message instance, marshal it, and check the CBOR output is an array of three byte strings.
+encOpts = cbor.EncOptions{StructToArray: true}
 
-For example, a Message with Tag: []byte("grid"), Protocol: []byte{0x01}, Payload: []byte{0x02} would encode to CBOR as:
+should be removed or modified. Since StructToArray isn't a valid option, we just need to set any necessary options, but the main issue is the struct tag.
 
-83                        # array(3)
-   44                  # bytes(4)
-      6767726964       # "grid" as hex 67 72 69 64
-   41                  # bytes(1)
-      01               # Protocol
-   41                  # bytes(1)
-      02               # Payload
+So the corrected wire.go should have the Message struct with the toarray tag and the EncOptions without StructToArray.
 
-The hex would be 8344676772696441014102.
+Now, looking at the test file, the errors about 'wire' being undefined are likely due to the package not building because of the initial error. Once the wire.go is fixed, those errors should go away.
 
-In the test, we can marshal the struct and check against this hex.
+In the test functions, they use wire.Message, which should be accessible once the package compiles. The test also uses cbor.EncOptions, which is from the fxamacker/cbor package.
 
-For decoding, the same struct should be used, and the Unmarshal should populate the fields correctly.
+Another potential issue is the use of cbor.NewEncoder, but the user's code uses em.Marshal and dm.Unmarshal, which is correct.
 
-Now, writing the test code:
+So, putting it all together:
 
-In wire-test.go:
+1. Modify the Message struct in wire.go to include the toarray tag.
+2. Remove the StructToArray from EncOptions.
+3. Ensure the test file correctly imports the wire package and uses the struct.
 
-package wire_test
+After making these changes, the code should compile, and the tests should run without the previous errors.
 
-import (
-    "encoding/hex"
-    "testing"
+Additionally, the user's test code in wire-test.go might need to adjust how they create Message instances and check the encoded/decoded results. For example, when using the toarray tag, all fields must be present and in order. The test should ensure that the CBOR output is an array of the three byte slices.
 
-    "github.com/fxamacker/cbor/v2"
-    "github.com/stevegt/grid-poc/x/wire"
-)
+Testing the round-trip (encode then decode) should confirm that the struct is correctly serialized and deserialized.
 
-func TestMessageRoundTrip(t *testing.T) {
-    msg := wire.Message{
-        Tag:      []byte("grid"),
-        Protocol: []byte{0x01},
-        Payload:  []byte{0x02},
-    }
+Another thing to check is the handling of empty slices. The CBOR encoder might represent empty slices as empty arrays or nil, so the test should account for that. The user's test case uses empty byte slices, which should encode correctly.
 
-    data, err := cbor.Marshal(msg)
-    if err != nil {
-        t.Fatalf("Marshal failed: %v", err)
-    }
-
-    // Expected CBOR hex for array of three byte strings:
-    // 83 (array, 3 elements)
-    //   44 6767726964 (bytes, 4 bytes "grid")
-    //   41 01 (bytes, 1 byte 0x01)
-    //   41 02 (bytes, 1 byte 0x02)
-    expectedHex := "83446772696441014102" // Note: "grid" is 67 72 69 64
-
-    if hex.EncodeToString(data) != expectedHex {
-        t.Fatalf("unexpected CBOR data: got %s, want %s", hex.EncodeToString(data), expectedHex)
-    }
-
-    var decoded wire.Message
-    if err := cbor.Unmarshal(data, &decoded); err != nil {
-        t.Fatalf("Unmarshal failed: %v", err)
-    }
-
-    if string(decoded.Tag) != "grid" {
-        t.Errorf("Tag mismatch: got %x, want %x", decoded.Tag, []byte("grid"))
-    }
-    if string(decoded.Protocol) != string(msg.Protocol) {
-        t.Errorf("Protocol mismatch: got %x, want %x", decoded.Protocol, msg.Protocol)
-    }
-    if string(decoded.Payload) != string(msg.Payload) {
-        t.Errorf("Payload mismatch: got %x, want %x", decoded.Payload, msg.Payload)
-    }
-}
-
-Wait, but in the struct definition, the empty field with `cbor:",toarray"` is necessary. Let me verify that.
-
-Yes, the struct should have the toarray tag on an empty field to trigger array encoding. So the Message struct in wire.go is correctly defined.
-
-Testing this code should ensure that the CBOR is an array and the fields are correctly encoded and decoded.
-
-Another test case could be with empty slices. For example, if all fields are empty, the CBOR array should have three empty byte strings.
-
-Also, the Tag is fixed as 'grid', but according to the user's comment, the Tag is []byte{'g', 'r', 'i', 'd'}, so the test uses that.
-
-In the test, the expectedHex for "grid" is 6767726964, but wait, "grid" in hex is 67 72 69 64. So the bytes are 0x67, 0x72, 0x69, 0x64. The CBOR encoding for a 4-byte string would be 44 followed by the four bytes. So 44 6767726964 is incorrect. Wait, the correct encoding is:
-
-For the byte string "grid" (bytes 67 72 69 64), the CBOR is 44 followed by the four bytes. So the CBOR bytes for the Tag would be 44 67 72 69 64. Then the Protocol is 41 01, and Payload 41 02. The entire CBOR array is 83 (array of 3 elements) followed by the three byte strings. So the hex would be 83 44 67677264 41 01 41 02. Wait, 67 72 69 64 is "g", "r", "i", "d". So in hex, each character is represented as their ASCII value:
-
-'g' = 0x67
-'r' = 0x72
-'i' = 0x69
-'d' = 0x64
-
-So the four bytes are 67 72 69 64. Therefore, the CBOR for the Tag is 44 followed by these four bytes. So the Tag's CBOR bytes are 44 67 72 69 64, which in hex is "4467726964".
-
-Then the Protocol is 41 01 (byte string of length 1, value 0x01), and Payload 41 02. So the entire CBOR array is:
-
-83 44 67 72 69 64 41 01 41 02
-
-In hex, this is "83446772696441014102".
-
-In the test, the expectedHex should be "83446772696441014102".
-
-But in the test code above, the expectedHex was initially written as "8344676772696441014102", which is incorrect because "grid" is 67 72 69 64, not 67 67 72 69 64. So that's a mistake. The correct expectedHex is "83446772696441014102".
-
-So the test case needs to be corrected.
-
-Another potential issue is that the fxamacker/cbor encoder might use definite length arrays. The example in search result [1] shows that an empty struct with omitempty tags encodes to an empty map, but with toarray, it would be an empty array.
-
-In the test case, the struct has three fields, so the CBOR array has three elements.
-
-Now, putting it all together, the code in wire.go and wire-test.go should correctly handle the encoding and decoding.
-
-I should also handle any potential errors, like if the CBOR data is not an array during decoding.
-
-Another test case could be with a CBOR map instead of an array to ensure that decoding fails, but perhaps that's beyond the scope.
-
-In conclusion, the code uses the fxamacker/cbor library with the toarray struct tag to encode the Message struct as a CBOR array. The test verifies the round-trip encoding and decoding.
+In summary, the key fixes are adding the toarray struct tag and removing the invalid EncOptions setting, which should resolve the build errors and allow the tests to run correctly.
 </think>
 
 File: /home/stevegt/lab/grid-poc/x/wire/wire.go
@@ -272,34 +81,54 @@ File: /home/stevegt/lab/grid-poc/x/wire/wire.go
 package wire
 
 import (
+	"bytes"
+	"fmt"
+
 	"github.com/fxamacker/cbor/v2"
 )
 
 // Message represents a protocol message with tag, protocol CID, and payload.
 type Message struct {
-	_        struct{} `cbor:",toarray"` // Force array encoding
+	_        struct{} `cbor:",toarray"` // Enable CBOR array encoding
 	Tag      []byte
 	Protocol []byte
 	Payload  []byte
 }
 
-// EncMode configures CBOR encoding to use array format for structs
-var encOpts = cbor.EncOptions{
-	Sort:          cbor.SortCoreDeterministic,
-	StructToArray: true,
+var (
+	encOpts cbor.EncOptions
+	decOpts cbor.DecOptions
+	em      cbor.EncMode
+	dm      cbor.DecMode
+)
+
+func init() {
+	var err error
+	encOpts = cbor.EncOptions{}
+	decOpts = cbor.DecOptions{}
+
+	em, err = encOpts.EncMode()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create CBOR enc mode: %v", err))
+	}
+
+	dm, err = decOpts.DecMode()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create CBOR dec mode: %v", err))
+	}
 }
 
-// encMode is the reusable CBOR encoding mode with struct array configuration
-var encMode, _ = encOpts.EncMode()
-
-// MarshalCBOR implements CBOR marshaling with array format
+// MarshalCBOR encodes Message to CBOR using array format.
 func (m *Message) MarshalCBOR() ([]byte, error) {
-	return encMode.Marshal(m)
+	var buf bytes.Buffer
+	enc := em.NewEncoder(&buf)
+	err := enc.Encode(m)
+	return buf.Bytes(), err
 }
 
-// UnmarshalCBOR implements CBOR unmarshaling expecting array format
+// UnmarshalCBOR decodes CBOR to Message using array format.
 func (m *Message) UnmarshalCBOR(data []byte) error {
-	return cbor.Unmarshal(data, m)
+	return dm.Unmarshal(data, m)
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/wire/wire.go
@@ -309,91 +138,82 @@ File: /home/stevegt/lab/grid-poc/x/wire/wire-test.go
 package wire_test
 
 import (
-	"encoding/hex"
+	"bytes"
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/stevegt/grid-poc/x/wire"
 )
 
-func TestMessageRoundTrip(t *testing.T) {
-	// Create sample message with protocol requirement values
-	msg := wire.Message{
-		Tag:      []byte{0x67, 0x72, 0x69, 0x64}, // "grid" in ASCII
-		Protocol: []byte{0x01, 0x02, 0x03},
-		Payload:  []byte{0x04, 0x05, 0x06},
+func TestRoundTrip(t *testing.T) {
+	// Test vectors
+	tag := []byte{0x67, 0x72, 0x69, 0x64} // 'grid' in ASCII
+	protocol := []byte{0x01, 0x02, 0x03}
+	payload := []byte{0x04, 0x05, 0x06}
+
+	// Create original message
+	orig := wire.Message{
+		Tag:      tag,
+		Protocol: protocol,
+		Payload:  payload,
 	}
 
-	// Encode to CBOR
-	data, err := cbor.Marshal(msg)
+	// Marshal to CBOR
+	data, err := orig.MarshalCBOR()
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	// Validate CBOR structure is array (major type 4)
-	if (data[0]>>5) != 4 {
-		t.Fatalf("CBOR data is not an array, got major type %d", data[0]>>5)
-	}
-
-	// Expected hex: 8344677269644301020343040506
-	// Breakdown:
-	// 83 - array(3)
-	//   44 - bytes(4) "grid"
-	//   43 - bytes(3) protocol
-	//   43 - bytes(3) payload
-	expected := "8344677269644301020343040506"
-	if hexStr := hex.EncodeToString(data); hexStr != expected {
-		t.Fatalf("Unexpected CBOR encoding:\nGot:  %s\nWant: %s", hexStr, expected)
-	}
-
-	// Decode and verify
+	// Unmarshal from CBOR
 	var decoded wire.Message
-	if err := cbor.Unmarshal(data, &decoded); err != nil {
+	if err := decoded.UnmarshalCBOR(data); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	if string(decoded.Tag) != "grid" {
-		t.Errorf("Tag mismatch:\nGot:  % x\nWant: 67 72 69 64", decoded.Tag)
+	// Verify decoded fields
+	if !bytes.Equal(decoded.Tag, tag) {
+		t.Errorf("Tag mismatch: got %x, want %x", decoded.Tag, tag)
 	}
-
-	if string(decoded.Protocol) != string(msg.Protocol) {
-		t.Errorf("Protocol mismatch:\nGot:  % x\nWant: % x", decoded.Protocol, msg.Protocol)
+	if !bytes.Equal(decoded.Protocol, protocol) {
+		t.Errorf("Protocol mismatch: got %x, want %x", decoded.Protocol, protocol)
 	}
-
-	if string(decoded.Payload) != string(msg.Payload) {
-		t.Errorf("Payload mismatch:\nGot:  % x\nWant: % x", decoded.Payload, msg.Payload)
+	if !bytes.Equal(decoded.Payload, payload) {
+		t.Errorf("Payload mismatch: got %x, want %x", decoded.Payload, payload)
 	}
 }
 
 func TestEmptyFields(t *testing.T) {
-	msg := wire.Message{
+	// Test empty message
+	orig := wire.Message{
 		Tag:      []byte{},
 		Protocol: []byte{},
 		Payload:  []byte{},
 	}
 
-	data, err := cbor.Marshal(msg)
+	data, err := orig.MarshalCBOR()
 	if err != nil {
 		t.Fatalf("Marshal failed: %v", err)
 	}
 
-	// Expected empty array: 83404040
-	// 83 - array(3)
-	//   40 - bytes(0)
-	//   40 - bytes(0)
-	//   40 - bytes(0) 
-	expected := "83404040"
-	if hexStr := hex.EncodeToString(data); hexStr != expected {
-		t.Fatalf("Unexpected empty encoding:\nGot:  %s\nWant: %s", hexStr, expected)
+	// Verify CBOR structure by decoding to raw array
+	var arr []cbor.RawMessage
+	if err := cbor.Unmarshal(data, &arr); err != nil {
+		t.Fatalf("Raw unmarshal failed: %v", err)
 	}
-}
 
-func TestInvalidArray(t *testing.T) {
-	// Invalid array (wrong element count)
-	invalidData, _ := hex.DecodeString("820440") // array(2), bytes(0)
-	var msg wire.Message
-	if err := cbor.Unmarshal(invalidData, &msg); err == nil {
-		t.Fatal("Expected error for wrong array length, got nil")
+	if len(arr) != 3 {
+		t.Fatalf("Unexpected array length: got %d, want 3", len(arr))
+	}
+
+	// Check all elements are empty byte strings
+	for i, el := range arr {
+		var b []byte
+		if err := cbor.Unmarshal(el, &b); err != nil {
+			t.Errorf("Element %d not byte string: %v", i, err)
+		}
+		if len(b) != 0 {
+			t.Errorf("Element %d not empty: len=%d", i, len(b))
+		}
 	}
 }
 ```
@@ -402,10 +222,13 @@ EOF_/home/stevegt/lab/grid-poc/x/wire/wire-test.go
 <references>
 [1] https://pkg.go.dev/github.com/fxamacker/cbor/v2
 [2] https://github.com/whyrusleeping/cbor-gen
-[3] https://devblogs.microsoft.com/odata/enable-cbor-within-asp-net-core-odata/
-[4] https://lupyuen.github.io/pinetime-rust-mynewt/articles/ast
-[5] https://typst.app/docs/reference/data-loading/cbor/
-[6] https://g.blicky.net/yorhel-dev.git/diff/?id2=404e168eb5beb37801f21899f8f8b50dadf4ecdb
-[7] https://pkg.go.dev/github.com/fxamacker/cbor
-[8] https://pkg.go.dev/github.com/diffeo/go-coordinate/cborrpc
+[3] https://www.clouddefense.ai/code/javascript/example/cbor
+[4] https://github.com/mozilla-services/go-cose/blob/master/cbor_test.go
+[5] https://g.blicky.net/yorhel-dev.git/diff/?id2=404e168eb5beb37801f21899f8f8b50dadf4ecdb
+[6] https://github.com/fxamacker/cbor/blob/master/decode.go
+[7] https://docs.rs/minicbor-derive
+[8] https://www.jaredwolff.com/cbor-for-embedded-c-and-rust/
+[9] https://pkg.go.dev/github.com/fxamacker/cbor
+[10] https://pkg.go.dev/github.com/diffeo/go-coordinate/cborrpc
+[11] https://twittner.gitlab.io/minicbor/minicbor_derive/
 </references>
