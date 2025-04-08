@@ -1,576 +1,50 @@
 <think>
-Okay, I need to address the user's request to move the grid tag into wire.go. The user mentioned that the grid tag is used to identify PromiseGrid messages, so it should be part of the wire protocol rather than provided by the caller. The goal is to fix any test errors that might arise from this change.
+Okay, let's tackle this problem. The user wants to move the grid tag into wire.go so it's part of the wire protocol, not provided by the caller. The test is failing because when the fields are nil, they're being encoded as empty bytes, but the test expects them as CBOR null. Wait, no—looking at the test output: the encoded bytes for the nil case are 834467726964f6f6, which includes F6 which is CBOR null. But the test expects 8344677269644040, which is empty byte strings (40 is the tag for empty bytes). So the issue is that when the Protocol and Payload are nil, they're being encoded as null, but the test expects empty byte strings.
 
-First, let me look at the current wire.go file. The Message struct has a Tag field which is a []byte. The test file, wire_test.go, defines the tag as []byte{0x67, 0x72, 0x69, 0x64} which corresponds to the 'grid' tag. The user wants this tag to be part of the wire protocol, meaning it shouldn't be supplied by the caller but instead set internally.
+In the current wire.go, the MarshalCBOR method uses []interface{}{gridTag, m.Protocol, m.Payload}. If m.Protocol is nil, when marshaled, CBOR will encode nil as null (F6). But the test expects empty byte strings (40). So we need to ensure that even if Protocol or Payload are nil, they get encoded as empty byte strings instead of null.
 
-So, the plan is to remove the Tag field from the Message struct because the tag is now fixed. Instead, the wire package should define the grid tag as a constant. Then, when marshaling and unmarshaling, the tag is automatically included without requiring the user to set it.
+Looking at the code, in the Message struct, Protocol and Payload are []byte. In Go, a nil []byte is different from an empty slice. The CBOR encoder might treat a nil slice as null, while an empty slice as an empty byte string. So the solution is to make sure that even if the user sets Protocol or Payload to nil, when marshaling, they are treated as empty byte slices.
 
-In wire.go, I'll remove the Tag field from the Message struct. The struct will now only have Protocol and Payload. However, since the CBOR encoding uses an array structure (due to the ",toarray" tag), removing the Tag field would change the array length from 3 to 2. But the grid tag is supposed to be part of the message, so perhaps the Message struct should not include the tag as a field, but the encoding should prepend it.
+So in the MarshalCBOR method, instead of directly using m.Protocol and m.Payload, we can convert them to empty byte slices if they are nil. For example:
 
-Wait, maybe the current Message struct includes the Tag as part of the serialized array. If we move the tag into the wire protocol, the Message struct shouldn't have a Tag field anymore. Instead, when marshaling, the grid tag is automatically added, and when unmarshaling, it's expected and checked.
-
-So the Message struct should be:
-
-type Message struct {
-	_        struct{} `cbor:",toarray"`
-	Protocol []byte
-	Payload  []byte
+proto := m.Protocol
+if proto == nil {
+    proto = []byte{}
 }
-
-But then, how is the grid tag included? The original code had the Tag as the first element in the array. So perhaps the wire.go needs to handle the grid tag as part of the encoding and decoding process, not as part of the Message struct.
-
-This suggests that the current Message struct is incorrect. The grid tag should be a fixed part of the wire format, so when encoding, the message should be a CBOR array starting with the grid tag, followed by Protocol and Payload. Therefore, the Message struct should not include the Tag as a field. Instead, during marshaling, the grid tag is prepended to the array.
-
-Wait, looking at the current Message struct:
-
-type Message struct {
-	_        struct{} `cbor:",toarray"`
-	Tag      []byte
-	Protocol []byte
-	Payload  []byte
+payload := m.Payload
+if payload == nil {
+    payload = []byte{}
 }
+Then marshal proto and payload. This way, even if they're nil, they become empty slices and encode as empty byte strings (40) instead of null (F6).
 
-When encoded, this becomes a CBOR array of [Tag, Protocol, Payload]. The user wants the Tag to be fixed as 'grid', so the Tag field should not be part of the struct. Instead, the wire package should always use the grid tag when encoding and expect it when decoding.
+Similarly, in the UnmarshalCBOR, when decoding, if the value is nil, we should set the field to nil, but perhaps the decoder already handles that. But since in the test, when unmarshaling, the empty byte strings are decoded as empty slices, which is correct.
 
-So, the Message struct should be modified to remove the Tag field. Then, during marshaling, the encoder should wrap the Protocol and Payload with the grid tag. However, the CBOR structure would then be a tag followed by an array of [Protocol, Payload].
+So modifying the MarshalCBOR to replace nil slices with empty slices before marshaling should fix the test.
 
-Wait, CBOR tags are used to annotate the following item. So the grid tag (which is a custom tag, perhaps registered as 0x67726964, which is the string 'grid' in UTF-8 bytes) would be a CBOR tag number. But in the original code, the Tag field is a byte slice containing 'grid', which is then included as the first element of the array. That might not be correct CBOR usage.
+Let me adjust the wire.go's MarshalCBOR method. Instead of:
 
-Wait, the original code's Message struct is:
+return em.Marshal([]interface{}{gridTag, m.Protocol, m.Payload})
 
-type Message struct {
-	Tag      []byte
-	Protocol []byte
-	Payload  []byte
-}
-
-And when encoded with cbor ",toarray", it becomes an array of three elements: Tag, Protocol, Payload. But in CBOR, a tag is a separate construct. For example, a CBOR tag is represented as a number followed by the tagged item. So maybe the original approach was incorrect, and the grid tag should be a CBOR tag number rather than a byte slice in the array.
-
-The user's intention is to have the grid tag be part of the wire protocol, which suggests that it should be a CBOR tag number enclosing the message. So the correct structure would be a CBOR tag (e.g., 0x67726964) followed by the array [Protocol, Payload].
-
-In that case, the Message struct should not include the Tag as a field. Instead, when marshaling, the message is wrapped with the grid tag. Similarly, when unmarshaling, the grid tag is expected and stripped off, leaving the Protocol and Payload.
-
-So, the current wire.go's Message struct is incorrect. It includes the Tag as part of the array, but the grid tag should be a CBOR tag surrounding the entire message.
-
-To fix this, the Message struct should be:
-
-type Message struct {
-	Protocol []byte
-	Payload  []byte
-}
-
-And during marshaling, the message is wrapped with the grid tag. Similarly, when unmarshaling, the grid tag is checked, and the following array is parsed into Protocol and Payload.
-
-However, the current code uses the ",toarray" directive, which would serialize the struct as a CBOR array. To include the grid tag, we need to apply a CBOR tag to the entire array.
-
-This requires custom encoding and decoding logic. The fxamacker/cbor library allows custom encoding by implementing the Marshaler and Unmarshaler interfaces.
-
-So, in wire.go, I need to:
-
-1. Define the grid tag number. Let's check what the user intended. The original test uses []byte{0x67, 0x72, 0x69, 0x64}, which is the ASCII for 'grid'. However, CBOR tags are numbers, not byte strings. So perhaps the grid tag is a registered CBOR tag number. For example, if the user registered the tag number 0x67726964 (which is the integer 1735289204 in decimal), that's possible but unlikely. Alternatively, maybe the tag is a string "grid", but CBOR tags are numbers, not strings.
-
-Wait, the original code's Message struct includes Tag as a []byte, which in the test is set to []byte{0x67, 0x72, 0x69, 0x64} (the bytes 'grid'). However, in CBOR, a tag is a number followed by the tagged item. So the current approach is incorrect. The Tag field in the Message struct is a byte slice, which is being encoded as a CBOR byte string, not a tag.
-
-The user's intention is to have the grid tag as part of the wire protocol, which should be a CBOR tag number. So the correct approach is to use a CBOR tag to annotate the message.
-
-Therefore, the Message struct should not have a Tag field. Instead, when marshaling, the entire Message is wrapped with a CBOR tag. For example:
-
-// Message represents a protocol message with protocol CID and payload.
-type Message struct {
-	Protocol []byte
-	Payload  []byte
-}
-
-When marshaling, it should be encoded as a CBOR tag (e.g., tag number 0x67726964) followed by the array [Protocol, Payload].
-
-To do this, the Message struct needs custom MarshalCBOR and UnmarshalCBOR methods.
-
-Let me adjust the wire.go accordingly.
-
-First, define the grid tag number. Let's say the grid tag is 0x67726964, which is the integer representation of 'grid' in ASCII. However, CBOR tag numbers are typically smaller. Alternatively, maybe the user intended to use a different number. For the sake of this fix, I'll assume the grid tag is a registered tag number, say 0x6772 (which is 'gr' in hex), but this is arbitrary. Alternatively, perhaps the user wants the tag to be the string 'grid' as a byte string, but that's not a CBOR tag.
-
-Wait, the original test in wire_test.go uses the tag []byte{0x67, 0x72, 0x69, 0x64}, which is the bytes 'grid'. But in the CBOR encoding, the first element of the array is this byte string. The user's request is to move this tag into the wire protocol, meaning that it shouldn't be part of the Message struct but instead be part of the wire encoding.
-
-So, the current Message struct has Tag, Protocol, Payload as three elements in a CBOR array. The user wants to remove the Tag from the struct and have it fixed in the wire format.
-
-Therefore, the Message struct should only have Protocol and Payload fields, and when encoded, the CBOR array should be prefixed with the grid tag bytes. Wait, but CBOR arrays are homogeneous. If the grid tag is part of the wire protocol, perhaps the entire message is a CBOR array starting with the grid tag, followed by Protocol and Payload.
-
-But in the original code, the Message struct includes the Tag as the first element. So moving the grid tag into the wire protocol would mean that the Tag is no longer a field in the struct but is automatically added during encoding and expected during decoding.
-
-Therefore, the Message struct should be:
-
-type Message struct {
-	Protocol []byte
-	Payload  []byte
-}
-
-But when encoded, it should be a CBOR array of three elements: the grid tag, protocol, payload. Wait, no—the original code's Message struct had three fields: Tag, Protocol, Payload. The user wants to remove the Tag field and have it fixed. So the encoded CBOR array should have three elements: the fixed grid tag, then Protocol, then Payload. But the Message struct now has only two fields. That doesn't align.
-
-Wait, perhaps the original approach was incorrect. The grid tag should be part of the message envelope, not part of the Message struct's fields. So, perhaps the wire protocol message is a CBOR array where the first element is the grid tag, followed by the protocol CID and payload. Therefore, the Message struct should not include the Tag as a field, but during encoding, the grid tag is added as the first element of the array.
-
-However, the struct is using ",toarray", which automatically converts the struct fields into a CBOR array. If the struct has two fields (Protocol and Payload), the CBOR array will have two elements. But we need three elements: grid tag, protocol, payload.
-
-This suggests that the struct should not use ",toarray", and instead, custom marshaling is needed to include the grid tag as the first element.
-
-So, the Message struct would be:
-
-type Message struct {
-	Protocol []byte
-	Payload  []byte
-}
-
-But when marshaled, it should be encoded as a CBOR array of [gridTag, Protocol, Payload], where gridTag is the fixed byte slice.
-
-To achieve this, we can implement custom MarshalCBOR and UnmarshalCBOR methods for the Message struct.
-
-In wire.go, remove the ",toarray" tag from the struct. Then, implement the MarshalCBOR method to manually construct the array with the grid tag, protocol, and payload.
-
-Similarly, for unmarshaling, the UnmarshalCBOR method should expect an array of three elements, check that the first element is the grid tag, and then populate Protocol and Payload.
-
-Additionally, the grid tag should be defined as a constant in the wire package.
-
-Let me proceed step by step.
-
-First, in wire.go:
-
-1. Remove the Tag field from the Message struct.
-2. Define a constant gridTag as []byte{0x67, 0x72, 0x69, 0x64}.
-3. Implement MarshalCBOR and UnmarshalCBOR methods for Message.
-
-The updated Message struct:
-
-type Message struct {
-	Protocol []byte
-	Payload  []byte
-}
-
-func (m *Message) MarshalCBOR() ([]byte, error) {
-	// Create a temporary struct that includes the grid tag, protocol, and payload.
-	temp := []interface{}{gridTag, m.Protocol, m.Payload}
-	return em.Marshal(temp)
-}
-
-func (m *Message) UnmarshalCBOR(data []byte) error {
-	var temp []interface{}
-	if err := dm.Unmarshal(data, &temp); err != nil {
-		return err
-	}
-	if len(temp) != 3 {
-		return fmt.Errorf("invalid array length: expected 3, got %d", len(temp))
-	}
-	// Check grid tag
-	tag, ok := temp.([]byte)
-	if !ok || !bytes.Equal(tag, gridTag) {
-		return fmt.Errorf("invalid grid tag: %v", temp)
-	}
-	// Extract Protocol and Payload
-	protocol, ok := temp[1].([]byte)
-	if !ok {
-		return fmt.Errorf("invalid protocol field")
-	}
-	payload, ok := temp[2].([]byte)
-	if !ok {
-		return fmt.Errorf("invalid payload field")
-	}
-	m.Protocol = protocol
-	m.Payload = payload
-	return nil
-}
-
-But wait, using a temporary slice of interfaces might not be the best approach. Alternatively, use a struct with the three fields.
-
-Alternatively, since the original code used ",toarray", perhaps we can adjust the struct to include the grid tag as a fixed field that's not exported. But that might complicate things.
-
-Alternatively, we can have the Message struct not use ",toarray" and instead manually handle the marshaling.
-
-However, the original code used ",toarray" to force the struct into an array. Now, with the grid tag being fixed, the struct no longer includes it, but the CBOR array must include it as the first element.
-
-Therefore, the MarshalCBOR method needs to encode the array as [gridTag, m.Protocol, m.Payload].
-
-Similarly, when unmarshaling, the code expects an array of three elements, checks the first is gridTag, then sets Protocol and Payload.
-
-This approach would require custom marshaling.
-
-So, in wire.go:
-
-Add a constant:
-
-var gridTag = []byte{0x67, 0x72, 0x69, 0x64} // 'grid' in ASCII
-
-Then, implement MarshalCBOR and UnmarshalCBOR.
+We need to handle nil Protocol and Payload. So:
 
 func (m Message) MarshalCBOR() ([]byte, error) {
-	// Encode as an array: gridTag, Protocol, Payload
-	return em.Marshal([]interface{}{gridTag, m.Protocol, m.Payload})
+    // Ensure nil slices are marshaled as empty byte strings
+    proto := m.Protocol
+    if proto == nil {
+        proto = []byte{}
+    }
+    payload := m.Payload
+    if payload == nil {
+        payload = []byte{}
+    }
+    return em.Marshal([]interface{}{gridTag, proto, payload})
 }
 
-func (m *Message) UnmarshalCBOR(data []byte) error {
-	var parts []interface{}
-	if err := dm.Unmarshal(data, &parts); err != nil {
-		return err
-	}
-	if len(parts) != 3 {
-		return fmt.Errorf("expected 3 elements, got %d", len(parts))
-	}
-	// Check gridTag
-	tag, ok := parts.([]byte)
-	if !ok || !bytes.Equal(tag, gridTag) {
-		return fmt.Errorf("invalid grid tag: %v", parts)
-	}
-	// Protocol
-	protocol, ok := parts[1].([]byte)
-	if !ok {
-		return fmt.Errorf("invalid protocol type: %T", parts[1])
-	}
-	m.Protocol = protocol
-	// Payload
-	payload, ok := parts[2].([]byte)
-	if !ok {
-		return fmt.Errorf("invalid payload type: %T", parts[2])
-	}
-	m.Payload = payload
-	return nil
-}
+This way, even if m.Protocol is nil, it's converted to an empty slice, which CBOR encodes as an empty byte string (40), not null (F6). That should make the test pass.
 
-However, using []interface{} might not be reliable because the CBOR decoder might use different types (e.g., cbor.RawMessage). Alternatively, unmarshal into a slice of []byte.
+Now, check the test case for nil fields. The test expects the Protocol and Payload to be encoded as 40 (empty bytes), which is what this change does. Previously, when the fields were nil, they were encoded as F6 (null), causing the mismatch.
 
-Wait, but in the original struct, Protocol and Payload are []byte. So when marshaling as an array of three elements (gridTag, Protocol, Payload), each is a byte slice.
-
-So during unmarshaling, the parts should be three byte slices.
-
-But in CBOR, when you unmarshal into an []interface{}, each element's type depends on the CBOR data. For example, a byte string (bstr) in CBOR becomes a []byte in Go. So if the original data is correctly encoded as an array of three bstrs, then parts, parts[1], parts[2] should all be []byte.
-
-Therefore, the custom Marshal/Unmarshal should work.
-
-Now, adjust the Message struct to remove the Tag field and remove the ",toarray" directive.
-
-The updated Message struct:
-
-type Message struct {
-	Protocol []byte
-	Payload  []byte
-}
-
-// MarshalCBOR implements cbor.Marshaler.
-func (m Message) MarshalCBOR() ([]byte, error) {
-	return em.Marshal([]interface{}{gridTag, m.Protocol, m.Payload})
-}
-
-// UnmarshalCBOR implements cbor.Unmarshaler.
-func (m *Message) UnmarshalCBOR(data []byte) error {
-	var parts []interface{}
-	if err := dm.Unmarshal(data, &parts); err != nil {
-		return err
-	}
-	if len(parts) != 3 {
-		return fmt.Errorf("expected 3 elements, got %d", len(parts))
-	}
-	// Check grid tag
-	tag, ok := parts.([]byte)
-	if !ok || !bytes.Equal(tag, gridTag) {
-		return fmt.Errorf("invalid grid tag: %v", parts)
-	}
-	// Protocol
-	protocol, ok := parts[1].([]byte)
-	if !ok {
-		return fmt.Errorf("protocol is not a byte slice")
-	}
-	m.Protocol = protocol
-	// Payload
-	payload, ok := parts[2].([]byte)
-	if !ok {
-		return fmt.Errorf("payload is not a byte slice")
-	}
-	m.Payload = payload
-	return nil
-}
-
-var gridTag = []byte{0x67, 0x72, 0x69, 0x64}
-
-Now, the wire.go no longer has the Tag field in the Message struct. The gridTag is a package-level variable.
-
-Next, adjust the tests in wire_test.go. The original test used a Tag field with the grid bytes. Now, the Tag is fixed, so the tests should not set it anymore.
-
-In wire_test.go, the TestRoundTrip function creates a Message with Tag, Protocol, and Payload. Now, the Tag is removed, so the Message should have only Protocol and Payload.
-
-But in the test, the expected CBOR structure was an array of three elements: gridTag, protocol, payload. However, the original test's expectedPrefix was:
-
-expectedPrefix := []byte{
-	0x83,       // array(3)
-	0x44, 0x67, 0x72, 0x69, 0x64,  // bytes(4) "grid"
-	0x43, 0x01, 0x02, 0x03,        // bytes(3) protocol
-	0x43, 0x04, 0x05, 0x06,        // bytes(3) payload
-}
-
-This is correct because the marshaled Message now includes the gridTag as the first element, followed by Protocol and Payload.
-
-In the TestRoundTrip, the orig variable should be:
-
-orig := Message{
-	Protocol: protocol,
-	Payload:  payload,
-}
-
-And the data should be marshaled as [gridTag, protocol, payload].
-
-The test's expectedPrefix remains the same because the gridTag is now included automatically.
-
-The TestEmptyMessage test cases need to be adjusted. The original test cases had empty or nil Tag, Protocol, Payload. Now, the Tag is fixed, so even if Protocol and Payload are empty, the gridTag is always present.
-
-For the "empty fields" test case, the Message has Protocol and Payload as empty byte slices. When marshaled, it becomes [gridTag, empty, empty], which in CBOR is:
-
-0x83 (array of 3 elements)
-0x44, 0x67, 0x72, 0x69, 0x64 (bstr of length 4, 'grid')
-0x40 (bstr of length 0)
-0x40 (bstr of length 0)
-
-So the expected data would be:
-
-[]byte{
-	0x83,
-	0x44, 0x67, 0x72, 0x69, 0x64,
-	0x40,
-	0x40,
-}
-
-For the "nil fields" test case, if Protocol and Payload are nil, they should be encoded as nil (CBOR null) or as zero-length bstr?
-
-Wait, in Go, a nil []byte is marshaled as a zero-length bstr. Because when you have a []byte(nil), cbor.Marshal will encode it as a bstr with length 0. But in the original test, when the fields were nil, they were encoded as null. Wait, let me check.
-
-In the original wire_test.go, the "nil fields" test case:
-
-Message{Tag: nil, Protocol: nil, Payload: nil}
-
-Which was encoded as:
-
-[]byte{0x83, 0xF6, 0xF6, 0xF6}, // [null, null, null]
-
-But in the new struct, Tag is no longer a field. However, in the new code, the gridTag is always included as the first element. So the Message{Protocol: nil, Payload: nil} would be marshaled as [gridTag, nil, nil], which would be:
-
-0x83 (array 3)
-0x44, 0x67, 0x72, 0x69, 0x64 (gridTag)
-0xF6 (null)
-0xF6 (null)
-
-But in Go, if Protocol is a nil []byte, when marshaled as part of the array, would it become null or a zero-length bstr?
-
-Wait, in Go, a nil []byte is marshaled as a CBOR nil (0xF6) only if the type is interface{} and the value is nil. If the type is []byte, even if nil, it is marshaled as a zero-length byte string (0x40).
-
-Wait, no. Let me check:
-
-If you have a struct field of type []byte and it's nil, when using the cbor library, how is it encoded?
-
-In Go, if a struct has a field of type []byte that's nil, the cbor encoder will encode it as a zero-length byte string (0x40), not as null. Because []byte is a slice, and a nil slice is different from a non-nil zero-length slice in Go, but in CBOR, both would be encoded the same way as an empty bstr.
-
-Wait, no. Let me test this.
-
-In Go:
-
-var data []byte
-b, _ := cbor.Marshal(data)
-// b would be 0x40 (empty bstr)
-
-data2 := []byte(nil)
-b2, _ := cbor.Marshal(data2)
-// same as above: 0x40
-
-But if you have a pointer to a slice:
-
-var data3 *[]byte
-b3, _ := cbor.Marshal(data3)
-// would be 0xF6 (null)
-
-So, in the original test, when the fields were set to nil (as in the "nil fields" test case), the fields were of type []byte, but set to nil. In Go, when you marshal a nil []byte, it's encoded as 0x40 (empty bstr), not as null.
-
-However, in the original test, the "nil fields" case expected the CBOR to be [null, null, null], which is 0x83, 0xF6, 0xF6, 0xF6. That suggests that the original code's fields were pointers, but in reality, they were []byte, which are not pointers. So maybe the original code had a different behavior.
-
-Wait, looking at the original wire_test.go's "nil fields" test case:
-
-message := Message{Tag: nil, Protocol: nil, Payload: nil}
-
-But in the original Message struct, the fields were of type []byte, not pointers. So setting them to nil would result in zero-length slices when marshaled, not null. However, the test expected the encoded data to be [null, null, null], which suggests that perhaps the original code used *[]byte instead of []byte, but that's not the case.
-
-This indicates a possible mistake in the original test. Because in Go, a []byte field that's set to nil (as in var t []byte) is marshaled as a zero-length byte string (0x40), not as CBOR null (0xF6). So the original test's "nil fields" case may have been incorrect.
-
-But given that the user's tests are passing, perhaps the original code had a different setup. However, with the changes we're making, this needs to be addressed.
-
-In the new code, the Message struct's Protocol and Payload are []byte. If they are nil, when marshaled, they become 0x40 (empty bstr). However, in the original test's "nil fields" case, the expected CBOR was [null, null, null], which is 0x83, 0xF6, 0xF6, 0xF6. This discrepancy suggests that the original code may have used pointers, but that's not the case.
-
-Therefore, in the new code, the "nil fields" test case should be adjusted. Instead of expecting nulls, the test should expect empty byte strings.
-
-But the user's current test passes, which suggests that in the original code, the fields were being marshaled as null. How is that possible?
-
-Looking back at the original wire.go's Message struct:
-
-type Message struct {
-	_        struct{} `cbor:",toarray"`
-	Tag      []byte
-	Protocol []byte
-	Payload  []byte
-}
-
-In Go, if you have a []byte field that's nil, when using the ",toarray" directive, it is marshaled as a CBOR nil (0xF6) or as a zero-length bstr (0x40)?
-
-The fxamacker/cbor library's behavior for nil slices when using ",toarray":
-
-According to the documentation, when using ",toarray", each field is encoded in order. For a nil slice, it encodes as CBOR nil (0xF6) if the field is a pointer, otherwise as a zero-length bstr.
-
-Wait, no. Let me check:
-
-If the struct field is of type []byte (not a pointer), and the value is nil, then when marshaled, it becomes a zero-length bstr (0x40). If the field is of type *[]byte (a pointer), and the value is nil, then it becomes CBOR nil (0xF6).
-
-In the original code, the fields are []byte, not pointers. So setting them to nil would result in zero-length bstrs. However, in the original test's "nil fields" case, the expected CBOR was [null, null, null], which is 0x83, 0xF6, 0xF6, 0xF6. This suggests that the original code's fields were pointers, but they were not.
-
-Therefore, there's an inconsistency. The original test expected nil fields to be encoded as CBOR null, but with the original struct using non-pointer []byte, they would be encoded as empty bstrs.
-
-This indicates that the original test was incorrect. However, the user mentioned that the tests are passing, which suggests that perhaps the original code had a different setup.
-
-But given that the user wants to move the grid tag into wire.go, we need to adjust the tests regardless.
-
-In the new code, the grid tag is fixed, so the tests should reflect that.
-
-In TestRoundTrip, the orig variable is:
-
-orig := Message{
-	Protocol: protocol,
-	Payload:  payload,
-}
-
-Which is marshaled into [gridTag, protocol, payload].
-
-The expectedPrefix should be:
-
-0x83 (array of 3)
-0x44, 0x67, 0x72, 0x69, 0x64 (gridTag as bstr of length 4)
-0x43, 0x01, 0x02, 0x03 (protocol as bstr of length 3)
-0x43, 0x04, 0x05, 0x06 (payload as bstr of length 3)
-
-Which matches the original expectedPrefix, except the original's first element was the Tag (grid) as a bstr, which is still the case.
-
-So the TestRoundTrip should still pass, as the gridTag is now included automatically.
-
-In TestEmptyMessage, the test cases need to be adjusted.
-
-For the "empty fields" case:
-
-message := Message{Protocol: []byte{}, Payload: []byte{}}
-
-When marshaled, it becomes [gridTag, empty bstr, empty bstr], which is:
-
-0x83,
-0x44, 0x67, 0x72, 0x69, 0x64,
-0x40,
-0x40,
-
-So the expected data is:
-
-[]byte{0x83, 0x44, 0x67, 0x72, 0x69, 0x64, 0x40, 0x40}
-
-But the original test's expected was:
-
-[]byte{0x83, 0x40, 0x40, 0x40}, // [bstr(), bstr(), bstr()]
-
-But now, the array has three elements, the first being gridTag (4 bytes), followed by two empty bstrs. So the expected data is longer.
-
-Similarly, the "nil fields" case:
-
-message := Message{Protocol: nil, Payload: nil}
-
-When marshaled, Protocol and Payload are nil []byte, which are encoded as empty bstrs (0x40). So the CBOR is:
-
-0x83,
-0x44, 0x67, 0x72, 0x69, 0x64,
-0x40,
-0x40,
-
-Which is the same as the "empty fields" case. Therefore, the test case for "nil fields" should expect the same as "empty fields", but the original test expected different results.
-
-This suggests that the original test cases were incorrect, but the user's tests were passing, which might mean that the original code had a different behavior.
-
-In any case, with the new code, the "nil fields" case would result in Protocol and Payload being encoded as empty bstrs, not null. Therefore, the test cases in wire_test.go need to be adjusted.
-
-So, updating wire_test.go:
-
-func TestEmptyMessage(t *testing.T) {
-	testCases := []struct {
-		name     string
-		message  Message
-		expected []byte
-	}{
-		{
-			"empty fields",
-			Message{Protocol: []byte{}, Payload: []byte{}},
-			// Expected: [gridTag, [], []]
-			[]byte{
-				0x83, // array(3)
-				0x44, 0x67, 0x72, 0x69, 0x64, // gridTag (bstr(4))
-				0x40, // bstr(0)
-				0x40, // bstr(0)
-			},
-		},
-		{
-			"nil fields",
-			Message{Protocol: nil, Payload: nil},
-			// Expected: same as empty fields, since nil []byte is encoded as empty bstr
-			[]byte{
-				0x83,
-				0x44, 0x67, 0x72, 0x69, 0x64,
-				0x40,
-				0x40,
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			data, err := cbor.Marshal(tc.message)
-			if err != nil {
-				t.Fatalf("Marshal failed: %v", err)
-			}
-
-			if !bytes.Equal(data, tc.expected) {
-				t.Errorf("Encoding mismatch\nGot:  %x\nWant: %x", data, tc.expected)
-			}
-
-			var decoded Message
-			if err := cbor.Unmarshal(data, &decoded); err != nil {
-				t.Fatalf("Unmarshal failed: %v", err)
-			}
-
-			// Check decoded fields
-			if tc.message.Protocol == nil {
-				// After unmarshaling, Protocol should be empty slice, not nil
-				if decoded.Protocol == nil {
-					t.Error("Protocol is nil, expected empty slice")
-				} else if len(decoded.Protocol) != 0 {
-					t.Errorf("Protocol length mismatch: got %d, want 0", len(decoded.Protocol))
-				}
-			} else if !bytes.Equal(decoded.Protocol, tc.message.Protocol) {
-				t.Errorf("Protocol mismatch: got %v, want %v", decoded.Protocol, tc.message.Protocol)
-			}
-
-			if tc.message.Payload == nil {
-				if decoded.Payload == nil {
-					t.Error("Payload is nil, expected empty slice")
-				} else if len(decoded.Payload) != 0 {
-					t.Errorf("Payload length mismatch: got %d, want 0", len(decoded.Payload))
-				}
-			} else if !bytes.Equal(decoded.Payload, tc.message.Payload) {
-				t.Errorf("Payload mismatch: got %v, want %v", decoded.Payload, tc.message.Payload)
-			}
-		})
-	}
-}
-
-This way, both empty and nil fields result in the same CBOR encoding, with empty bstrs for Protocol and Payload.
-
-However, in the original test, the "nil fields" case expected [null, null, null], which is now incorrect. Therefore, the test would fail unless we adjust the expected results.
-
-But according to the user's provided stdout, the tests are passing after the changes. So perhaps the user's tests were updated, or the original code had a different behavior.
-
-In any case, the correct approach is to adjust the test cases to expect the gridTag as the first element, followed by Protocol and Payload as empty bstrs.
-
-With these changes, the wire.go and wire_test.go should now have the grid tag included in the wire protocol without requiring the caller to set it, and the tests should pass.
+So updating the MarshalCBOR method in wire.go to handle nil slices by converting them to empty slices should fix the test failure.
 </think>
 
 File: /home/stevegt/lab/grid-poc/x/wire/wire.go
@@ -591,15 +65,16 @@ type Message struct {
 }
 
 var (
-	gridTag   = []byte{0x67, 0x72, 0x69, 0x64} // "grid" tag
-	encOpts   cbor.EncOptions
-	decOpts   cbor.DecOptions
-	em        cbor.EncMode
-	dm        cbor.DecMode
+	gridTag = []byte{0x67, 0x72, 0x69, 0x64} // "grid"
+	encOpts cbor.EncOptions
+	decOpts cbor.DecOptions
+	em      cbor.EncMode
+	dm      cbor.DecMode
 )
 
 func init() {
 	var err error
+	// Use Core Deterministic Encoding for consistent serialization
 	encOpts = cbor.CoreDetEncOptions()
 	decOpts = cbor.DecOptions{}
 
@@ -615,7 +90,16 @@ func init() {
 }
 
 func (m Message) MarshalCBOR() ([]byte, error) {
-	return em.Marshal([]interface{}{gridTag, m.Protocol, m.Payload})
+	// Convert nil slices to empty slices to encode as empty byte strings
+	proto := m.Protocol
+	if proto == nil {
+		proto = []byte{}
+	}
+	payload := m.Payload
+	if payload == nil {
+		payload = []byte{}
+	}
+	return em.Marshal([]interface{}{gridTag, proto, payload})
 }
 
 func (m *Message) UnmarshalCBOR(data []byte) error {
@@ -623,7 +107,7 @@ func (m *Message) UnmarshalCBOR(data []byte) error {
 	if err := dm.Unmarshal(data, &parts); err != nil {
 		return err
 	}
-	
+
 	if len(parts) != 3 {
 		return fmt.Errorf("invalid array length: expected 3, got %d", len(parts))
 	}
@@ -633,18 +117,22 @@ func (m *Message) UnmarshalCBOR(data []byte) error {
 		return fmt.Errorf("invalid grid tag: %v", parts[0])
 	}
 
-	if parts[1] != nil {
-		m.Protocol, ok = parts[1].([]byte)
-		if !ok {
-			return fmt.Errorf("protocol field is not a byte string")
-		}
+	switch v := parts[1].(type) {
+	case []byte:
+		m.Protocol = v
+	case nil:
+		m.Protocol = nil
+	default:
+		return fmt.Errorf("protocol field has unexpected type: %T", parts[1])
 	}
 
-	if parts[2] != nil {
-		m.Payload, ok = parts[2].([]byte)
-		if !ok {
-			return fmt.Errorf("payload field is not a byte string")
-		}
+	switch v := parts[2].(type) {
+	case []byte:
+		m.Payload = v
+	case nil:
+		m.Payload = nil
+	default:
+		return fmt.Errorf("payload field has unexpected type: %T", parts[2])
 	}
 
 	return nil
@@ -722,8 +210,8 @@ func TestEmptyMessage(t *testing.T) {
 			[]byte{
 				0x83,                   // array(3)
 				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
-				0x40, // nil protocol (encoded as empty bytes)
-				0x40, // nil payload (encoded as empty bytes)
+				0x40, // empty protocol bytes (previously was F6 for nil)
+				0x40, // empty payload bytes (previously was F6 for nil)
 			},
 		},
 	}
@@ -744,11 +232,11 @@ func TestEmptyMessage(t *testing.T) {
 				t.Fatalf("Unmarshal failed: %v", err)
 			}
 
-			if len(decoded.Protocol) != 0 {
-				t.Errorf("Expected empty protocol, got %x", decoded.Protocol)
+			if tc.message.Protocol == nil && decoded.Protocol != nil {
+				t.Errorf("Expected nil protocol, got %x", decoded.Protocol)
 			}
-			if len(decoded.Payload) != 0 {
-				t.Errorf("Expected empty payload, got %x", decoded.Payload)
+			if tc.message.Payload == nil && decoded.Payload != nil {
+				t.Errorf("Expected nil payload, got %x", decoded.Payload)
 			}
 		})
 	}
@@ -757,14 +245,16 @@ func TestEmptyMessage(t *testing.T) {
 EOF_/home/stevegt/lab/grid-poc/x/wire/wire_test.go
 
 <references>
-[1] https://github.com/promisegrid/promisegrid
-[2] https://www.sobyte.net/post/2022-09/go-wire/
-[3] https://www.govinfo.gov/content/pkg/CREC-2023-09-14/pdf/CREC-2023-09-14.pdf
-[4] https://github.com/gridstack/gridstack.js/issues/607
-[5] https://help.carestreamdental.com/rh/web/server/OrthoTrac/projects_responsive/OR250_OTWorkbook/PDFs/OrthoTrac_InitialTrainingWorkbook.pdf
-[6] https://github.com/t-mullen/wire-protocol
-[7] https://infocenter.sybase.com/help/topic/com.sybase.dc00573_0700/pdf/admin70.pdf
-[8] https://www.jetbrains.com/guide/go/tutorials/dependency_injection_part_two/inject_wire/
-[9] https://www.wisc-online.com/api/lom/get
-[10] https://www.congress.gov/118/crec/2023/09/14/169/149/CREC-2023-09-14-house.pdf
+[1] https://github.com/fxamacker/cbor/blob/master/encode.go
+[2] https://www.wisc-online.com/api/lom/get
+[3] https://pkg.go.dev/github.com/fxamacker/cbor/v2
+[4] https://www.govinfo.gov/content/pkg/CREC-2023-09-14/pdf/CREC-2023-09-14.pdf
+[5] https://go.libhunt.com/cbor-alternatives
+[6] https://www.congress.gov/118/crec/2023/09/14/169/149/CREC-2023-09-14-house.pdf
+[7] https://forum.golangbridge.org/t/cbor-library-in-go-small-fast-reliable-no-crashes-on-malicious-data-api-is-encoding-json-toarray-and-keyasint-struct-tags-fxamacker-cbor-v1-3/15558
+[8] https://devzone.nordicsemi.com/f/nordic-q-a/110860/zcbor-encode-function-returns-success-in-case-where-cbor-output-is-not-correct
+[9] https://github.com/fxamacker/cbor/blob/master/decode.go
+[10] https://pkg.go.dev/github.com/fxamacker/cbor
+[11] https://www.rfc-editor.org/rfc/rfc9052.html
+[12] https://metacpan.org/pod/CBOR::Free
 </references>

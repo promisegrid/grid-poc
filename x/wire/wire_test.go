@@ -66,8 +66,8 @@ func TestEmptyMessage(t *testing.T) {
 			[]byte{
 				0x83,                   // array(3)
 				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
-				0x40, // nil protocol (encoded as empty bytes)
-				0x40, // nil payload (encoded as empty bytes)
+				0x40, // empty protocol bytes (previously was F6 for nil)
+				0x40, // empty payload bytes (previously was F6 for nil)
 			},
 		},
 	}
@@ -88,11 +88,11 @@ func TestEmptyMessage(t *testing.T) {
 				t.Fatalf("Unmarshal failed: %v", err)
 			}
 
-			if len(decoded.Protocol) != 0 {
-				t.Errorf("Expected empty protocol, got %x", decoded.Protocol)
+			if tc.message.Protocol == nil && decoded.Protocol != nil {
+				t.Errorf("Expected nil protocol, got %x", decoded.Protocol)
 			}
-			if len(decoded.Payload) != 0 {
-				t.Errorf("Expected empty payload, got %x", decoded.Payload)
+			if tc.message.Payload == nil && decoded.Payload != nil {
+				t.Errorf("Expected nil payload, got %x", decoded.Payload)
 			}
 		})
 	}

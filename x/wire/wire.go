@@ -39,7 +39,16 @@ func init() {
 }
 
 func (m Message) MarshalCBOR() ([]byte, error) {
-	return em.Marshal([]interface{}{gridTag, m.Protocol, m.Payload})
+	// Convert nil slices to empty slices to encode as empty byte strings
+	proto := m.Protocol
+	if proto == nil {
+		proto = []byte{}
+	}
+	payload := m.Payload
+	if payload == nil {
+		payload = []byte{}
+	}
+	return em.Marshal([]interface{}{gridTag, proto, payload})
 }
 
 func (m *Message) UnmarshalCBOR(data []byte) error {
@@ -57,18 +66,22 @@ func (m *Message) UnmarshalCBOR(data []byte) error {
 		return fmt.Errorf("invalid grid tag: %v", parts[0])
 	}
 
-	if parts[1] != nil {
-		m.Protocol, ok = parts[1].([]byte)
-		if !ok {
-			return fmt.Errorf("protocol field is not a byte string")
-		}
+	switch v := parts[1].(type) {
+	case []byte:
+		m.Protocol = v
+	case nil:
+		m.Protocol = nil
+	default:
+		return fmt.Errorf("protocol field has unexpected type: %T", parts[1])
 	}
 
-	if parts[2] != nil {
-		m.Payload, ok = parts[2].([]byte)
-		if !ok {
-			return fmt.Errorf("payload field is not a byte string")
-		}
+	switch v := parts[2].(type) {
+	case []byte:
+		m.Payload = v
+	case nil:
+		m.Payload = nil
+	default:
+		return fmt.Errorf("payload field has unexpected type: %T", parts[2])
 	}
 
 	return nil
