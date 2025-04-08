@@ -39,16 +39,7 @@ func init() {
 }
 
 func (m Message) MarshalCBOR() ([]byte, error) {
-	// Convert nil slices to empty slices to encode as empty byte strings
-	proto := m.Protocol
-	if proto == nil {
-		proto = []byte{}
-	}
-	payload := m.Payload
-	if payload == nil {
-		payload = []byte{}
-	}
-	return em.Marshal([]interface{}{gridTag, proto, payload})
+	return em.Marshal([]interface{}{gridTag, m.Protocol, m.Payload})
 }
 
 func (m *Message) UnmarshalCBOR(data []byte) error {

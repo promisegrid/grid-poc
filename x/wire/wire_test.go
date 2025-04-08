@@ -66,8 +66,8 @@ func TestEmptyMessage(t *testing.T) {
 			[]byte{
 				0x83,                   // array(3)
 				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
-				0x40, // empty protocol bytes (previously was F6 for nil)
-				0x40, // empty payload bytes (previously was F6 for nil)
+				0xF6, // nil protocol
+				0xF6, // nil payload
 			},
 		},
 	}

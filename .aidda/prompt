@@ -1,9 +1,5 @@
 wire: move grid tag into wire.go
 
-Move the grid tag content into wire.go.  The grid tag is used to
-identify PromiseGrid messages, so we want it to be part of the wire
-protocol rather than provided by the caller.
-
 Fix any test errors.
 
 Sysmsg: 

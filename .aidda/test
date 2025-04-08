@@ -6,15 +6,11 @@ stdout:
 === RUN   TestEmptyMessage
 === RUN   TestEmptyMessage/empty_fields
 === RUN   TestEmptyMessage/nil_fields
-    wire_test.go:83: Encoding mismatch
-        Got:  834467726964f6f6
-        Want: 8344677269644040
---- FAIL: TestEmptyMessage (0.00s)
+--- PASS: TestEmptyMessage (0.00s)
     --- PASS: TestEmptyMessage/empty_fields (0.00s)
-    --- FAIL: TestEmptyMessage/nil_fields (0.00s)
-FAIL
-exit status 1
-FAIL	github.com/stevegt/grid-poc/x/wire	0.003s
+    --- PASS: TestEmptyMessage/nil_fields (0.00s)
+PASS
+ok  	github.com/stevegt/grid-poc/x/wire	0.003s
 
 
 stderr:
