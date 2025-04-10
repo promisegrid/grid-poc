@@ -10,7 +10,7 @@ stdout:
     --- PASS: TestEmptyMessage/empty_fields (0.00s)
     --- PASS: TestEmptyMessage/nil_fields (0.00s)
 PASS
-ok  	github.com/stevegt/grid-poc/x/wire	0.003s
+ok  	github.com/stevegt/grid-poc/x/wire	0.004s
 
 
 stderr:
