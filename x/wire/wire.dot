@@ -1,0 +1,14 @@
+digraph WireMessage {
+    rankdir=LR;
+    node [shape=record];
+
+    Root [label="CBOR Array (3 items)|<f0> 0: Grid Tag|"+
+            "<f1> 1: Protocol (CID)|<f2> 2: Payload"];
+    Item0 [label="CBOR Bytes (4)\n0x67726964 'grid'"];
+    Item1 [label="CBOR Bytes\nExample: bafyrei..."];
+    Item2 [label="CBOR Bytes\nExample: 0x48656c6c6f 'Hello'"];
+
+    Root:f0 -> Item0;
+    Root:f1 -> Item1;
+    Root:f2 -> Item2;
+}

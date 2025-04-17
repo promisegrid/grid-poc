@@ -1,6 +1,10 @@
-wire: move grid tag into wire.go
+wire: draw a diagram of an example wire message
 
-Fix any test errors.
+Draw a diagram of an example wire message.  The diagram should
+show the structure of the message, including the CBOR tags and types,
+subprotocol hash (CID) and an example payload.
+
+Use graphviz to draw the diagram.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -15,16 +19,17 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
-  x/wire/scenario-trees.md
-  x/wire/wire.md
   x/wire/wire.go
   x/wire/wire_test.go
 Out:
-  x/wire/wire.go
-  x/wire/wire_test.go
+  x/wire/wire.dot
 
 .stop
 
+
+  x/wire/wire.md
+
+  x/wire/scenario-trees.md
 
 wire: reconcile worldline and scenario tree
 
