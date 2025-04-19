@@ -1,10 +1,9 @@
-wire: draw a diagram of an example wire message
+wire: add a test case that uses a full CBOR-encoded CID of a SHA256 hash
 
-Draw a diagram of an example wire message.  The diagram should
-show the structure of the message, including the CBOR tags and types,
-subprotocol hash (CID) and an example payload.
-
-Use graphviz to draw the diagram.  
+Add a Message{} test case that uses a full CBOR-encoded CID of a
+SHA256 hash.  The test case should use the CID as the protocol
+identifier, and the CID should be a valid CIDv1.  The payload should
+be the word "hello".  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -22,7 +21,7 @@ In:
   x/wire/wire.go
   x/wire/wire_test.go
 Out:
-  x/wire/wire.dot
+  x/wire/wire_test.go
 
 .stop
 

@@ -1,283 +1,175 @@
-<think>
-Okay, I need to create a diagram for the wire message structure using either Mermaid or Graphviz. Let me look at the provided Go code to understand the message format.
+File: /home/stevegt/lab/grid-poc/x/wire/wire_test.go
+```go
+package wire
 
-From the code, the Message struct has Protocol and Payload fields. When marshaled to CBOR, it's an array of three elements: the gridTag, Protocol, and Payload. The gridTag is a byte slice with the bytes 0x67, 0x72, 0x69, 0x64, which corresponds to the string "grid". The Protocol is a subprotocol hash (like a CID), and Payload is the actual data.
+import (
+	"bytes"
+	"testing"
 
-So the CBOR structure is an array [gridTag, Protocol, Payload]. Each of these elements has specific types. The gridTag is a byte string of 4 bytes. Protocol and Payload are also byte strings, which could be represented as CIDs or raw bytes.
+	"github.com/fxamacker/cbor/v2"
+	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multihash"
+)
 
-Now, the user wants a diagram showing the CBOR tags and types, the subprotocol hash (CID), and an example payload. Let's choose Mermaid since it's text-based and easier to represent nested structures.
+func TestRoundTrip(t *testing.T) {
+	protocol := []byte{0x01, 0x02, 0x03}
+	payload := []byte{0x04, 0x05, 0x06}
 
-In Mermaid, I can use a class diagram to represent the CBOR array structure. Each element in the array can be a separate class node, showing the type and example. For the gridTag, I'll show the bytes and the string "grid". The Protocol would be a CID, maybe a v1 CID example like "bafybei..." and note it's a CBOR byte string. The Payload is another byte string with an example like "0x48656c6c6f" (which is "Hello" in hex).
+	orig := Message{
+		Protocol: protocol,
+		Payload:  payload,
+	}
 
-I need to make sure the Mermaid syntax is correct. The diagram should have an array as the main node, then each element as separate nodes connected. Alternatively, using a nested structure with fields. Wait, Mermaid's class diagrams can have fields in classes. Maybe represent the top-level array as a class with three fields, each field being another class node.
+	data, err := cbor.Marshal(orig)
+	if err != nil {
+		t.Fatalf("Marshal failed: %v", err)
+	}
 
-Wait, perhaps a better approach is to use a tree structure. The root is the CBOR array, and each child is an element. Each element shows its CBOR type and value. For example:
+	expectedPrefix := []byte{
+		0x83,                         // array(3)
+		0x44, 0x67, 0x72, 0x69, 0x64, // 'grid' tag bytes
+		0x43, 0x01, 0x02, 0x03, // subprotocol bytes
+		0x43, 0x04, 0x05, 0x06, // payload bytes
+	}
+	if !bytes.HasPrefix(data, expectedPrefix) {
+		t.Errorf("Invalid CBOR structure\nGot:  %x\nWant prefix: %x",
+			data, expectedPrefix)
+	}
 
-- Array (3 elements)
-  ├─ 0: Bytes (4) "grid"
-  ├─ 1: Bytes (CIDv1 example)
-  └─ 2: Bytes (payload example)
+	var decoded Message
+	if err := cbor.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("Unmarshal failed: %v", err)
+	}
 
-In Mermaid, I can use a flowchart with nodes and links. Let me try that.
+	if !bytes.Equal(decoded.Protocol, protocol) {
+		t.Errorf("Protocol mismatch\nGot:  %x\nWant: %x",
+			decoded.Protocol, protocol)
+	}
+	if !bytes.Equal(decoded.Payload, payload) {
+		t.Errorf("Payload mismatch\nGot:  %x\nWant: %x",
+			decoded.Payload, payload)
+	}
+}
 
-Alternatively, using a class diagram with compartments. Each element in the array can be a class with their details. The main array is a class with three parts, each part pointing to another class.
+func TestEmptyMessage(t *testing.T) {
+	testCases := []struct {
+		name     string
+		message  Message
+		expected []byte
+	}{
+		{
+			"empty fields",
+			Message{Protocol: []byte{}, Payload: []byte{}},
+			[]byte{
+				0x83,                         // array(3)
+				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
+				0x40, // empty protocol bytes
+				0x40, // empty payload bytes
+			},
+		},
+		{
+			"nil fields",
+			Message{Protocol: nil, Payload: nil},
+			[]byte{
+				0x83,                         // array(3)
+				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
+				0xF6, // nil protocol
+				0xF6, // nil payload
+			},
+		},
+	}
 
-Hmm. Let's outline the structure step by step.
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			data, err := cbor.Marshal(tc.message)
+			if err != nil {
+				t.Fatalf("Marshal failed: %v", err)
+			}
 
-The CBOR structure is an array of three items:
-1. gridTag: bytes "grid" (hex 67 72 69 64)
-2. Protocol: byte string (CID, e.g., CIDv1 represented as bytes)
-3. Payload: byte string (example data)
+			if !bytes.Equal(data, tc.expected) {
+				t.Errorf("Encoding mismatch\nGot:  %x\nWant: %x",
+					data, tc.expected)
+			}
 
-Each of these is a CBOR item with their own types. So in the diagram, I need to show each element's type and content.
+			var decoded Message
+			if err := cbor.Unmarshal(data, &decoded); err != nil {
+				t.Fatalf("Unmarshal failed: %v", err)
+			}
 
-Using Mermaid's flowchart syntax:
+			if tc.message.Protocol == nil && decoded.Protocol != nil {
+				t.Errorf("Expected nil protocol, got %x", decoded.Protocol)
+			}
+			if tc.message.Payload == nil && decoded.Payload != nil {
+				t.Errorf("Expected nil payload, got %x", decoded.Payload)
+			}
+		})
+	}
+}
 
-flowchart LR
-    Root[CBOR Array (3 items)]
-    Root --> Item0["CBOR Bytes (4 bytes)\n0x67726964 'grid'"]
-    Root --> Item1["CBOR Bytes (CID)\nbafybei... (example)"]
-    Root --> Item2["CBOR Bytes\nPayload (e.g., 0x48656c6c6f 'Hello')"]
+func TestMessageWithCID(t *testing.T) {
+	// Create a CIDv1 with a SHA2-256 multihash.
+	// We use multihash.Sum to generate the hash.
+	mh, err := multihash.Sum([]byte("example data"), multihash.SHA2_256, -1)
+	if err != nil {
+		t.Fatalf("failed to create multihash: %v", err)
+	}
+	// Create a CIDv1 using the Raw codec.
+	c, err := cid.NewCidV1(cid.Raw, mh), nil
+	if err != nil {
+		t.Fatalf("failed to create CIDv1: %v", err)
+	}
 
-This shows the root array linking to each element with their descriptions.
+	// Marshal the CID to CBOR using fxamacker/cbor.
+	cborCID, err := cbor.Marshal(c)
+	if err != nil {
+		t.Fatalf("failed to CBOR encode CID: %v", err)
+	}
 
-Alternatively, using a nested structure with subgraphs. But maybe the simple flowchart is better.
+	// Create the message with the full CBOR encoded CID as the
+	// protocol identifier and "hello" as the payload.
+	msg := Message{
+		Protocol: cborCID,
+		Payload:  []byte("hello"),
+	}
 
-Wait, the user might prefer a more detailed structure, showing the CBOR tags. Wait, the gridTag is just bytes, not a CBOR tag. CBOR tags are different; the gridTag here is part of the data, not a CBOR semantic tag. So the CBOR array is untagged, containing three items: two byte strings and a tag.
+	data, err := msg.MarshalCBOR()
+	if err != nil {
+		t.Fatalf("MarshalCBOR failed: %v", err)
+	}
 
-Wait, looking at the code, the Message is marshaled as an array of three elements: gridTag (bytes), Protocol (bytes), Payload (bytes). So each of these is a CBOR byte string. The first item is the gridTag, which is a byte string of 4 bytes. The second is the Protocol, which is a byte string (CID), and the third is the Payload, a byte string.
+	var out Message
+	if err := out.UnmarshalCBOR(data); err != nil {
+		t.Fatalf("UnmarshalCBOR failed: %v", err)
+	}
 
-So the CBOR structure is:
+	// Verify that the payload matches.
+	if !bytes.Equal(out.Payload, []byte("hello")) {
+		t.Errorf("Payload mismatch: got %s, expected hello",
+			string(out.Payload))
+	}
+	// Verify that the protocol (CID) matches the original.
+	if !bytes.Equal(out.Protocol, cborCID) {
+		t.Errorf("Protocol mismatch: got %x, expected %x", out.Protocol,
+			cborCID)
+	}
 
-83                  # array(3)
-   44 67726964      # bytes(4) "grid"
-   43 010203        # bytes(3) [0x01,0x02,0x03]
-   43 040506        # bytes(3) [0x04,0x05,0x06]
-
-In the test case, the example has Protocol as 0x010203 and Payload as 0x040506.
-
-So the diagram should show the array with three elements: gridTag (bytes), Protocol (bytes/CID), Payload (bytes).
-
-For the Mermaid diagram, using a flowchart where the root is the array, and each element is a node.
-
-I'll structure it as:
-
-```mmd
-flowchart TD
-    Root[CBOR Array\nTag: 0x83 (3 items)]
-    Root --> Item0[Grid Tag\nCBOR Bytes (4)\n0x67726964 "grid"]
-    Root --> Item1[Protocol\nCBOR Bytes (CID)\ne.g. bafyrei...]
-    Root --> Item2[Payload\nCBOR Bytes\ne.g. 0x48656c6c6f "Hello"]
-```
-
-This shows each element's type and example. The CID example can be a v1 CID like "bafyrei..." which is a valid CID. The payload example is "Hello" in hex.
-
-Alternatively, for the Protocol, maybe show how a CID is structured. But perhaps that's too detailed. The user said "subprotocol hash (CID)", so just representing it as a CID in bytes is sufficient.
-
-Now, the user also mentioned using either Mermaid or Graphviz. The initial response should include both files? Wait, no, the user said to create either a Mermaid or Graphviz diagram. The assistant needs to choose one. But the user's request says to create a diagram using either, so perhaps provide both? But the user's answer must include the two files wire.mmd and wire.dot. Wait, looking back, the user's request says:
-
-"Please make the requested changes to the given code or documentation. [...] Your response must include the following complete files: '/home/stevegt/lab/grid-poc/x/wire/wire.mmd', '/home/stevegt/lab/grid-poc/x/wire/wire.dot'"
-
-So the user wants both files created. Wait, but the initial problem says "draw a diagram of an example wire message" using either graphviz or mermaid. But the user's answer must include both files. So perhaps the user wants both formats? Or maybe the user wants the assistant to choose one. But according to the problem statement, the user says "Use either graphviz or mermaid to draw the diagram." So the assistant can choose one. However, the response must include both files as per the instructions. Wait, looking at the regex in the problem, the response must include both files. So perhaps the user wants both formats? The problem says "make the requested changes to the given code or documentation" and the files wire.mmd and wire.dot are to be included. So the user expects both files to be created. So the assistant needs to create both a Mermaid and a Graphviz (DOT) diagram.
-
-Wait, the user's original request says to "draw a diagram of an example wire message" using either graphviz or mermaid, but the response must include both wire.mmd and wire.dot. So perhaps the user wants both formats. Therefore, I need to create both diagrams.
-
-Let me create both a Mermaid and a Graphviz diagram.
-
-For Mermaid:
-
-The Mermaid code would be a flowchart showing the array structure.
-
-For Graphviz (DOT):
-
-The DOT file would represent the same structure as a graph, perhaps using records or nodes.
-
-Starting with Mermaid:
-
-The Mermaid code could be:
-
-```mmd
-flowchart TD
-    Root["CBOR Array (3 items)"] --> Item0["Grid Tag\nCBOR Bytes (4)\n0x67726964 'grid'"]
-    Root --> Item1["Protocol (CID)\nCBOR Bytes\nbafyrei..."]
-    Root --> Item2["Payload\nCBOR Bytes\n0x48656c6c6f 'Hello'"]
-```
-
-Each element connected to the root array.
-
-For Graphviz:
-
-Using DOT, the structure can be represented as a tree with the root node connected to each element. Each element is a node with its details.
-
-Example DOT code:
-
-```dot
-digraph WireMessage {
-    rankdir=LR;
-    node [shape=record];
-
-    Root [label="CBOR Array (3 items)|<f0> 0|<f1> 1|<f2> 2"];
-    Item0 [label="Grid Tag|CBOR Bytes (4)|0x67726964 'grid'"];
-    Item1 [label="Protocol (CID)|CBOR Bytes|bafyrei..."];
-    Item2 [label="Payload|CBOR Bytes|0x48656c6c6f 'Hello'"];
-
-    Root:f0 -> Item0;
-    Root:f1 -> Item1;
-    Root:f2 -> Item2;
+	// Further verify that the CBOR encoded protocol can be decoded back
+	// to a valid CID.
+	var rawCID []byte
+	if err := cbor.Unmarshal(out.Protocol, &rawCID); err != nil {
+		t.Errorf("failed to unmarshal protocol as raw bytes: %v", err)
+	}
+	decodedCID, err := cid.Cast(rawCID)
+	if err != nil {
+		t.Errorf("failed to cast raw bytes to CID: %v", err)
+	}
+	if decodedCID.Version() != 1 {
+		t.Errorf("expected CIDv1, got CIDv%d", decodedCID.Version())
+	}
+	if decodedCID.Hash().Code() != multihash.SHA2_256 {
+		t.Errorf("expected SHA2_256 multihash, got code %d",
+			decodedCID.Hash().Code())
+	}
 }
 ```
-
-This uses record-shaped nodes to show the array indices and the details of each element.
-
-I need to ensure that both diagrams accurately represent the structure. The Mermaid uses a flowchart TD (top-down), while the Graphviz uses a left-right rankdir with record nodes.
-
-Now, check that the examples are correct. The gridTag is correct as 0x67726964. The CID example could be a valid CIDv1. For example, "bafybeigdyrzt5sfp7udm7hu76uh7y26nf3efuylqabf3oclgtqy55fbzdi" is a valid CID. However, in the test code, the Protocol is a byte slice like 0x010203, which is a raw byte string. So perhaps in the diagram, the Protocol is a CID represented as bytes, so the example could be a CID's byte representation. But maybe for clarity, just show it as a CID string.
-
-Alternatively, since the Protocol is a byte string, which is a CID, the example can show both the CID string and its byte representation. But that might complicate the diagram. Perhaps just the CID string as an example.
-
-So in the Mermaid and DOT diagrams, the Protocol is labeled as a CID (CBOR Bytes) with an example CID string.
-
-The payload example in the test is 0x040506, but in the diagram, using "Hello" as an example (0x48656c6c6f) is more relatable.
-
-Thus, the diagrams should have:
-
-- Root: CBOR array with 3 items.
-- Item 0: Grid Tag as CBOR bytes (4 bytes) with hex and string 'grid'.
-- Item 1: Protocol as CBOR bytes, example CID (like bafyrei...).
-- Item 2: Payload as CBOR bytes, example hex and string 'Hello'.
-
-Both diagrams (Mermaid and DOT) should reflect this structure.
-
-Now, write the Mermaid and DOT code accordingly, ensuring that lines are wrapped at 70 characters if necessary.
-
-For the Mermaid file:
-
-```mmd
-flowchart TD
-    Root["CBOR Array (3 items)"] --> Item0["Grid Tag\nCBOR Bytes (4)\n0x67726964 'grid'"]
-    Root --> Item1["Protocol (CID)\nCBOR Bytes\nExample: bafyrei..."]
-    Root --> Item2["Payload\nCBOR Bytes\nExample: 0x48656c6c6f 'Hello'"]
-```
-
-For the DOT file:
-
-```dot
-digraph WireMessage {
-    rankdir=LR;
-    node [shape=record];
-
-    Root [label="CBOR Array (3 items)|<f0> 0: Grid Tag|<f1> 1: Protocol (CID)|<f2> 2: Payload"];
-    Item0 [label="CBOR Bytes (4)\n0x67726964 'grid'"];
-    Item1 [label="CBOR Bytes\nExample: bafyrei..."];
-    Item2 [label="CBOR Bytes\nExample: 0x48656c6c6f 'Hello'"];
-
-    Root:f0 -> Item0;
-    Root:f1 -> Item1;
-    Root:f2 -> Item2;
-}
-```
-
-Check line lengths. The lines in the DOT file for the node labels might exceed 70 characters. Let's adjust:
-
-In the Root node label:
-
-"CBOR Array (3 items)|<f0> 0: Grid Tag|<f1> 1: Protocol (CID)|<f2> 2: Payload" is 74 characters. To wrap, split into multiple lines:
-
-But in DOT, record labels can have line breaks using \n. However, the line wrapping in the code should not exceed 70 characters. So perhaps split the Root label into multiple lines using \n.
-
-Wait, the user's instruction says: "Lines must be wrapped at 70 characters unless you are making other changes to the paragraph."
-
-So need to ensure that each line in the code files (mmd and dot) does not exceed 70 characters.
-
-For the Mermaid code:
-
-The lines are within 70 characters. For example:
-
-"Root[\"CBOR Array (3 items)\"] --> Item0[\"Grid Tag\nCBOR Bytes (4)\n0x67726964 'grid'\"]" — each part is under 70.
-
-For the DOT code:
-
-The Root node's label is a long string. Let's split it:
-
-Original line:
-
-Root [label="CBOR Array (3 items)|<f0> 0: Grid Tag|<f1> 1: Protocol (CID)|<f2> 2: Payload"];
-
-This is 83 characters. To wrap, split into multiple lines using concatenation in DOT:
-
-Root [label="CBOR Array (3 items)|<f0> 0: Grid Tag|\n<f1> 1: Protocol (CID)|\n<f2> 2: Payload"];
-
-But in DOT, the label is a single string, so using \n would create line breaks in the label. But the code line itself should not exceed 70 characters. So breaking the label into parts separated by + operators.
-
-Wait, in DOT, you can split long strings using "+" to concatenate them.
-
-For example:
-
-Root [label="CBOR Array (3 items)|<f0> 0: Grid Tag|" +
-            "<f1> 1: Protocol (CID)|<f2> 2: Payload"];
-
-But this might not be necessary if the line is under 70. Let's check:
-
-The original line is 83 characters. So splitting into two lines:
-
-Root [label="CBOR Array (3 items)|<f0> 0: Grid Tag|" +
-            "<f1> 1: Protocol (CID)|<f2> 2: Payload"];
-
-Each line is under 70.
-
-Similarly for other lines. Let's adjust the DOT code accordingly.
-
-Revised DOT code:
-
-```dot
-digraph WireMessage {
-    rankdir=LR;
-    node [shape=record];
-
-    Root [label="CBOR Array (3 items)|<f0> 0: Grid Tag|"+
-            "<f1> 1: Protocol (CID)|<f2> 2: Payload"];
-    Item0 [label="CBOR Bytes (4)\n0x67726964 'grid'"];
-    Item1 [label="CBOR Bytes\nExample: bafyrei..."];
-    Item2 [label="CBOR Bytes\nExample: 0x48656c6c6f 'Hello'"];
-
-    Root:f0 -> Item0;
-    Root:f1 -> Item1;
-    Root:f2 -> Item2;
-}
-```
-
-Each line is now under 70 characters.
-
-So the Mermaid and DOT files are properly formatted, lines wrapped where necessary, and accurately representing the wire message structure.
-</think>
-
-File: /home/stevegt/lab/grid-poc/x/wire/wire.mmd
-```mmd
-flowchart TD
-    Root["CBOR Array (3 items)"] --> Item0["Grid Tag\nCBOR Bytes (4)\n0x67726964 'grid'"]
-    Root --> Item1["Protocol (CID)\nCBOR Bytes\nExample: bafyrei..."]
-    Root --> Item2["Payload\nCBOR Bytes\nExample: 0x48656c6c6f 'Hello'"]
-```
-EOF_/home/stevegt/lab/grid-poc/x/wire/wire.mmd
-
-File: /home/stevegt/lab/grid-poc/x/wire/wire.dot
-```dot
-digraph WireMessage {
-    rankdir=LR;
-    node [shape=record];
-
-    Root [label="CBOR Array (3 items)|<f0> 0: Grid Tag|"+
-            "<f1> 1: Protocol (CID)|<f2> 2: Payload"];
-    Item0 [label="CBOR Bytes (4)\n0x67726964 'grid'"];
-    Item1 [label="CBOR Bytes\nExample: bafyrei..."];
-    Item2 [label="CBOR Bytes\nExample: 0x48656c6c6f 'Hello'"];
-
-    Root:f0 -> Item0;
-    Root:f1 -> Item1;
-    Root:f2 -> Item2;
-}
-```
-EOF_/home/stevegt/lab/grid-poc/x/wire/wire.dot
-
-<references>
-</references>
+EOF_/home/stevegt/lab/grid-poc/x/wire/wire_test.go
