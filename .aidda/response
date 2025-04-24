@@ -1,3 +1,95 @@
+File: /home/stevegt/lab/grid-poc/x/wire/wire.go
+```go
+package wire
+
+import (
+	"bytes"
+	"fmt"
+
+	"github.com/fxamacker/cbor/v2"
+)
+
+// Message represents a protocol message with protocol CID and payload.
+type Message struct {
+	Protocol []byte
+	Payload  []byte
+}
+
+const gridTagNumber uint32 = 0x67726964 // ascii for "grid" as a single integer
+
+var (
+	encOpts cbor.EncOptions
+	decOpts cbor.DecOptions
+	em      cbor.EncMode
+	dm      cbor.DecMode
+)
+
+func init() {
+	var err error
+	// Use Core Deterministic Encoding for consistent serialization
+	encOpts = cbor.CoreDetEncOptions()
+	decOpts = cbor.DecOptions{}
+
+	em, err = encOpts.EncMode()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create CBOR enc mode: %v", err))
+	}
+
+	dm, err = decOpts.DecMode()
+	if err != nil {
+		panic(fmt.Sprintf("failed to create CBOR dec mode: %v", err))
+	}
+}
+
+func (m Message) MarshalCBOR() ([]byte, error) {
+	// Create a CBOR tag with the proper tag number and content.
+	// The tag content is a 2-element CBOR array with the first element
+	// being the protocol CID and the second element being the payload.
+	tag := cbor.Tag{
+		Number:  uint64(gridTagNumber),
+		Content: []interface{}{m.Protocol, m.Payload},
+	}
+	return em.Marshal(tag)
+}
+
+func (m *Message) UnmarshalCBOR(data []byte) error {
+	var tag cbor.Tag
+	if err := dm.Unmarshal(data, &tag); err != nil {
+		return err
+	}
+	if tag.Number != uint64(gridTagNumber) {
+		return fmt.Errorf("invalid grid tag number: %v", tag.Number)
+	}
+	parts, ok := tag.Content.([]interface{})
+	if !ok {
+		return fmt.Errorf("invalid tag content type: %T", tag.Content)
+	}
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid tag content length: expected 2, got %d",
+			len(parts))
+	}
+
+	switch v := parts[0].(type) {
+	case []byte:
+		m.Protocol = v
+	case nil:
+		m.Protocol = nil
+	default:
+		return fmt.Errorf("protocol field has unexpected type: %T", parts[0])
+	}
+	switch v := parts[1].(type) {
+	case []byte:
+		m.Payload = v
+	case nil:
+		m.Payload = nil
+	default:
+		return fmt.Errorf("payload field has unexpected type: %T", parts[1])
+	}
+	return nil
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/wire/wire.go
+
 File: /home/stevegt/lab/grid-poc/x/wire/wire_test.go
 ```go
 package wire
@@ -26,10 +118,11 @@ func TestRoundTrip(t *testing.T) {
 	}
 
 	expectedPrefix := []byte{
-		0x83,                         // array(3)
-		0x44, 0x67, 0x72, 0x69, 0x64, // 'grid' tag bytes
-		0x43, 0x01, 0x02, 0x03, // subprotocol bytes
-		0x43, 0x04, 0x05, 0x06, // payload bytes
+		0xDA,                         // CBOR tag indicator for uint32 tag
+		0x67, 0x72, 0x69, 0x64,       // tag number "grid" (0x67726964)
+		0x82,                         // array(2)
+		0x43, 0x01, 0x02, 0x03,       // protocol bytes
+		0x43, 0x04, 0x05, 0x06,       // payload bytes
 	}
 	if !bytes.HasPrefix(data, expectedPrefix) {
 		t.Errorf("Invalid CBOR structure\nGot:  %x\nWant prefix: %x",
@@ -61,8 +154,9 @@ func TestEmptyMessage(t *testing.T) {
 			"empty fields",
 			Message{Protocol: []byte{}, Payload: []byte{}},
 			[]byte{
-				0x83,                         // array(3)
-				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
+				0xDA,                         // tag indicator
+				0x67, 0x72, 0x69, 0x64,       // tag number "grid"
+				0x82,                         // array(2)
 				0x40, // empty protocol bytes
 				0x40, // empty payload bytes
 			},
@@ -71,8 +165,9 @@ func TestEmptyMessage(t *testing.T) {
 			"nil fields",
 			Message{Protocol: nil, Payload: nil},
 			[]byte{
-				0x83,                         // array(3)
-				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
+				0xDA,                         // tag indicator
+				0x67, 0x72, 0x69, 0x64,       // tag number "grid"
+				0x82,                         // array(2)
 				0xF6, // nil protocol
 				0xF6, // nil payload
 			},
@@ -172,4 +267,5 @@ func TestMessageWithCID(t *testing.T) {
 	}
 }
 ```
+EOF_/home/stevegt/lab/grid-poc/x/wire/wire_test.go
 EOF_/home/stevegt/lab/grid-poc/x/wire/wire_test.go

@@ -24,10 +24,11 @@ func TestRoundTrip(t *testing.T) {
 	}
 
 	expectedPrefix := []byte{
-		0x83,                         // array(3)
-		0x44, 0x67, 0x72, 0x69, 0x64, // 'grid' tag bytes
-		0x43, 0x01, 0x02, 0x03, // subprotocol bytes
-		0x43, 0x04, 0x05, 0x06, // payload bytes
+		0xDA,                         // CBOR tag indicator for uint32 tag
+		0x67, 0x72, 0x69, 0x64,       // tag number "grid" (0x67726964)
+		0x82,                         // array(2)
+		0x43, 0x01, 0x02, 0x03,       // protocol bytes
+		0x43, 0x04, 0x05, 0x06,       // payload bytes
 	}
 	if !bytes.HasPrefix(data, expectedPrefix) {
 		t.Errorf("Invalid CBOR structure\nGot:  %x\nWant prefix: %x",
@@ -59,8 +60,9 @@ func TestEmptyMessage(t *testing.T) {
 			"empty fields",
 			Message{Protocol: []byte{}, Payload: []byte{}},
 			[]byte{
-				0x83,                         // array(3)
-				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
+				0xDA,                         // tag indicator
+				0x67, 0x72, 0x69, 0x64,       // tag number "grid"
+				0x82,                         // array(2)
 				0x40, // empty protocol bytes
 				0x40, // empty payload bytes
 			},
@@ -69,8 +71,9 @@ func TestEmptyMessage(t *testing.T) {
 			"nil fields",
 			Message{Protocol: nil, Payload: nil},
 			[]byte{
-				0x83,                         // array(3)
-				0x44, 0x67, 0x72, 0x69, 0x64, // grid tag
+				0xDA,                         // tag indicator
+				0x67, 0x72, 0x69, 0x64,       // tag number "grid"
+				0x82,                         // array(2)
 				0xF6, // nil protocol
 				0xF6, // nil payload
 			},
