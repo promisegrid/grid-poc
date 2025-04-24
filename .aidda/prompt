@@ -5,6 +5,8 @@ SHA256 hash.  The test case should use the CID as the protocol
 identifier, and the CID should be a valid CIDv1.  The payload should
 be the word "hello".  
 
+fix errors
+
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
   to the given code or documentation. For IPFS, IPLD, or libp2p,

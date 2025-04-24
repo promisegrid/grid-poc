@@ -112,10 +112,7 @@ func TestMessageWithCID(t *testing.T) {
 		t.Fatalf("failed to create multihash: %v", err)
 	}
 	// Create a CIDv1 using the Raw codec.
-	c, err := cid.NewCidV1(cid.Raw, mh), nil
-	if err != nil {
-		t.Fatalf("failed to create CIDv1: %v", err)
-	}
+	c := cid.NewCidV1(cid.Raw, mh)
 
 	// Marshal the CID to CBOR using fxamacker/cbor.
 	cborCID, err := cbor.Marshal(c)
@@ -164,8 +161,11 @@ func TestMessageWithCID(t *testing.T) {
 	if decodedCID.Version() != 1 {
 		t.Errorf("expected CIDv1, got CIDv%d", decodedCID.Version())
 	}
-	if decodedCID.Hash().Code() != multihash.SHA2_256 {
-		t.Errorf("expected SHA2_256 multihash, got code %d",
-			decodedCID.Hash().Code())
+	mhDecoded, err := multihash.Decode(decodedCID.Hash())
+	if err != nil {
+		t.Errorf("failed to decode multihash: %v", err)
+	}
+	if mhDecoded.Code != multihash.SHA2_256 {
+		t.Errorf("expected SHA2_256 multihash, got code %d", mhDecoded.Code)
 	}
 }
