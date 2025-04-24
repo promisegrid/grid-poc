@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>PromiseGrid Wire Protocol Design</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remark/0.14.0/remark.min.css">
+  <style>
+    pre {
+            font-size: 12px;
+            scrollbar-width: auto;
+            background: #f5f5f5;
+            padding: 6px;
+            display: block;
+            max-height: 300px;
+            overflow-y: auto;
+            overflow-x: auto;
+            white-space: pre;
+            }
+  </style>
+</head>
+<body>
+  
+  <textarea id="source">
+class: center, middle
+
+# PromiseGrid Wire Protocol Design 
+
+---
+
+## Protocol Overview
+### Decentralized Message Passing Architecture
+- Microkernel-inspired design for sandbox orchestration
+- Content-addressable network using IPFS multihash/CID standards
+- Two-phase message structure: protocol hash and payload
+
+A &#39;CID&#39; (Content Identifier) is a unique identifier for content in
+IPFS and compatible systems, including Bluesky.  
+
+The protocol hash serves as a versioning mechanism, enabling future
+updates without breaking existing implementations.
+
+---
+
+## Key Design Goals
+- Future-proof extensibility through hash of protocol documents
+- IoT compatibility with minimal message overhead
+- Cross-platform execution (WASM, CLI, containers, bare metal)
+
+---
+
+## Core Protocol Components
+### Message Structure
+- Nested CBOR format
+  - `grid` tag (0x67726964)
+    - Protocol hash CID
+    - Message payload
+
+Tag 0x67726964 (&#34;grid&#34;) will be registered with IANA.
+
+The format of the message payload is described in the document(s)
+referred to by the protocol hash CID. 
+
+---
+
+## Content Addressing
+- CIDv1 implementation using multiformats standards:
+  - Multihash (SHA2-256 default)
+  - Multicodec (raw bytes)
+  - Multibase encoding
+- Protocol documents would typically be stored in IPFS DAGs for ease
+  of retrieval by developers.
+
+---
+
+## Cryptographic Foundations
+- Public key infrastructure integrated with CIDs
+- Multihash-derived addresses for agent identification
+  - TBD whether we use Bluesky-style DIDs or IPFS-style CIDs
+
+---
+
+## What is an agent?
+
+An agent is defined as an entity that can:
+
+- cryptographically sign and send messages
+- receive and verify the cryptographic signatures of messages
+
+Agents can be humans, machines, or software processes.
+
+This definition of &#39;agent&#39; is consistent with that of Promise Theory
+(PT) in that &#34;agents cannot make promises on behalf of other agents&#34;.
+
+---
+
+## PromiseGrid Agents are a subset of Promise Theory Agents
+
+As PromiseGrid (PG) is a practical implementation of Promise Theory,
+the engineering constraints involved in building network and security
+protocols mean that we need to choose a reasonable subset of Promise
+Theory&#39;s definition of an agent.  In particular:
+
+- A simple machine or subatomic particle does not have the mechanisms
+  required to cryptographically sign or verify messages.
+  - So a PG agent cannot be a simple machine or subatomic particle.
+
+This diverges from Promise Theory&#39;s definition of an agent.  From the
+book &#34;Thinking in Promises&#34;, page 9:
+
+  Any agent (person, object, or machine) can harbour intentions. An
+  intention might be something like “be red” for a [simple] light
+  [...] When an intention is publicly declared to an audience (called
+  its scope) it then becomes a promise.
+
+---
+
+## IoT Integration Strategy
+### Constrained Device Support
+- Example minimum viable agent requirements:
+  - Aruino UNO
+    - 32KB RAM
+    - ability to run sha256 hash algorithm
+    - ability to run ed25519 signature algorithm
+
+---
+
+## Decentralized IoT Standard
+
+Is is possible that the grid could serve as a generic IoT network
+fabric similar in spirit to the local I2C bus?
+
+- Comparative analysis with MQTT/HTTP bridges
+- Grid-as-backbone architecture vs traditional IoT hubs
+
+---
+
+## Next steps
+
+A reasonable next step is to implement a &#39;hello world&#39; equivalent; an
+example of remote execution of a simple function in a CLI demo:
+
+- sender writes a simple WASM module that returns a &#39;hello world&#39; string
+- sender compiles the module and stores it in IPFS, retaining the CID
+  of  the module
+- sender includes the CID in a message to a recipient
+- recipient retrieves the module from IPFS using the CID
+- recipient executes the module in a WASM runtime, seeing &#39;hello world&#39;
+
+---
+
+## Standardization Roadmap
+
+Register &#39;grid&#39; tag with IANA.
+
+Create protocol documents that can be stored in IPFS and referenced by
+the protocol hash CID.  For example:
+
+- Scenario tree modeling
+- Personal currencies
+- Advisor/Executor model
+- ...
+
+Start a draft RFC.
+
+  </textarea>
+
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/remark/0.14.0/remark.min.js"></script>
+  <script>
+    
+    remark.macros.img = function (altText, width) { var url = this; return '<img alt="' +
+      altText + '" src="' + url + '" style="width: ' + width + '" />';
+    };
+    
+    var slideshow = remark.create({
+      ratio: '16:9',
+      navigation: {
+        scroll: true,   
+        touch: true     
+      }
+    });
+  </script>
+  <script>
+    
+    var ws = new WebSocket("ws://" + window.location.host + "/ws");
+    ws.onmessage = function(event) {
+      if (event.data === "reload") {
+        window.location.reload();
+      }
+    };
+  </script>
+</body>
+</html>

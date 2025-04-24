@@ -1,3 +1,33 @@
+write slides outline
+
+Write a detailed outline of the PromiseGrid wire protocol design based
+on the content of x/wire/slides/notes.md, x/wire/wire.go,
+x/wire/wire_test.go, and your own research of PromiseGrid.  The
+outline should be in markdown format and suitable for use in creating
+a slide deck.  
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p,
+  prefer recent examples to avoid deprecated APIs.  Please verify that
+  the code compiles and runs without errors -- do not hallucinate
+  library methods, structs, or functions that do not exist. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file.  Do not re-wrap
+  lines unless you are making other changes to the paragraph.  Lines
+  must be wrapped at 70 characters.  
+In: 
+  x/wire/slides/notes.md
+  x/wire/wire.go
+  x/wire/wire_test.go
+Out:
+  x/wire/slides/outline.md
+
+.stop
+
+
 wire: use a proper CBOR tag as message header
 
 Refactor the message header. The message header should start with a
@@ -6,6 +36,8 @@ translated to single integer.  The tag content should be a a 2-element
 CBOR array, with the first element being the protocol CID and the
 second element being the payload.  The protocol CID should be a CIDv1
 of a SHA256 hash.  
+
+fix errors
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
