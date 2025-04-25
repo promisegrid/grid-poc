@@ -154,7 +154,7 @@ func buildSlides() {
 	log.Println("Rebuilt slides.html successfully.")
 }
 
-// watchSlides sets up a file watcher on slides.md. On modifications, it rebuilds slides.html
+// watchSlides sets up a file watcher on slides.md and slides.thtml. On modifications, it rebuilds slides.html
 // and notifies connected websocket clients to reload.
 func watchSlides(hub *Hub) {
 	watcher, err := fsnotify.NewWatcher()
@@ -178,11 +178,14 @@ func watchSlides(hub *Hub) {
 			if !ok {
 				return
 			}
-			// If slides.md was written to or renamed, schedule a rebuild.
-			if strings.HasSuffix(event.Name, "slides.md") &&
-				(event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Rename == fsnotify.Rename) {
-				// Debounce: wait briefly for successive events.
-				debounce = time.After(1000 * time.Millisecond)
+
+			for _, fn := range []string{"slides.md", "slides.thtml"} {
+
+				// If file was modified, created, or renamed, set the debounce timer.
+				if strings.HasSuffix(event.Name, fn) && (event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Rename == fsnotify.Rename) {
+					// Debounce: wait briefly for successive events.
+					debounce = time.After(1000 * time.Millisecond)
+				}
 			}
 		case <-debounce:
 			buildSlides()

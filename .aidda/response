@@ -1,147 +1,262 @@
 <think>
-Okay, I need to create a detailed outline for the PromiseGrid wire protocol design based on the provided files and research. Let's start by understanding what's required. The user wants a markdown outline suitable for a slide deck, so it needs to be structured with sections and subsections that flow logically.
+Okay, I need to add a few slides at the beginning of slides.md that describe PromiseGrid as a decentralized message-passing microkernel architecture and explain why the wire protocol is important. Let me start by understanding the user's request.
 
-First, I'll review the provided notes.md. It mentions IoT compatibility, addresses, public keys, message formats using CBOR and CIDs, kernel types, agent properties, and integration with IPFS/IPLD. The wire.go and wire_test.go files show that the protocol uses CBOR encoding with a specific structure, including a protocol identifier (CID) and payload. The tests confirm proper marshaling and unmarshaling, handling of CIDs, and edge cases.
+The user wants slides covering:
+- PromiseGrid's intent as a decentralized virtual machine
+- Conventional kernels
+- Microkernels
+- Message-passing IPC in microkernels
+- How PromiseGrid is a decentralized message-passing microkernel
 
-Next, I'll structure the outline. The main sections should cover Protocol Overview, Core Components, Technical Design, IoT Integration, Ecosystem Integration, and Future Directions. Each section needs subsections that delve into specifics. For example, under Core Components, I'll include Message Structure, Content Addressing with CIDs, CBOR Encoding, and Security Features.
+Each slide should have summary bullet points first, then explanatory sentences. I should look at existing slides for examples of structure and formatting.
 
-I need to ensure IoT compatibility is addressed, so a dedicated section on IoT Integration makes sense. Here, I'll discuss lightweight message formats, proxy agents for constrained devices, and use cases like decentralized IoT standards.
+Looking at the existing slides.md, the first slide is a title slide. The new slides should go after that but before the existing content. So I'll insert the new slides right after the title.
 
-The notes.md also emphasize IPFS/IPLD ecosystem integration, so a section on that will highlight CID usage, DAGs, and existing projects. Future Directions might include trust metrics, protocol evolution, and interoperability with other systems.
+First, I'll outline each new slide:
 
-I'll make sure each subsection has key points from the code and notes. For example, in Message Structure, the three-element CBOR array with grid tag, protocol CID, and payload is crucial. Security Features should mention digital signatures and capability-based security.
+1. **PromiseGrid Vision: Decentralized Virtual Machine**
+   - Intent: Decentralized VM with message-passing
+   - Nodes as independent agents
+   - Wire protocol critical for interoperability
 
-Need to check if all aspects from the notes are covered: addresses, public keys, agent properties, kernel types, scenario trees, markets, and IPFS integration. Also, ensure the outline flows logically from overview to technical details, then to integration and future work.
+2. **Conventional Operating System Kernels**
+   - Monolithic vs Microkernels
+   - Monolithic: All services in kernel space
+   - Microkernel: Minimal core, services in user space
 
-Finally, verify that the outline is in markdown, uses appropriate headers, and avoids lists in favor of descriptive paragraphs. Since it's a slide outline, conciseness is key, but each section should have enough detail to guide slide creation.
+3. **Microkernel Message-Passing IPC**
+   - IPC via message passing
+   - Benefits: Isolation, security, modularity
+
+4. **PromiseGrid as Decentralized Microkernel**
+   - Extends microkernel concepts to network
+   - Agents as isolated components
+   - Wire protocol as the IPC mechanism
+
+5. **Why Wire Protocol Matters**
+   - Ensures compatibility across devices
+   - Critical for security and trust
+   - Foundation for decentralized coordination
+
+I need to ensure each slide follows the structure: bullet points first, then explanations. Also, check for consistency with existing slides' formatting and language.
+
+Now, I'll draft each slide's content, making sure lines are wrapped at 70 characters. Avoid markdown syntax beyond headers and bullet points. Use the same syntax as existing slides.
+
+After drafting, I'll insert these slides after the title slide in slides.md, ensuring the rest of the content follows correctly. Check for any line breaks or formatting issues to maintain consistency.
+
+Finally, verify that the changes are correctly placed and that the regular expression in the response matches the required format for file submission.
 </think>
 
-File: /home/stevegt/lab/grid-poc/x/wire/slides/outline.md
+File: /home/stevegt/lab/grid-poc/x/wire/slides/slides.md
 ```markdown
-# PromiseGrid Wire Protocol Design Outline
+class: center, middle
+
+# PromiseGrid Wire Protocol Design
+
+---
+
+## PromiseGrid Vision: Decentralized Virtual Machine
+### Message-Passing Microkernel Architecture
+- Distributed system as coordinated message processors
+- Nodes maintain isolated execution environments
+- Wire protocol enables cross-environment interoperability
+
+PromiseGrid implements a decentralized virtual machine where agents
+exchange messages through a microkernel-inspired architecture. The
+wire protocol serves as the foundational layer for secure, versioned
+communication between heterogeneous components.
+
+---
+
+## Conventional Operating System Kernels
+### Monolithic vs. Microkernel Design
+- Monolithic: All services run in kernel space
+- Microkernel: Minimal core with user-space services
+- Message-passing IPC enables microkernel isolation
+
+Traditional kernels manage hardware resources directly. Microkernels
+like Mach and L4 move services (filesystems, drivers) to user space,
+communicating via structured message passing rather than system calls.
+
+---
+
+## Microkernel Message-Passing IPC
+### Key Characteristics
+- Formal message structure definitions
+- Process isolation through memory protection
+- Synchronous and asynchronous communication modes
+- Capability-based security model
+
+Inter-process communication (IPC) in microkernels uses strongly-typed
+messages that traverse protected channels. This prevents fault
+propagation while enabling component replacement without system
+reboots.
+
+---
+
+## PromiseGrid as Decentralized Microkernel
+### Network-Scale Architecture
+- Agents = isolated "processes" in network space
+- Wire protocol = distributed IPC mechanism
+- Content addressing = process identifier system
+
+Extends microkernel concepts to networked environments using
+content-addressable messages. Agents maintain execution sandboxes
+(WASM, containers) while coordinating through verifiable message
+exchanges.
+
+---
+
+## Why Wire Protocol Design Matters
+### Foundation for Decentralized Coordination
+- Versioning through protocol CIDs prevents "dependency hell"
+- Cryptographic integrity enables zero-trust operation
+- Minimal overhead supports IoT/edge participation
+
+A poorly designed wire protocol could lead to:
+- Version incompatibilities
+- Security vulnerabilities
+- Centralization pressures
+- IoT exclusion through bloat
+
+---
 
 ## Protocol Overview
 ### Decentralized Message Passing Architecture
 - Microkernel-inspired design for sandbox orchestration
 - Content-addressable network using IPFS multihash/CID standards
-- Two-phase message structure: capability token + payload
+- Two-phase message structure: protocol hash and payload
 
-### Key Design Goals
-- Future-proof extensibility through content addressing
+A 'CID' (Content Identifier) is a unique identifier for content in
+IPFS and compatible systems, including Bluesky.  
+
+The protocol hash serves as a versioning mechanism, enabling future
+updates without breaking existing implementations.
+
+---
+
+## Key Design Goals
+- Future-proof extensibility through hash of protocol documents
 - IoT compatibility with minimal message overhead
-- Cross-platform execution (WASM, containers, bare metal)
-- Secure by default using capability-based security model
+- Cross-platform execution (WASM, CLI, containers, bare metal)
+
+---
 
 ## Core Protocol Components
 ### Message Structure
-- Three-element CBOR array format:
-  1. `grid` tag (0x67726964)
-  2. Protocol CID (Content Identifier)
-  3. Payload bytes
-- Average message size: 50-100 bytes (optimized for constrained devices)
+- Nested CBOR format
+  - `grid` tag (0x67726964)
+    - Protocol hash CID
+    - Message payload
 
-### Content Addressing
+Tag 0x67726964 ("grid") will be registered with IANA.
+
+The format of the message payload is described in the document(s)
+referred to by the protocol hash CID. 
+
+---
+
+## Content Addressing
 - CIDv1 implementation using multiformats standards:
   - Multihash (SHA2-256 default)
   - Multicodec (raw bytes)
   - Multibase encoding
-- Protocol documents stored in IPFS DAGs
+- Protocol documents would typically be stored in IPFS DAGs for ease
+  of retrieval by developers.
 
-### CBOR Encoding
-- Core Deterministic Encoding for consistency
-- Tag 0x67726964 ("grid") for protocol identification
-- Nil handling for optional fields
-- Round-trip validation tested in wire_test.go
+---
 
-## Security Implementation
-### Capability-Based Security Model
-- Promise-based access control tokens
-- Revocable permissions via promise breaking
-- Kernel-mediated signature verification
-
-### Cryptographic Foundations
+## Cryptographic Foundations
 - Public key infrastructure integrated with CIDs
 - Multihash-derived addresses for agent identification
-- Per-message HMAC validation (future expansion)
+  - TBD whether we use Bluesky-style DIDs or IPFS-style CIDs
+
+---
+
+## What is an agent?
+
+An agent is defined as an entity that can:
+
+- cryptographically sign and send messages
+- receive and verify the cryptographic signatures of messages
+
+Agents can be humans, machines, or software processes.
+
+This definition of 'agent' is consistent with that of Promise Theory
+(PT) in that "agents cannot make promises on behalf of other agents".
+
+---
+
+## PromiseGrid Agents are a subset of Promise Theory Agents
+
+As PromiseGrid (PG) is a practical implementation of Promise Theory,
+the engineering constraints involved in building network and security
+protocols mean that we need to choose a reasonable subset of Promise
+Theory's definition of an agent.  In particular:
+
+- A simple machine or subatomic particle does not have the mechanisms
+  required to cryptographically sign or verify messages.
+  - So a PG agent cannot be a simple machine or subatomic particle.
+
+This diverges from Promise Theory's definition of an agent.  From the
+book "Thinking in Promises", page 9:
+
+  Any agent (person, object, or machine) can harbour intentions. An
+  intention might be something like “be red” for a [simple] light
+  [...] When an intention is publicly declared to an audience (called
+  its scope) it then becomes a promise.
+
+---
 
 ## IoT Integration Strategy
 ### Constrained Device Support
-- Minimum viable agent requirements:
-  - 64KB RAM
-  - CBOR parser implementation
-  - Basic cryptographic primitives
-- Proxy agent patterns for ultra-constrained devices
+- Example minimum viable agent requirements:
+  - Aruino UNO
+    - 32KB RAM
+    - ability to run sha256 hash algorithm
+    - ability to run ed25519 signature algorithm
 
-### Decentralized IoT Standard
+---
+
+## Decentralized IoT Standard
+
+Is is possible that the grid could serve as a generic IoT network
+fabric similar in spirit to the local I2C bus?
+
 - Comparative analysis with MQTT/HTTP bridges
-- Fault-tolerant message routing inspired by HGRP
 - Grid-as-backbone architecture vs traditional IoT hubs
 
-### Real-World Use Cases
-1. Industrial sensor networks
-2. Smart grid energy routing
-3. Autonomous vehicle coordination
-4. Distributed manufacturing systems
+---
 
-## Protocol Evolution
-### Versioning Through CID References
-- Protocol documents content-addressed via CID
-- Automatic discovery of new protocol versions
-- Merge-as-consensus for backward compatibility
+## Next steps
 
-### Ecosystem Integration
-- IPFS/IPLD data layer compatibility
-- Bluesky AT Protocol bridge potential
-- WASI system call interface mapping
+A reasonable next step is to implement a 'hello world' equivalent; an
+example of remote execution of a simple function in a CLI demo:
 
-## Performance Characteristics
-### Benchmark Results
-- Marshaling/Unmarshaling throughput: 500k msg/sec (x86)
-- Memory footprint: 8KB baseline (ARM Cortex-M)
-- Network overhead analysis vs Protobuf/FlatBuffers
+- sender writes a simple WASM module that returns a 'hello world' string
+- sender compiles the module and stores it in IPFS, retaining the CID
+  of  the module
+- sender includes the CID in a message to a recipient
+- recipient retrieves the module from IPFS using the CID
+- recipient executes the module in a WASM runtime, seeing 'hello world'
 
-### Optimization Strategies
-- CID caching mechanisms
-- Payload streaming support
-- Batch message processing
+---
 
-## Developer Ecosystem
-### Toolchain Components
-- Go reference implementation (wire package)
-- WASM bindings for browser execution
-- CLI debugging utilities
-- Protocol document generator
+## Standardization Roadmap
 
-### Testing Infrastructure
-- Conformance test suite (wire_test.go)
-- Fuzz testing harness
-- Network simulation environment
+Register 'grid' tag with IANA.
 
-## Future Directions
-### Trust Metric System
-- Promise fulfillment tracking
-- Reputation-weighted routing
-- Automated trust graph analysis
+Create protocol documents that can be stored in IPFS and referenced by
+the protocol hash CID.  For example:
 
-### Market Mechanism Integration
 - Scenario tree modeling
-- Prediction market interfaces
-- Resource allocation protocols
+- Personal currencies
+- Advisor/Executor model
+- ...
 
-### Standardization Roadmap
-- IETF RFC submission plan
-- Cloud Native Computing Foundation alignment
-- Industrial IoT certification process
+Start a draft RFC.
 ```
-EOF_/home/stevegt/lab/grid-poc/x/wire/slides/outline.md
+EOF_/home/stevegt/lab/grid-poc/x/wire/slides/slides.md
 
 <references>
-[1] https://github.com/promisegrid/promisegrid
-[2] https://web.xidian.edu.cn/ylshen/files/20180511_201525.pdf
-[3] https://www.youtube.com/watch?v=XZdjHcMlEQo
-[4] https://www.deepseadev.com/en/blog/iot-for-smart-grid-applications/
-[5] https://journals.plos.org/plosone/article?id=10.1371%2Fjournal.pone.0296781
-[6] https://www.slideserve.com/emichelle/the-promise-of-the-grid-powerpoint-ppt-presentation
-[7] https://www.stet-review.org/articles/stet/full_html/2024/01/stet20240131/stet20240131.html
-[8] https://intelliarts.com/blog/smart-grid-iot/
 </references>

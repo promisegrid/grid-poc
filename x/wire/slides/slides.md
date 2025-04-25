@@ -1,14 +1,143 @@
 class: center, middle
 
-# PromiseGrid Wire Protocol Design 
+# PromiseGrid Wire Protocol Design
 
 ---
 
-## Protocol Overview
-### Decentralized Message Passing Architecture
-- Microkernel-inspired design for sandbox orchestration
-- Content-addressable network using IPFS multihash/CID standards
-- Two-phase message structure: protocol hash and payload
+## What is a wire protocol?
+
+A wire protocol is a set of rules that define:
+
+- how data is formatted and transmitted over a network
+- how to interpret the data once it is received
+- how to handle errors and exceptions
+- how to manage connections and sessions
+- how to authenticate and authorize agents
+
+---
+
+## Why Wire Protocol Design Matters in Early Development
+
+PromiseGrid implements a decentralized virtual machine where agents
+of all sorts exchange messages using a standardized wire protocol. 
+
+A poorly designed wire protocol could lead to:
+
+- Version incompatibilities
+- Lack of future-proofing
+- Security vulnerabilities
+- Centralization pressures
+- exclusion of IoT devices due to bloated requirements for message
+  formats
+
+---
+
+## PromiseGrid Vision: Decentralized Virtual Machine
+
+PromiseGrid is implemented using a message-passing microkernel architecture:
+
+- Message-passing: agents exchange structured messages
+- Microkernel: minimal core, most services run as applications
+
+More on this later.
+
+---
+
+## What is a kernel?
+
+In computer science, a kernel is the core component of an operating
+system that:
+
+- manages system resources such as CPU, memory, storage, and I/O devices
+- provides a communication interface between hardware and software
+- provides a set of services for applications to interact with the
+  hardware and network
+
+![:img Local Image, 30%](images/Kernel_Layout.svg)
+
+---
+
+## Conventional (Monolithic) Kernels
+
+Windows and Linux use conventional (monolithic) kernels.  In these
+systems, all of the kernel's functionality is implemented in a
+monolithic piece of code that runs in "ring 0" of the CPU.  Ring 0
+processes have full access and control over the hardware.
+
+In current operating systems, including Linux, MacOS, and Windows,
+applications run in "user space" (ring 3) and communicate with the
+kernel using system calls such as 'open()', 'read()', and 'write()'.
+
+![:img Local Image, 30%](images/Kernel_Layout.svg)
+![:img Local Image, 30%](images/Priv_rings.svg)
+
+---
+
+## Microkernels
+
+MacOS and iOS use a microkernel architecture.  In these systems,
+the kernel is a small, lightweight component that provides only the
+essential services required for communication between hardware and
+software, such as:
+
+- Inter-process communication (IPC), usually via message passing
+- Low-level hardware access
+
+The rest of the operating system services, such as device drivers,
+file systems, and network stacks, run in user space (ring 3) as
+separate processes. This separation allows for better isolation,
+security, and modularity.  
+
+![:img Local Image, 30%](images/Microkernel.jpeg)
+![:img Local Image, 50%](images/OS-structure.svg)
+
+---
+
+# Fault Tolerance
+
+Microkernels also provide for better failure isolation, as a crash in
+one user-space process does not affect the entire system.  
+
+This property of microkernels is important for decentralized systems,
+where each agent may be running on a different machine or device and
+where the agents are of variable reliability.
+
+---
+
+## Microkernel Message-Passing IPC
+
+Perhaps the most important feature of microkernels is their use of
+message-passing for inter-process communication (IPC).  In a
+microkernel, instead of system calls like 'open()', 'read()', and
+'write()', processes communicate with each other by sending and
+receiving messages.  
+
+![:img Local Image, 30%](images/Microkernel.jpeg)
+
+---
+
+## PromiseGrid as Decentralized Microkernel
+
+Analogies between microkernel architectures and PromiseGrid:
+
+| Feature | Microkernel | PromiseGrid |
+|---------|-------------|-------------|
+| interprocess communication | message passing within same CPU | grid messages between agents |
+| kernel | microkernel | PG kernel running on each grid node |
+| services | device drivers, file systems, network stacks | agent services |
+| process | user space process | agent |
+| storage | local file system | IPFS |
+| addressing | memory address | content address (CID) |
+
+---
+
+## PromiseGrid Wire Protocol Overview
+
+Using a microkernel-inspired architecture, the PromiseGrid wire protocol
+is based on the following principles:
+
+- message-passing between agents, regardless of their location
+- content-addressable storage using CIDs
 
 A 'CID' (Content Identifier) is a unique identifier for content in
 IPFS and compatible systems, including Bluesky.  
@@ -25,6 +154,25 @@ updates without breaking existing implementations.
 
 ---
 
+## What is a CID?
+
+A CID (Content Identifier) is a unique identifier for content in
+IPFS and compatible systems.  It is a self-describing data structure
+that contains information about the content, including:
+
+- the version of the CID (currently CIDv0 or CIDv1)
+- the content's multicodec (e.g., raw bytes, DAG-CBOR)
+- the content's hash algorithm (e.g., SHA-256, SHA-512)
+- the encoding format (e.g., base32, base58)
+- the hash of the content itself
+
+![:img Example CID, 70%](images/cid.png)
+
+
+Ref: https://proto.school/anatomy-of-a-cid
+
+---
+
 ## Core Protocol Components
 ### Message Structure
 - Nested CBOR format
@@ -35,17 +183,10 @@ updates without breaking existing implementations.
 Tag 0x67726964 ("grid") will be registered with IANA.
 
 The format of the message payload is described in the document(s)
-referred to by the protocol hash CID. 
+referred to by the protocol hash CID. Protocol documents would
+typically be stored in IPFS for ease of retrieval by developers.
 
----
-
-## Content Addressing
-- CIDv1 implementation using multiformats standards:
-  - Multihash (SHA2-256 default)
-  - Multicodec (raw bytes)
-  - Multibase encoding
-- Protocol documents would typically be stored in IPFS DAGs for ease
-  of retrieval by developers.
+Ref:  RFC-8949  https://datatracker.ietf.org/doc/html/rfc8949
 
 ---
 
@@ -127,14 +268,18 @@ example of remote execution of a simple function in a CLI demo:
 
 ## Standardization Roadmap
 
-Register 'grid' tag with IANA.
+- Start a draft RFC.  
+  - This is a prereq for registering the 'grid' tag with IANA.
+  - https://www.rfc-editor.org/pubprocess/
+- Register 'grid' tag with IANA.  
+  - https://www.iana.org/assignments/cbor-tags/cbor-tags.xhtml
+- Create protocol documents that can be stored in IPFS and referenced
+  by the protocol hash CID.  For example:
+  - LLM API
+  - wrapped MCP API
+  - Scenario tree modeling
+  - Personal currencies
+  - Advisor/Executor model
+  - IoT sensor data, e.g. optical encoder, temperature, humidity, etc.
+  - ...
 
-Create protocol documents that can be stored in IPFS and referenced by
-the protocol hash CID.  For example:
-
-- Scenario tree modeling
-- Personal currencies
-- Advisor/Executor model
-- ...
-
-Start a draft RFC.
