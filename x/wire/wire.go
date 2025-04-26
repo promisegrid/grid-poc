@@ -1,10 +1,10 @@
 package wire
 
 import (
-	"bytes"
 	"fmt"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/ipfs/go-cid"
 )
 
 // Message represents a protocol message with protocol CID and payload.
@@ -14,11 +14,11 @@ type Message struct {
 }
 
 var (
-	gridTag = []byte{0x67, 0x72, 0x69, 0x64} // "grid"
-	encOpts cbor.EncOptions
-	decOpts cbor.DecOptions
-	em      cbor.EncMode
-	dm      cbor.DecMode
+	gridTagNum uint64 = 0x67726964 // 'grid' as 4-byte big-endian integer
+	encOpts    cbor.EncOptions
+	decOpts    cbor.DecOptions
+	em         cbor.EncMode
+	dm         cbor.DecMode
 )
 
 func init() {
@@ -38,41 +38,56 @@ func init() {
 	}
 }
 
+// NewMessage creates a new CBOR-encoded message with protocol CID and payload
+func NewMessage(cidV1 cid.Cid, payload []byte) ([]byte, error) {
+	msg := Message{
+		Protocol: cidV1.Bytes(),
+		Payload:  payload,
+	}
+	return em.Marshal(msg)
+}
+
 func (m Message) MarshalCBOR() ([]byte, error) {
-	return em.Marshal([]interface{}{gridTag, m.Protocol, m.Payload})
+	tag := cbor.Tag{
+		Number:  gridTagNum,
+		Content: []interface{}{m.Protocol, m.Payload},
+	}
+	return em.Marshal(tag)
 }
 
 func (m *Message) UnmarshalCBOR(data []byte) error {
-	var parts []interface{}
-	if err := dm.Unmarshal(data, &parts); err != nil {
+	var tag cbor.Tag
+	if err := dm.Unmarshal(data, &tag); err != nil {
 		return err
 	}
 
-	if len(parts) != 3 {
-		return fmt.Errorf("invalid array length: expected 3, got %d", len(parts))
+	if tag.Number != gridTagNum {
+		return fmt.Errorf("invalid grid tag number: %d", tag.Number)
 	}
 
-	tag, ok := parts[0].([]byte)
-	if !ok || !bytes.Equal(tag, gridTag) {
-		return fmt.Errorf("invalid grid tag: %v", parts[0])
+	parts, ok := tag.Content.([]interface{})
+	if !ok || len(parts) != 2 {
+		return fmt.Errorf("invalid content format, expected 2-element array")
 	}
 
-	switch v := parts[1].(type) {
+	// Decode protocol CID
+	switch v := parts[0].(type) {
 	case []byte:
 		m.Protocol = v
 	case nil:
 		m.Protocol = nil
 	default:
-		return fmt.Errorf("protocol field has unexpected type: %T", parts[1])
+		return fmt.Errorf("protocol field has unexpected type: %T", parts[0])
 	}
 
-	switch v := parts[2].(type) {
+	// Decode payload
+	switch v := parts[1].(type) {
 	case []byte:
 		m.Payload = v
 	case nil:
 		m.Payload = nil
 	default:
-		return fmt.Errorf("payload field has unexpected type: %T", parts[2])
+		return fmt.Errorf("payload field has unexpected type: %T", parts[1])
 	}
 
 	return nil

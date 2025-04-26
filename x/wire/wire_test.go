@@ -9,166 +9,123 @@ import (
 	"github.com/multiformats/go-multihash"
 )
 
-func TestRoundTrip(t *testing.T) {
-	protocol := []byte{0x01, 0x02, 0x03}
-	payload := []byte{0x04, 0x05, 0x06}
+func TestNewMessageRoundTrip(t *testing.T) {
+	// Create CIDv1 with raw codec
+	mh, _ := multihash.Sum([]byte("test"), multihash.SHA2_256, -1)
+	c := cid.NewCidV1(cid.Raw, mh)
+	payload := []byte{0x01, 0x02, 0x03}
 
-	orig := Message{
-		Protocol: protocol,
-		Payload:  payload,
-	}
-
-	data, err := cbor.Marshal(orig)
+	// Create and encode message
+	encoded, err := NewMessage(c, payload)
 	if err != nil {
-		t.Fatalf("Marshal failed: %v", err)
+		t.Fatalf("NewMessage failed: %v", err)
 	}
 
+	// Verify CBOR structure
 	expectedPrefix := []byte{
-		0xDA,                         // CBOR tag indicator for uint32 tag
-		0x67, 0x72, 0x69, 0x64,       // tag number "grid" (0x67726964)
-		0x82,                         // array(2)
-		0x43, 0x01, 0x02, 0x03,       // protocol bytes
-		0x43, 0x04, 0x05, 0x06,       // payload bytes
+		0xDA,             // Tag(4 bytes)
+		0x67, 0x72, 0x69, 0x64, // Tag number 0x67726964 ('grid')
+		0x82, // Array(2)
 	}
-	if !bytes.HasPrefix(data, expectedPrefix) {
-		t.Errorf("Invalid CBOR structure\nGot:  %x\nWant prefix: %x",
-			data, expectedPrefix)
+	if !bytes.HasPrefix(encoded, expectedPrefix) {
+		t.Errorf("Invalid CBOR structure\nGot:  %x\nWant prefix: %x", encoded, expectedPrefix)
 	}
 
+	// Decode message
 	var decoded Message
-	if err := cbor.Unmarshal(data, &decoded); err != nil {
+	if err := cbor.Unmarshal(encoded, &decoded); err != nil {
 		t.Fatalf("Unmarshal failed: %v", err)
 	}
 
-	if !bytes.Equal(decoded.Protocol, protocol) {
-		t.Errorf("Protocol mismatch\nGot:  %x\nWant: %x",
-			decoded.Protocol, protocol)
+	// Verify CID roundtrip
+	decodedCID, err := cid.Cast(decoded.Protocol)
+	if err != nil {
+		t.Fatalf("CID cast failed: %v", err)
 	}
+	if !decodedCID.Equals(c) {
+		t.Errorf("CID mismatch\nGot:  %s\nWant: %s", decodedCID, c)
+	}
+
+	// Verify payload
 	if !bytes.Equal(decoded.Payload, payload) {
-		t.Errorf("Payload mismatch\nGot:  %x\nWant: %x",
-			decoded.Payload, payload)
+		t.Errorf("Payload mismatch\nGot:  %x\nWant: %x", decoded.Payload, payload)
 	}
 }
 
-func TestEmptyMessage(t *testing.T) {
-	testCases := []struct {
-		name     string
-		message  Message
-		expected []byte
-	}{
-		{
-			"empty fields",
-			Message{Protocol: []byte{}, Payload: []byte{}},
-			[]byte{
-				0xDA,                         // tag indicator
-				0x67, 0x72, 0x69, 0x64,       // tag number "grid"
-				0x82,                         // array(2)
-				0x40, // empty protocol bytes
-				0x40, // empty payload bytes
-			},
-		},
-		{
-			"nil fields",
-			Message{Protocol: nil, Payload: nil},
-			[]byte{
-				0xDA,                         // tag indicator
-				0x67, 0x72, 0x69, 0x64,       // tag number "grid"
-				0x82,                         // array(2)
-				0xF6, // nil protocol
-				0xF6, // nil payload
-			},
-		},
-	}
+func TestEdgeCases(t *testing.T) {
+	t.Run("empty payload", func(t *testing.T) {
+		c, _ := cid.Decode("bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku")
+		encoded, err := NewMessage(c, []byte{})
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			data, err := cbor.Marshal(tc.message)
-			if err != nil {
-				t.Fatalf("Marshal failed: %v", err)
-			}
+		var decoded Message
+		if err := cbor.Unmarshal(encoded, &decoded); err != nil {
+			t.Fatal(err)
+		}
 
-			if !bytes.Equal(data, tc.expected) {
-				t.Errorf("Encoding mismatch\nGot:  %x\nWant: %x",
-					data, tc.expected)
-			}
+		if len(decoded.Payload) != 0 {
+			t.Errorf("Expected empty payload, got %x", decoded.Payload)
+		}
+	})
 
-			var decoded Message
-			if err := cbor.Unmarshal(data, &decoded); err != nil {
-				t.Fatalf("Unmarshal failed: %v", err)
-			}
+	t.Run("nil payload", func(t *testing.T) {
+		c, _ := cid.Decode("bafkreihdwdcefgh4dqkjv67uzcmw7ojee6xedzdetojuzjevtenxquvyku")
+		encoded, err := NewMessage(c, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-			if tc.message.Protocol == nil && decoded.Protocol != nil {
-				t.Errorf("Expected nil protocol, got %x", decoded.Protocol)
-			}
-			if tc.message.Payload == nil && decoded.Payload != nil {
-				t.Errorf("Expected nil payload, got %x", decoded.Payload)
-			}
-		})
-	}
+		var decoded Message
+		if err := cbor.Unmarshal(encoded, &decoded); err != nil {
+			t.Fatal(err)
+		}
+
+		if decoded.Payload != nil {
+			t.Errorf("Expected nil payload, got %x", decoded.Payload)
+		}
+	})
 }
 
-func TestMessageWithCID(t *testing.T) {
-	// Create a CIDv1 with a SHA2-256 multihash.
-	// We use multihash.Sum to generate the hash.
-	mh, err := multihash.Sum([]byte("example data"), multihash.SHA2_256, -1)
-	if err != nil {
-		t.Fatalf("failed to create multihash: %v", err)
-	}
-	// Create a CIDv1 using the Raw codec.
-	c := cid.NewCidV1(cid.Raw, mh)
+func TestInvalidMessages(t *testing.T) {
+	t.Run("invalid tag number", func(t *testing.T) {
+		data := []byte{
+			0xDA, // Tag(4 bytes)
+			0x00, 0x00, 0x00, 0x00, // Invalid tag number
+			0x82, // Array(2)
+			0x40, // Empty bytes
+			0x40, // Empty bytes
+		}
+		var m Message
+		err := cbor.Unmarshal(data, &m)
+		if err == nil {
+			t.Error("Expected error for invalid tag number")
+		}
+	})
 
-	// Marshal the CID to CBOR using fxamacker/cbor.
-	cborCID, err := cbor.Marshal(c)
-	if err != nil {
-		t.Fatalf("failed to CBOR encode CID: %v", err)
-	}
+	t.Run("insufficient array elements", func(t *testing.T) {
+		data := []byte{
+			0xDA, 0x67, 0x72, 0x69, 0x64, // Valid grid tag
+			0x81, // Array(1) instead of 2
+			0x40, // Empty bytes
+		}
+		var m Message
+		err := cbor.Unmarshal(data, &m)
+		if err == nil {
+			t.Error("Expected error for insufficient array elements")
+		}
+	})
 
-	// Create the message with the full CBOR encoded CID as the
-	// protocol identifier and "hello" as the payload.
-	msg := Message{
-		Protocol: cborCID,
-		Payload:  []byte("hello"),
-	}
-
-	data, err := msg.MarshalCBOR()
-	if err != nil {
-		t.Fatalf("MarshalCBOR failed: %v", err)
-	}
-
-	var out Message
-	if err := out.UnmarshalCBOR(data); err != nil {
-		t.Fatalf("UnmarshalCBOR failed: %v", err)
-	}
-
-	// Verify that the payload matches.
-	if !bytes.Equal(out.Payload, []byte("hello")) {
-		t.Errorf("Payload mismatch: got %s, expected hello",
-			string(out.Payload))
-	}
-	// Verify that the protocol (CID) matches the original.
-	if !bytes.Equal(out.Protocol, cborCID) {
-		t.Errorf("Protocol mismatch: got %x, expected %x", out.Protocol,
-			cborCID)
-	}
-
-	// Further verify that the CBOR encoded protocol can be decoded back
-	// to a valid CID.
-	var rawCID []byte
-	if err := cbor.Unmarshal(out.Protocol, &rawCID); err != nil {
-		t.Errorf("failed to unmarshal protocol as raw bytes: %v", err)
-	}
-	decodedCID, err := cid.Cast(rawCID)
-	if err != nil {
-		t.Errorf("failed to cast raw bytes to CID: %v", err)
-	}
-	if decodedCID.Version() != 1 {
-		t.Errorf("expected CIDv1, got CIDv%d", decodedCID.Version())
-	}
-	mhDecoded, err := multihash.Decode(decodedCID.Hash())
-	if err != nil {
-		t.Errorf("failed to decode multihash: %v", err)
-	}
-	if mhDecoded.Code != multihash.SHA2_256 {
-		t.Errorf("expected SHA2_256 multihash, got code %d", mhDecoded.Code)
-	}
+	t.Run("non-array content", func(t *testing.T) {
+		data := []byte{
+			0xDA, 0x67, 0x72, 0x69, 0x64, // Valid grid tag
+			0xA0, // Empty map instead of array
+		}
+		var m Message
+		err := cbor.Unmarshal(data, &m)
+		if err == nil {
+			t.Error("Expected error for non-array content")
+		}
+	})
 }
