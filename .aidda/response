@@ -7,13 +7,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 
 	ipfslite "github.com/hsanjuan/ipfs-lite"
-	"github.com/ipfs/go-cid"
 	flatfs "github.com/ipfs/go-ds-flatfs"
+	datastore "github.com/ipfs/go-datastore"
+	mount "github.com/ipfs/go-datastore/mount"
+	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -32,14 +35,28 @@ func main() {
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		panic(err)
 	}
-	if err := flatfs.Create(repoPath, shardFunc); err != nil && !os.IsExist(err) {
-		panic(err)
+	if err := flatfs.Create(repoPath, shardFunc); err != nil {
+		// Ignore error if datastore already exists
+		if err.Error() != "datastore already exists" &&
+			!errors.Is(err, os.ErrExist) {
+			panic(err)
+		}
 	}
 	ds, err := flatfs.Open(repoPath, false)
 	if err != nil {
 		panic(err)
 	}
 	defer ds.Close()
+
+	// Wrap the FlatFS datastore with a mount to handle block keys without
+	// unsupported prefixes.  IPFS-Lite uses keys with a "/blocks/" prefix,
+	// but FlatFS does not allow keys containing the "/" separator.
+	// The mount datastore will only store the key in the FlatFS datastore if
+	// the key begins with "blocks" (without a leading slash).
+	blocksDs := mount.New([]mount.Mount{{
+		Prefix:    datastore.NewKey("blocks"),
+		Datastore: ds,
+	}})
 
 	// Generate RSA key pair for persistent peer identity
 	priv, _, err := crypto.GenerateKeyPair(crypto.RSA, 2048)
@@ -63,8 +80,9 @@ func main() {
 		panic(err)
 	}
 
-	// Create IPFS-Lite node with persistent block store
-	lite, err := ipfslite.New(ctx, ds, nil, h, dht, nil)
+	// Create IPFS-Lite node with persistent block store using the mounted
+	// datastore.
+	lite, err := ipfslite.New(ctx, blocksDs, nil, h, dht, nil)
 	if err != nil {
 		panic(err)
 	}
