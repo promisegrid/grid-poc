@@ -1,10 +1,7 @@
-write boxo node
+add comments to the code
 
-Write Go code that uses boxo to implement an IPFS node that supports
-bitswap, gossipsub, ipns, relaying, and disk storage for data.
-
-fix errors
-
+Add comments to the code to explain how the code works and what it
+does.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -19,9 +16,9 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
-  x/node-boxo/node-boxo.go
+  x/node-ipfs-lite/node-ipfs-lite.go
 Out:
-  x/node-boxo/node-boxo.go
+  x/node-ipfs-lite/node-ipfs-lite.go
 
 .stop
 

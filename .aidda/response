@@ -1,252 +1,116 @@
 <think>
-Okay, let's tackle this problem. The user wants to fix their Go code that uses Boxo to implement an IPFS node with specific features. The initial code had several compilation errors, so I need to figure out what's wrong and how to correct it.
+Okay, I need to add comments to the provided Go code for the IPFS-Lite node. Let me start by understanding what each part does.
 
-First, looking at the error messages:
+First, the package declaration and the initial comment. The existing comment mentions it's an example, so I'll expand that to explain the overall purpose.
 
-1. The error `cannot use hst (host.Host) as context.Context` suggests that the `dht.New` function is expecting a context as the first argument. The original code passed `hst` instead. Checking the Boxo documentation or the source code, I see that the `dht.New` function actually requires a context as the first parameter, followed by the host. So the first fix is to add `ctx` as the first argument to `dht.New`.
+Looking at the imports, they're necessary for context, IO, IPFS-Lite, CID, crypto, multiaddr, etc. No changes needed there.
 
-2. The undefined `dht.Mode` and `dht.ModeAutoServer` indicate that the way the DHT mode is set has changed. In the `go-libp2p-kad-dht/dual` package, the `Mode` option is now set using `dual.DHTOption` functions. Instead of `dht.ModeAutoServer`, we should use `dual.DHTMode(dht.ModeAutoServer)`.
+In the main function, the context is set up with cancellation. I'll add a comment explaining that it's for managing the lifecycle.
 
-3. The `dht.Datastore` is undefined. The correct way to pass the datastore to the DHT is through the `dual.DHTOption` using `dual.DHTOption(dht.Datastore(repo.Datastore()))`.
+The in-memory datastore is created using ipfslite.NewInMemoryDatastore(). A comment here can note that it's ephemeral, which is good for testing.
 
-4. The `bsnet.New` function call has incorrect arguments. The original code passed the host and DHT, but the updated `bsnet.NewFromIpfsHost` function requires the host and a content routing instance. Since the DHT implements the `Routing` interface, we can pass `dht` directly.
+Generating the RSA key pair: the code uses crypto.GenerateKeyPair. I should explain that this is for the peer's identity.
 
-5. The `bitswap.New` function was called with `network` and `bs`, but the parameters might be in the wrong order. The correct order is context, network, blockstore, followed by options. Also, the options should be applied correctly using functional parameters.
+The listen address is created with multiaddr.NewMultiaddr. A comment here can mention that it's setting the listener to all interfaces on TCP 4005.
 
-6. The `provider.New` function had issues with undefined options. The correct options are `provider.Online` and `provider.Reprovider`, and the direct provider should be the DHT's content routing.
+Setting up libp2p with SetupLibp2p. The parameters include the context, private key, listen addresses, etc. A comment here can outline the components being initialized, like the host and DHT.
 
-7. The IPNS publisher was initialized with the DHT and datastore, but according to the Boxo documentation, it should be created using `namesys.NewPublisher` which takes the DHT, the repository's datastore, and optional parameters.
+Error handling after SetupLibp2p and New: adding comments to note where panics occur due to setup failures.
 
-By addressing each error step-by-step, checking the correct function signatures and options, and ensuring that all dependencies are correctly imported and used, the code should compile and function as intended.
+Creating the IPFS-Lite node with ipfslite.New. A comment here can explain the parameters and that the node is initialized with the host and DHT.
+
+Bootstrap connects to default peers. Adding a comment about joining the IPFS network.
+
+Decoding the CID for "Hello World". The CID is hardcoded, so a comment can mention that it's a known test CID.
+
+Fetching the file using lite.GetFile. Comments here can explain the retrieval process and the use of io.ReadAll to read the content.
+
+Finally, printing the content. A comment to note the expected output.
+
+I need to make sure comments are concise, explain each major step, and don't repeat what's obvious from the code. Also, check that comments are accurate, especially regarding IPFS-Lite and libp2p usage. Ensure that no deprecated functions are mentioned and that all comments add value without being redundant.
 </think>
 
-File: /home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
+File: /home/stevegt/lab/grid-poc/x/node-ipfs-lite/node-ipfs-lite.go
 ```go
 package main
+
+// This example launches an IPFS-Lite peer and fetches a hello-world
+// hash from the IPFS network. IPFS-Lite provides a lightweight way to
+// interact with IPFS content without running a full IPFS node.
 
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"time"
+	"io"
 
-	"github.com/ipfs/boxo/bitswap"
-	bsnet "github.com/ipfs/boxo/bitswap/network"
-	"github.com/ipfs/boxo/blockstore"
-	"github.com/ipfs/boxo/exchange"
-	"github.com/ipfs/boxo/namesys"
-	"github.com/ipfs/boxo/provider"
-	config "github.com/ipfs/kubo/config"
-	"github.com/ipfs/kubo/repo"
-	flatfs "github.com/ipfs/go-ds-flatfs"
+	ipfslite "github.com/hsanjuan/ipfs-lite"
 	"github.com/ipfs/go-cid"
-	"github.com/libp2p/go-libp2p"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
-	"github.com/libp2p/go-libp2p-kad-dht/dual"
-	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/routing"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/multiformats/go-multihash"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/multiformats/go-multiaddr"
 )
 
-const repoPath = "/tmp/.ipfs-boxo"
-
-type BoxoNode struct {
-	Host          host.Host
-	DHT           *dual.DHT
-	PubSub        *pubsub.PubSub
-	Blockstore    blockstore.Blockstore
-	Bitswap       exchange.Interface
-	IPNSPublisher *namesys.Publisher
-	Repo          repo.Repo
-	ProviderSys   provider.System
-}
-
-func setupRepo(ctx context.Context, path string) (repo.Repo, error) {
-	if err := os.MkdirAll(path, 0755); err != nil {
-		return nil, fmt.Errorf("creating repo directory: %w", err)
-	}
-
-	cfg, err := config.Init(os.Stdout, 2048)
-	if err != nil {
-		return nil, fmt.Errorf("initializing config: %w", err)
-	}
-
-	cfg.Datastore.Spec = map[string]interface{}{
-		"type":      "flatfs",
-		"path":      "blocks",
-		"sync":      true,
-		"shardFunc": "/repo/flatfs/shard/v1/next-to-last/2",
-	}
-
-	shardFuncStr, ok := cfg.Datastore.Spec["shardFunc"].(string)
-	if !ok {
-		return nil, fmt.Errorf("shardFunc is not a string")
-	}
-
-	shardFunc, err := flatfs.ParseShardFunc(shardFuncStr)
-	if err != nil {
-		return nil, fmt.Errorf("parsing shard function: %w", err)
-	}
-
-	dsPath := filepath.Join(path, "blocks")
-	ds, err := flatfs.CreateOrOpen(dsPath, shardFunc, true)
-	if err != nil {
-		return nil, fmt.Errorf("creating flatfs datastore: %w", err)
-	}
-
-	return &repo.Mock{
-		D: ds,
-		C: *cfg,
-	}, nil
-}
-
-func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
-	repo, err := setupRepo(ctx, repoPath)
-	if err != nil {
-		return nil, fmt.Errorf("repo setup failed: %w", err)
-	}
-
-	hst, err := libp2p.New(
-		libp2p.ListenAddrStrings(
-			"/ip4/0.0.0.0/tcp/4001",
-			"/ip6/::/tcp/4001",
-		),
-		libp2p.NATPortMap(),
-		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
-			return dual.New(ctx, h,
-				dual.DHTOption(
-					dht.Datastore(repo.Datastore()),
-				),
-				dual.DHTMode(dht.ModeAutoServer),
-			)
-		}),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("creating host: %w", err)
-	}
-
-	dht, ok := hst.(routing.Routing).(*dual.DHT)
-	if !ok {
-		return nil, fmt.Errorf("could not cast routing to dual.DHT")
-	}
-
-	ps, err := pubsub.NewGossipSub(ctx, hst)
-	if err != nil {
-		return nil, fmt.Errorf("creating pubsub: %w", err)
-	}
-
-	bs := blockstore.NewBlockstore(repo.Datastore())
-	network := bsnet.NewFromIpfsHost(hst, dht)
-	bswap := bitswap.New(ctx, network, bs,
-		bitswap.EngineBlockstoreWorkerCount(3),
-	)
-
-	ipnsPublisher, err := namesys.NewPublisher(dht, repo.Datastore())
-	if err != nil {
-		return nil, fmt.Errorf("creating IPNS publisher: %w", err)
-	}
-
-	providerSys := provider.NewSystem(
-		provider.NewProvider(bs),
-		provider.Reprovider(time.Hour),
-		provider.Online(dht),
-	)
-
-	return &BoxoNode{
-		Host:          hst,
-		DHT:           dht,
-		PubSub:        ps,
-		Blockstore:    bs,
-		Bitswap:       bswap,
-		IPNSPublisher: ipnsPublisher,
-		Repo:          repo,
-		ProviderSys:   providerSys,
-	}, nil
-}
-
-func (n *BoxoNode) Start(ctx context.Context) error {
-	if err := n.DHT.Bootstrap(ctx); err != nil {
-		return fmt.Errorf("dht bootstrap failed: %w", err)
-	}
-
-	cfg, _ := config.Init(os.Stdout, 2048)
-	bootstrapPeers, err := cfg.BootstrapPeers()
-	if err != nil {
-		return fmt.Errorf("getting bootstrap peers: %w", err)
-	}
-
-	for _, p := range bootstrapPeers {
-		if err := n.Host.Connect(ctx, peer.AddrInfo{ID: p.ID}); err != nil {
-			fmt.Printf("Failed to connect to bootstrap peer %s: %v\n", p.ID, err)
-		}
-	}
-
-	if err := n.ProviderSys.Run(); err != nil {
-		return fmt.Errorf("starting provider system: %w", err)
-	}
-
-	return nil
-}
-
 func main() {
+	// Create a context that can cancel ongoing operations
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	node, err := NewBoxoNode(ctx)
+	// Create an in-memory datastore for the peer (ephemeral storage)
+	ds := ipfslite.NewInMemoryDatastore()
+	
+	// Generate RSA key pair for the peer's identity
+	priv, _, err := crypto.GenerateKeyPair(crypto.RSA, 2048)
 	if err != nil {
-		panic(fmt.Errorf("node creation failed: %w", err))
+		panic(err)
 	}
 
-	if err := node.Start(ctx); err != nil {
-		panic(fmt.Errorf("node start failed: %w", err))
+	// Configure the network listener to listen on all interfaces, TCP port 4005
+	listen, _ := multiaddr.NewMultiaddr("/ip4/0.0.0.0/tcp/4005")
+
+	// Set up libp2p host and DHT (Distributed Hash Table)
+	// This creates the network stack for the IPFS-Lite node
+	h, dht, err := ipfslite.SetupLibp2p(
+		ctx,
+		priv,          // Cryptographic identity
+		nil,           // No existing peerstore
+		[]multiaddr.Multiaddr{listen},  // Listen addresses
+		ds,            // Datastore for network metadata
+		ipfslite.Libp2pOptionsExtra..., // Default libp2p options
+	)
+
+	if err != nil {
+		panic(err)
 	}
-	defer node.Host.Close()
 
-	fmt.Printf("IPFS node running with ID %s\n", node.Host.ID())
-	fmt.Printf("Listening on addresses:\n")
-	for _, addr := range node.Host.Addrs() {
-		fmt.Printf("  %s/p2p/%s\n", addr, node.Host.ID())
+	// Create the IPFS-Lite node instance
+	lite, err := ipfslite.New(ctx, ds, nil, h, dht, nil)
+	if err != nil {
+		panic(err)
 	}
 
-	go func() {
-		time.Sleep(5 * time.Second)
-		privKey := node.Host.Peerstore().PrivKey(node.Host.ID())
+	// Connect to IPFS bootstrap peers to join the network
+	lite.Bootstrap(ipfslite.DefaultBootstrapPeers())
 
-		mh, _ := multihash.Sum([]byte("example"), multihash.SHA2_256, -1)
-		exampleCid := cid.NewCidV1(cid.Raw, mh)
-		expiration := time.Now().Add(24 * time.Hour)
+	// Decode a known CID (Content Identifier) for "Hello World"
+	c, _ := cid.Decode("QmWATWQ7fVPP2EFGu71UkfnqhYXDYH566qy47CnJDgvs8u")
+	
+	// Retrieve the file from the IPFS network using the Lite node
+	rsc, err := lite.GetFile(ctx, c)
+	if err != nil {
+		panic(err)
+	}
+	defer rsc.Close()
+	
+	// Read the entire content of the fetched file
+	content, err := io.ReadAll(rsc)
+	if err != nil {
+		panic(err)
+	}
 
-		err := node.IPNSPublisher.Publish(ctx, privKey, "/ipfs/"+exampleCid.String(), 0, time.Hour, namesys.WithEOL(expiration))
-		if err != nil {
-			fmt.Printf("IPNS publication failed: %v\n", err)
-		} else {
-			fmt.Println("Successfully published IPNS record")
-		}
-	}()
-
-	select {}
+	// Print the content (should be "Hello World")
+	fmt.Println(string(content))
 }
 ```
-EOF_/home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
+EOF_/home/stevegt/lab/grid-poc/x/node-ipfs-lite/node-ipfs-lite.go
 
 <references>
-[1] https://github.com/libp2p/go-libp2p-kad-dht/blob/master/dht.go
-[2] https://pt.w3d.community/aiengineer13/libp2p-pubsub-descoberta-de-pares-com-kademlia-dht-5hej
-[3] https://pkg.go.dev/github.com/ipfs/boxo/bitswap
-[4] https://discuss.libp2p.io/t/is-it-possible-to-advertise-a-record-across-private-network/507
-[5] https://github.com/ipfs/go-bitswap/issues/525
-[6] https://discuss.libp2p.io/t/how-to-limit-gossip-pubsub-peer-discovery/556
-[7] https://discuss.libp2p.io/t/how-to-create-bootstrap-node-correctly-always-searching-for-other-peers/1389
-[8] https://developer.box.com/guides/api-calls/permissions-and-errors/common-errors/
-[9] https://betterstack.com/community/guides/scaling-nodejs/nodejs-errors/
-[10] https://ultahost.com/knowledge-base/how-to-fix-the-npm-command-not-found-error/
-[11] https://pkg.go.dev/github.com/ipfs/boxo
-[12] https://discuss.ipfs.tech/t/spamming-dht-errors-ignoring-incoming-dht-message-while-not-in-server-mode/17254
-[13] https://docs.npmjs.com/common-errors/
-[14] https://discuss.ipfs.tech/t/unable-to-get-blocks-when-the-node-is-connected-to-multiple-peers/18711
-[15] https://pkg.go.dev/github.com/ipfs/boxo/coreiface
-[16] https://github.com/ipfs/kubo/blob/master/docs/config.md
 </references>
