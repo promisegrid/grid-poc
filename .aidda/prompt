@@ -1,23 +1,11 @@
-add a persistent store 
+store the file in the local datastore
 
-Add a persistent store to the IPFS Lite node.  Use the flatfs
-backend as a starting point.  The storage location should be
-"/tmp/ipfs-lite".
+After fetching the file, store it in the local datastore.  
 
 fix errors
 
-2025/04/26 19:51:39 failed to sufficiently increase receive buffer size (was: 208 kiB, wanted: 7168 kiB, got: 416 kiB). See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details.
-panic: when putting '"/blocks/CIQHIQIFO4IRBFWNQF5D7LWXQYYPEJCWG27N5VAS2OZBFIXATOSZHSQ"': key not supported by flatfs
-
-goroutine 1 [running]:
-main.main()
-	/home/stevegt/lab/grid-poc/x/node-ipfs-lite/node-ipfs-lite.go:84 +0x4aa
-exit status 2
-
-goroutine 1 [running]:
-main.main()
-	/home/stevegt/lab/grid-poc/x/node-ipfs-lite/node-ipfs-lite.go:34 +0x4e6
-exit status 2
+# command-line-arguments
+./node-ipfs-lite.go:53:21: undefined: flatfs.DataStore
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

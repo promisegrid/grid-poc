@@ -1,109 +1,193 @@
 package main
 
-// This example launches a persistent IPFS-Lite peer using FlatFS block storage
-// and fetches a hello-world hash from the IPFS network.
-
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
+	"strings"
+	"time"
 
 	ipfslite "github.com/hsanjuan/ipfs-lite"
-	flatfs "github.com/ipfs/go-ds-flatfs"
-	datastore "github.com/ipfs/go-datastore"
-	mount "github.com/ipfs/go-datastore/mount"
 	"github.com/ipfs/go-cid"
+	datastore "github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/namespace"
+	"github.com/ipfs/go-datastore/query"
+	flatfs "github.com/ipfs/go-ds-flatfs"
+	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/multiformats/go-multiaddr"
 )
 
-func main() {
-	// Create a context that can cancel ongoing operations
+type safeDS struct {
+	ds datastore.Batching
+}
+
+func (s *safeDS) Put(ctx context.Context, key datastore.Key, value []byte) error {
+	return s.ds.Put(ctx, safeKey(key), value)
+}
+
+func (s *safeDS) Get(ctx context.Context, key datastore.Key) ([]byte, error) {
+	return s.ds.Get(ctx, safeKey(key))
+}
+
+func (s *safeDS) Has(ctx context.Context, key datastore.Key) (bool, error) {
+	return s.ds.Has(ctx, safeKey(key))
+}
+
+func (s *safeDS) Delete(ctx context.Context, key datastore.Key) error {
+	return s.ds.Delete(ctx, safeKey(key))
+}
+
+func (s *safeDS) Query(ctx context.Context, q query.Query) (query.Results, error) {
+	return s.ds.Query(ctx, q)
+}
+
+func (s *safeDS) Batch(ctx context.Context) (datastore.Batch, error) {
+	return s.ds.Batch(ctx)
+}
+
+func (s *safeDS) GetSize(ctx context.Context, key datastore.Key) (int, error) {
+	if getter, ok := s.ds.(interface {
+		GetSize(context.Context, datastore.Key) (int, error)
+	}); ok {
+		return getter.GetSize(ctx, safeKey(key))
+	}
+	return 0, datastore.ErrNotFound
+}
+
+func (s *safeDS) Sync(ctx context.Context, key datastore.Key) error {
+	if dsSync, ok := s.ds.(interface {
+		Sync(context.Context, datastore.Key) error
+	}); ok {
+		return dsSync.Sync(ctx, safeKey(key))
+	}
+	return nil
+}
+
+func (s *safeDS) Close() error {
+	if c, ok := s.ds.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
+}
+
+func safeKey(k datastore.Key) datastore.Key {
+	s := k.String()
+	if len(s) > 0 && s[0] == '/' {
+		s = s[1:]
+	}
+	s = strings.ReplaceAll(s, "/", "-")
+	s = strings.ToUpper(s)
+	allowed := "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789+-_="
+	var sb strings.Builder
+	for _, r := range s {
+		if strings.ContainsRune(allowed, r) {
+			sb.WriteRune(r)
+		} else {
+			sb.WriteRune('_')
+		}
+	}
+	return datastore.NewKey(sb.String())
+}
+
+func Main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// Configure persistent storage location and FlatFS sharding
 	repoPath := "/tmp/ipfs-lite"
-	// Use the NextToLast sharding function for FlatFS
 	shardFunc := flatfs.NextToLast(2)
 
-	// Create or open FlatFS datastore for block storage
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		panic(err)
 	}
-	if err := flatfs.Create(repoPath, shardFunc); err != nil {
-		// Ignore error if datastore already exists
-		if err.Error() != "datastore already exists" &&
-			!errors.Is(err, os.ErrExist) {
-			panic(err)
-		}
-	}
-	ds, err := flatfs.Open(repoPath, false)
+
+	ds, err := flatfs.CreateOrOpen(repoPath, shardFunc, false)
 	if err != nil {
 		panic(err)
 	}
 	defer ds.Close()
 
-	// Wrap the FlatFS datastore with a mount to handle block keys without
-	// unsupported prefixes.  IPFS-Lite uses keys with a "/blocks/" prefix,
-	// but FlatFS does not allow keys containing the "/" separator.
-	// The mount datastore will only store the key in the FlatFS datastore if
-	// the key begins with "blocks" (without a leading slash).
-	blocksDs := mount.New([]mount.Mount{{
-		Prefix:    datastore.NewKey("blocks"),
-		Datastore: ds,
-	}})
+	blocksDs := &safeDS{ds: ds}
+	metadataDs := namespace.Wrap(ds, datastore.NewKey("metadata"))
 
-	// Generate RSA key pair for persistent peer identity
 	priv, _, err := crypto.GenerateKeyPair(crypto.RSA, 2048)
 	if err != nil {
 		panic(err)
 	}
 
-	// Configure network listener for long-running service
-	listen, _ := multiaddr.NewMultiaddr("/ip4/0.0.0.0/tcp/4005")
+	listen, err := multiaddr.NewMultiaddr("/ip4/0.0.0.0/tcp/4005")
+	if err != nil {
+		panic(err)
+	}
 
-	// Set up libp2p host and DHT with persistent configuration
 	h, dht, err := ipfslite.SetupLibp2p(
 		ctx,
-		priv,                          // Persistent cryptographic identity
-		nil,                           // No existing peerstore
-		[]multiaddr.Multiaddr{listen}, // Persistent listener config
-		ds,                            // Shared datastore for network metadata
-		ipfslite.Libp2pOptionsExtra..., // Default libp2p options
+		priv,
+		nil,
+		[]multiaddr.Multiaddr{listen},
+		metadataDs,
+		ipfslite.Libp2pOptionsExtra...,
 	)
 	if err != nil {
 		panic(err)
 	}
 
-	// Create IPFS-Lite node with persistent block store using the mounted
-	// datastore.
-	lite, err := ipfslite.New(ctx, blocksDs, nil, h, dht, nil)
+	bs := blockstore.NewBlockstore(blocksDs)
+	lite, err := ipfslite.New(ctx, metadataDs, bs, h, dht, nil)
 	if err != nil {
 		panic(err)
 	}
 
-	// Connect to IPFS network using bootstrap peers
 	lite.Bootstrap(ipfslite.DefaultBootstrapPeers())
 
-	// Fetch and display test content
-	c, _ := cid.Decode("QmWATWQ7fVPP2EFGu71UkfnqhYXDYH566qy47CnJDgvs8u")
+	c, err := cid.Decode("QmWATWQ7fVPP2EFGu71UkfnqhYXDYH566qy47CnJDgvs8u")
+	if err != nil {
+		panic(err)
+	}
 
-	// Retrieve the file from the IPFS network using the Lite node
+	// Convert to CIDv1 for base32 encoding
+	c = cid.NewCidV1(c.Type(), c.Hash())
+
+	// we get the file a few times, timing each operation to see if caching works
+	for i := 0; i < 4; i++ {
+		start := time.Now()
+		content, err := getContent(ctx, lite, c)
+		elapsed := time.Since(start)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Printf("File content:\n%s\n", string(content))
+		fmt.Printf("Elapsed time: %s\n", elapsed)
+	}
+
+	/*
+		if false {
+			fileKey := datastore.NewKey("files-" + c.String())
+			if err := blocksDs.Put(ctx, fileKey, content); err != nil {
+				panic(fmt.Errorf("when putting %q: %w", fileKey.String(), err))
+			}
+			fmt.Println("File stored in local datastore under key", fileKey.String())
+		}
+	*/
+}
+
+// getcontent returns the entire content of a file
+func getContent(ctx context.Context, lite *ipfslite.Peer, c cid.Cid) (content []byte, err error) {
+
 	rsc, err := lite.GetFile(ctx, c)
 	if err != nil {
 		panic(err)
 	}
 	defer rsc.Close()
 
-	// Read the entire content of the fetched file
-	content, err := io.ReadAll(rsc)
+	content, err = io.ReadAll(rsc)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
+	return content, nil
+}
 
-	// Print the content (should be "Hello World")
-	fmt.Println(string(content))
+func main() {
+	Main()
 }
