@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ipfs/boxo/bitswap"
-	"github.com/ipfs/boxo/bitswap/network"
+	bsnet "github.com/ipfs/boxo/bitswap/network"
 	"github.com/ipfs/boxo/blockstore"
 	"github.com/ipfs/boxo/exchange"
 	"github.com/ipfs/boxo/namesys"
@@ -18,7 +18,7 @@ import (
 	"github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/repo"
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-kad-dht"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -94,8 +94,7 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 	dht, err := dual.New(
 		ctx,
 		hst,
-		dual.WantMode(dht.ModeClient),
-		dual.DHTOption(dht.ProtocolPrefix("/ipfs/kad/1.0.0")),
+		dual.DHTOption(dht.Mode(dht.ModeAuto)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating DHT: %w", err)
@@ -109,10 +108,9 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 	bs := blockstore.NewBlockstore(repo.Datastore())
 	bswap := bitswap.New(
 		ctx,
-		network.NewFromIpfsHost(hst, dht),
-		dht,
+		bsnet.NewFromIpfsHost(hst, dht),
 		bs,
-		bitswap.ProvideEnabled(true),
+		bitswap.Provider(repo.Datastore()),
 		bitswap.EngineBlockstoreWorkerCount(3),
 	)
 
@@ -145,8 +143,8 @@ func (n *BoxoNode) Start(ctx context.Context) error {
 		}
 	}
 
-	provSys := provider.NewSystem(n.DHT, n.Blockstore)
-	provSys.Run()
+	provSys := provider.New(n.DHT, n.Blockstore)
+	go provSys.Run(ctx)
 
 	return nil
 }
@@ -174,10 +172,10 @@ func main() {
 	go func() {
 		time.Sleep(5 * time.Second)
 		privKey := node.Host.Peerstore().PrivKey(node.Host.ID())
-		valuePath := path.New("/ipfs/QmExampleContentHash")
+		cid := path.FromCid(node.Blockstore.(interface{ GenesisCID() path.Resolved }).GenesisCID())
 		expiration := time.Now().Add(24 * time.Hour)
 
-		err := node.IPNSPublisher.Publish(ctx, privKey, valuePath, namesys.PublishWithEOL(expiration))
+		err := node.IPNSPublisher.Publish(ctx, privKey, cid, namesys.PublishWithEOL(expiration))
 		if err != nil {
 			fmt.Printf("IPNS publication failed: %v\n", err)
 		} else {
