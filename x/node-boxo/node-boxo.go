@@ -12,6 +12,8 @@ import (
 	"github.com/ipfs/boxo/blockstore"
 	"github.com/ipfs/boxo/exchange"
 	"github.com/ipfs/boxo/ipns"
+	"github.com/ipfs/boxo/namesys"
+	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/boxo/provider"
 	flatfs "github.com/ipfs/go-ds-flatfs"
 	"github.com/ipfs/kubo/config"
@@ -32,7 +34,7 @@ type BoxoNode struct {
 	PubSub        *pubsub.PubSub
 	Blockstore    blockstore.Blockstore
 	Bitswap       exchange.Interface
-	IPNSPublisher *ipns.Publisher
+	IPNSPublisher *namesys.IPNSPublisher
 }
 
 func setupRepo(ctx context.Context, path string) (repo.Repo, error) {
@@ -97,10 +99,7 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 		bitswap.EngineBlockstoreWorkerCount(3),
 	)
 
-	ipnsPublisher, err := ipns.NewPublisher(hst.Peerstore(), repo.Datastore(), routing.NewComposer(routing.NewDHTRouting(dht.WAN, nil)))
-	if err != nil {
-		return nil, fmt.Errorf("creating IPNS publisher: %w", err)
-	}
+	ipnsPublisher := namesys.NewIPNSPublisher(dht.WAN, repo.Datastore())
 
 	return &BoxoNode{
 		Host:          hst,
@@ -155,13 +154,11 @@ func main() {
 
 	go func() {
 		time.Sleep(5 * time.Second)
-		value := []byte("/ipfs/QmExampleContentHash")
-
+		privKey := node.Host.Peerstore().PrivKey(node.Host.ID())
+		valuePath := path.Path("/ipfs/QmExampleContentHash")
 		expiration := time.Now().Add(24 * time.Hour)
-		err := node.IPNSPublisher.Publish(ctx, node.Host.Peerstore().PrivKey(node.Host.ID()), ipns.Record{
-			Value:    value,
-			Validity: expiration,
-		})
+
+		err := node.IPNSPublisher.Publish(ctx, privKey, valuePath, namesys.PublishWithEOL(expiration))
 		if err != nil {
 			fmt.Printf("IPNS publication failed: %v\n", err)
 		} else {

@@ -1,8 +1,6 @@
 fix errors
 
-go: finding module for package github.com/ipfs/boxo/config
-go: node-boxo imports
-	github.com/ipfs/boxo/config: module github.com/ipfs/boxo@latest found (v0.29.1), but does not contain package github.com/ipfs/boxo/config
+vet: ./node-boxo.go:35:22: undefined: ipns.Publisher
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
