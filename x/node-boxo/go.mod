@@ -5,7 +5,6 @@ go 1.24.0
 require (
 	github.com/ipfs/boxo v0.29.1
 	github.com/ipfs/go-ds-flatfs v0.5.5
-	github.com/ipfs/go-ipfs-config v0.19.0
 	github.com/ipfs/kubo v0.34.1
 	github.com/libp2p/go-libp2p v0.41.1
 	github.com/libp2p/go-libp2p-kad-dht v0.31.0
@@ -17,7 +16,6 @@ require (
 	github.com/alexbrainman/goissue34681 v0.0.0-20191006012335-3fc7a47baff5 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
-	github.com/btcsuite/btcd v0.20.1-beta // indirect
 	github.com/caddyserver/certmagic v0.21.6 // indirect
 	github.com/caddyserver/zerossl v0.1.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -47,25 +45,18 @@ require (
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/ipfs/bbloom v0.0.4 // indirect
 	github.com/ipfs/go-block-format v0.2.0 // indirect
-	github.com/ipfs/go-blockservice v0.5.2 // indirect
 	github.com/ipfs/go-cid v0.5.0 // indirect
 	github.com/ipfs/go-cidutil v0.1.0 // indirect
 	github.com/ipfs/go-datastore v0.8.2 // indirect
-	github.com/ipfs/go-ipfs-blockstore v1.3.1 // indirect
 	github.com/ipfs/go-ipfs-delay v0.0.1 // indirect
-	github.com/ipfs/go-ipfs-ds-help v1.1.1 // indirect
-	github.com/ipfs/go-ipfs-exchange-interface v0.2.1 // indirect
 	github.com/ipfs/go-ipfs-pq v0.0.3 // indirect
 	github.com/ipfs/go-ipfs-util v0.0.3 // indirect
 	github.com/ipfs/go-ipld-format v0.6.0 // indirect
 	github.com/ipfs/go-ipld-legacy v0.2.1 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-log/v2 v2.5.1 // indirect
-	github.com/ipfs/go-merkledag v0.11.0 // indirect
 	github.com/ipfs/go-metrics-interface v0.3.0 // indirect
 	github.com/ipfs/go-peertaskqueue v0.8.2 // indirect
-	github.com/ipfs/go-verifcid v0.0.3 // indirect
-	github.com/ipfs/interface-go-ipfs-core v0.4.0 // indirect
 	github.com/ipld/go-codec-dagpb v1.6.0 // indirect
 	github.com/ipld/go-ipld-prime v0.21.0 // indirect
 	github.com/ipshipyard/p2p-forge v0.4.0 // indirect
@@ -79,24 +70,20 @@ require (
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
 	github.com/libp2p/go-flow-metrics v0.2.0 // indirect
 	github.com/libp2p/go-libp2p-asn-util v0.4.1 // indirect
-	github.com/libp2p/go-libp2p-core v0.6.1 // indirect
 	github.com/libp2p/go-libp2p-kbucket v0.7.0 // indirect
 	github.com/libp2p/go-libp2p-record v0.3.1 // indirect
 	github.com/libp2p/go-libp2p-routing-helpers v0.7.5 // indirect
 	github.com/libp2p/go-msgio v0.3.0 // indirect
 	github.com/libp2p/go-netroute v0.2.2 // indirect
-	github.com/libp2p/go-openssl v0.1.0 // indirect
 	github.com/libp2p/go-reuseport v0.4.0 // indirect
 	github.com/libp2p/go-yamux/v5 v5.0.0 // indirect
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-pointer v0.0.1 // indirect
 	github.com/mholt/acmez/v3 v3.0.0 // indirect
 	github.com/miekg/dns v1.1.63 // indirect
 	github.com/mikioh/tcpinfo v0.0.0-20190314235526-30a79bb1804b // indirect
 	github.com/mikioh/tcpopt v0.0.0-20190314235656-172688c1accc // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
-	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-base36 v0.2.0 // indirect
@@ -143,7 +130,6 @@ require (
 	github.com/quic-go/webtransport-go v0.8.1-0.20241018022711-4ac2c9250e66 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/samber/lo v1.47.0 // indirect
-	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/whyrusleeping/base32 v0.0.0-20170828182744-c30ac30633cc // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
@@ -153,7 +139,6 @@ require (
 	go.opentelemetry.io/otel v1.34.0 // indirect
 	go.opentelemetry.io/otel/metric v1.34.0 // indirect
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.18.0 // indirect
 	go.uber.org/fx v1.23.0 // indirect
 	go.uber.org/mock v0.5.0 // indirect

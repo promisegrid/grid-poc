@@ -1,23 +1,19 @@
 <think>
-Okay, I need to address the vet errors in the provided Go code. Let's look at the errors one by one.
+Okay, let's tackle this problem. The user is encountering a Go module error where the package github.com/ipfs/boxo/config isn't found in the latest version of boxo (v0.29.1). The error message indicates that the code is importing that package, but it doesn't exist in the module.
 
-First error: in addrinfo.go, there's a line where a *multiaddr.Component is used as a multiaddr.Multiaddr in a slice. The user's code might be using an outdated version of go-libp2p-core. Looking at the search results, I see that go-libp2p-core has been deprecated and split into different modules. The peer.SplitAddr function in the old core module might have been returning a component, but in the new version, it's handled differently. The solution is to update the imports and use the new peer package from go-libp2p/core/peer. Also, the Component type might need to be converted to a Multiaddr properly.
+First, I need to figure out why the package is missing. Looking at the provided search results, especially [4] and [9], I see that Boxo is a collection of libraries from various IPFS Go modules. The issue in [9] mentions migrating repositories into Boxo. Maybe the config package was moved or renamed.
 
-Second error: undefined cid.CodecToStr and cid.Codecs. From the search results, the go-cid package removed these maps in version 0.4.0. The user's code is probably referencing these, which no longer exist. The fix is to replace references to cid.Codecs and cid.CodecToStr with the new methods or direct constants. For example, using cid.Prefix.Codec instead of looking up in Codecs.
+In the code, the import is "github.com/ipfs/boxo/config". Checking the Boxo documentation [4], the config package isn't listed under the migrated components. Instead, the Kubo (go-ipfs) repository [1][6] has a config package. The user's code is using Kubo's repo package, so perhaps the config should come from Kubo as well.
 
-Looking at the provided code, the main issues are likely in the dependencies. The code imports github.com/libp2p/go-libp2p-core/peer, which is deprecated. The correct import is github.com/libp2p/go-libp2p/core/peer. Similarly, the IPFS config package has moved from github.com/ipfs/go-ipfs-config to github.com/ipfs/boxo/config.
+Looking at the setupRepo function, it uses config.Init from Boxo. But according to the search results, the config initialization is part of Kubo. The correct package should be from Kubo, not Boxo. So the import should be changed from "github.com/ipfs/boxo/config" to "github.com/ipfs/kubo/config".
 
-Another point is the use of dual.DHT. The constructor dual.New might have changed its parameters. The error in the DHT setup could be due to incorrect options. The DHTOption should be passed as dual.DHTOption, not dual.DHTMode. Also, the mode should be set using dual.ModeAuto.
+Next, I need to check if the Kubo config package's Init function matches the usage in the code. The user's code calls config.Init(os.Stdout, 2048), which aligns with Kubo's config.Init function that takes an io.Writer and a keysize. Boxo's config might have a different API or might not exist anymore.
 
-The IPNS publisher uses NewPublisher, which might require a routing system. The code currently passes the DHT, but the new API might need a specific routing.IPNSRouter. Updating to use the correct routing parameter would fix this.
+Additionally, the code uses repo.Mock from Kubo, which is correct. So replacing the Boxo config import with Kubo's config should resolve the missing package error. 
 
-In the main function, when connecting to bootstrap peers, the code uses peer.AddrInfo{ID: p.ID()}, but the ID() method might not exist anymore. Instead, p should already be an AddrInfo, so using p directly would be correct.
+Another thing to verify is the module dependencies. The user might need to ensure that the Kubo module is properly required in go.mod. Since the code already imports "github.com/ipfs/kubo/repo", adding the config package from the same module should be compatible.
 
-Also, the provider.NewProvider function's parameters might have changed. The new provider system might require different arguments, such as a content router and a provider system.
-
-Finally, the IPNS publishing part uses NewRoutingPublisher, which might be deprecated. The correct approach is to use the IPNSPublisher created earlier instead of initializing a new one.
-
-By updating the imports, correcting the DHT and IPNS setup, and adjusting how peer addresses and provider systems are handled, the vet errors should be resolved.
+So the fix involves changing the import path in the code from github.com/ipfs/boxo/config to github.com/ipfs/kubo/config. This should resolve the module error as the config package is part of Kubo, not Boxo.
 </think>
 
 File: /home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
@@ -34,11 +30,11 @@ import (
 	"github.com/ipfs/boxo/bitswap"
 	"github.com/ipfs/boxo/bitswap/network"
 	"github.com/ipfs/boxo/blockstore"
-	"github.com/ipfs/boxo/config"
 	"github.com/ipfs/boxo/exchange"
 	"github.com/ipfs/boxo/ipns"
 	"github.com/ipfs/boxo/provider"
 	flatfs "github.com/ipfs/go-ds-flatfs"
+	"github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/repo"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
@@ -199,18 +195,16 @@ func main() {
 EOF_/home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
 
 <references>
-[1] https://github.com/libp2p/go-libp2p/issues/459
-[2] https://discuss.ipfs.tech/t/constructing-multiaddr-to-pass-into-libp2p-dialprotocol/13445
-[3] https://discuss.libp2p.io/t/how-to-connect-to-nodes-only-knowing-their-ip-and-port/283
-[4] https://discuss.libp2p.io/t/examples-failing-help-new-to-libp2p/620
-[5] https://pkg.go.dev/github.com/ipfs/go-cid
-[6] https://pkg.go.dev/github.com/libp2p/go-libp2p-core/peer
-[7] https://github.com/ipfs/go-cid/blob/master/cid.go
-[8] https://curl.se/mail/lib-2022-02/0127.html
-[9] https://forum.golangbridge.org/t/how-to-migrate-from-this-old-lib-to-the-new-lib/24163
-[10] https://github.com/ipfs/kubo/blob/master/docs/changelogs/v0.4.md
-[11] https://discuss.libp2p.io/t/go-libp2p-core-migration-issue/184
-[12] https://raw.githubusercontent.com/ipfs/go-ipfs/v0.13.0-rc1/CHANGELOG.md
-[13] https://github.com/ipld/go-ipld-prime/blob/master/CHANGELOG.md
-[14] https://github.com/ipld/go-ipld-prime/releases
+[1] https://github.com/ipfs/kubo/blob/master/docs/config.md
+[2] https://docs.ipfs.eth.link/how-to/configure-node/
+[3] https://git.shivering-isles.com/github-mirror/ipfs/go-ipfs/-/blob/v0.26.0/docs/environment-variables.md
+[4] https://github.com/ipfs/boxo
+[5] https://github.com/kubernetes/client-go/issues/551
+[6] https://github.com/ipfs/kubo
+[7] https://github.com/ipfs/go-ipfs-util
+[8] https://github.com/ipfs/go-ipfs-api
+[9] https://github.com/ipfs/boxo/issues/215
+[10] https://docs.ipfs.tech/reference/kubo/cli/
+[11] https://newreleases.io/project/github/ipfs/kubo/release/v0.30.0
+[12] https://github.com/ipfs/ipfs-desktop/blob/master/README.md
 </references>
