@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/hsanjuan/ipfs-lite v1.8.4
 	github.com/ipfs/go-cid v0.5.0
+	github.com/ipfs/go-ds-flatfs v0.5.5
 	github.com/libp2p/go-libp2p v0.41.1
 	github.com/multiformats/go-multiaddr v0.15.0
 )
@@ -12,6 +13,7 @@ require (
 require (
 	github.com/Jorropo/jsync v1.0.1 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
+	github.com/alexbrainman/goissue34681 v0.0.0-20191006012335-3fc7a47baff5 // indirect
 	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

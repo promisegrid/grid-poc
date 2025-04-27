@@ -1,7 +1,11 @@
-add comments to the code
+add a persistent store 
 
-Add comments to the code to explain how the code works and what it
-does.  
+Add a persistent store to the IPFS Lite node.  Use the flatfs
+backend as a starting point.  The storage location should be
+"/tmp/ipfs-lite".
+
+fix errors
+
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
