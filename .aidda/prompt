@@ -1,6 +1,10 @@
+write boxo node
+
+Write Go code that uses boxo to implement an IPFS node that supports
+bitswap, gossipsub, ipns, relaying, and disk storage for data.
+
 fix errors
 
-vet: ./node-boxo.go:35:22: undefined: ipns.Publisher
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

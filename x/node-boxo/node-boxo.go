@@ -11,7 +11,6 @@ import (
 	"github.com/ipfs/boxo/bitswap/network"
 	"github.com/ipfs/boxo/blockstore"
 	"github.com/ipfs/boxo/exchange"
-	"github.com/ipfs/boxo/ipns"
 	"github.com/ipfs/boxo/namesys"
 	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/boxo/provider"
@@ -19,11 +18,10 @@ import (
 	"github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/repo"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/routing"
 )
 
 const repoPath = "/tmp/.ipfs-boxo"
@@ -54,9 +52,24 @@ func setupRepo(ctx context.Context, path string) (repo.Repo, error) {
 		"shardFunc": "/repo/flatfs/shard/v1/next-to-last/2",
 	}
 
+	shardFuncStr, ok := cfg.Datastore.Spec["shardFunc"].(string)
+	if !ok {
+		return nil, fmt.Errorf("shardFunc is not a string")
+	}
+
+	shardFunc, err := flatfs.ParseShardFunc(shardFuncStr)
+	if err != nil {
+		return nil, fmt.Errorf("parsing shard function: %w", err)
+	}
+
+	dsPath := filepath.Join(path, "blocks")
+	ds, err := flatfs.CreateOrOpen(dsPath, shardFunc, true)
+	if err != nil {
+		return nil, fmt.Errorf("creating flatfs datastore: %w", err)
+	}
+
 	return &repo.Mock{
-		D: flatfs.CreateOrOpen(flatfs.ParseShardFunc(cfg.Datastore.Spec["shardFunc"].(string)),
-			filepath.Join(path, "blocks"), false),
+		D: ds,
 		C: *cfg,
 	}, nil
 }
@@ -78,9 +91,11 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 		return nil, fmt.Errorf("creating host: %w", err)
 	}
 
-	dht, err := dual.New(ctx, hst,
-		dual.WanDHTOption(dual.DHTClientMode()),
-		dual.LanDHTOption(dual.DHTClientMode()),
+	dht, err := dual.New(
+		ctx,
+		hst,
+		dual.WantMode(dht.ModeClient),
+		dual.DHTOption(dht.ProtocolPrefix("/ipfs/kad/1.0.0")),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating DHT: %w", err)
@@ -92,14 +107,16 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 	}
 
 	bs := blockstore.NewBlockstore(repo.Datastore())
-	bswap := bitswap.New(ctx,
+	bswap := bitswap.New(
+		ctx,
 		network.NewFromIpfsHost(hst, dht),
+		dht,
 		bs,
 		bitswap.ProvideEnabled(true),
 		bitswap.EngineBlockstoreWorkerCount(3),
 	)
 
-	ipnsPublisher := namesys.NewIPNSPublisher(dht.WAN, repo.Datastore())
+	ipnsPublisher := namesys.NewIPNSPublisher(dht, repo.Datastore())
 
 	return &BoxoNode{
 		Host:          hst,
@@ -128,7 +145,9 @@ func (n *BoxoNode) Start(ctx context.Context) error {
 		}
 	}
 
-	provider.NewProviderSystem(n.Host, n.DHT, n.Blockstore)
+	provSys := provider.NewSystem(n.DHT, n.Blockstore)
+	provSys.Run()
+
 	return nil
 }
 
@@ -155,7 +174,7 @@ func main() {
 	go func() {
 		time.Sleep(5 * time.Second)
 		privKey := node.Host.Peerstore().PrivKey(node.Host.ID())
-		valuePath := path.Path("/ipfs/QmExampleContentHash")
+		valuePath := path.New("/ipfs/QmExampleContentHash")
 		expiration := time.Now().Add(24 * time.Hour)
 
 		err := node.IPNSPublisher.Publish(ctx, privKey, valuePath, namesys.PublishWithEOL(expiration))
