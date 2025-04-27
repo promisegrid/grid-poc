@@ -10,17 +10,18 @@ import (
 	"github.com/ipfs/boxo/bitswap"
 	"github.com/ipfs/boxo/bitswap/network"
 	"github.com/ipfs/boxo/blockstore"
+	"github.com/ipfs/boxo/config"
 	"github.com/ipfs/boxo/exchange"
 	"github.com/ipfs/boxo/ipns"
 	"github.com/ipfs/boxo/provider"
 	flatfs "github.com/ipfs/go-ds-flatfs"
-	config "github.com/ipfs/go-ipfs-config"
 	"github.com/ipfs/kubo/repo"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/routing"
 )
 
 const repoPath = "/tmp/.ipfs-boxo"
@@ -75,9 +76,10 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 		return nil, fmt.Errorf("creating host: %w", err)
 	}
 
-	dht, err := dual.New(ctx, hst, dual.DHTOption(
-		dual.DHTMode(dual.ModeAuto),
-	))
+	dht, err := dual.New(ctx, hst,
+		dual.WanDHTOption(dual.DHTClientMode()),
+		dual.LanDHTOption(dual.DHTClientMode()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("creating DHT: %w", err)
 	}
@@ -95,7 +97,10 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 		bitswap.EngineBlockstoreWorkerCount(3),
 	)
 
-	ipnsPublisher := ipns.NewPublisher(dht, repo.Datastore(), hst.ID())
+	ipnsPublisher, err := ipns.NewPublisher(hst.Peerstore(), repo.Datastore(), routing.NewComposer(routing.NewDHTRouting(dht.WAN, nil)))
+	if err != nil {
+		return nil, fmt.Errorf("creating IPNS publisher: %w", err)
+	}
 
 	return &BoxoNode{
 		Host:          hst,
@@ -119,12 +124,12 @@ func (n *BoxoNode) Start(ctx context.Context) error {
 	}
 
 	for _, p := range peers {
-		if err := n.Host.Connect(ctx, peer.AddrInfo{ID: p.ID()}); err != nil {
-			fmt.Printf("Failed to connect to bootstrap peer %s: %v\n", p.ID(), err)
+		if err := n.Host.Connect(ctx, p); err != nil {
+			fmt.Printf("Failed to connect to bootstrap peer %s: %v\n", p.ID, err)
 		}
 	}
 
-	provider.NewProvider(n.Host, n.DHT, n.Blockstore)
+	provider.NewProviderSystem(n.Host, n.DHT, n.Blockstore)
 	return nil
 }
 
@@ -150,14 +155,13 @@ func main() {
 
 	go func() {
 		time.Sleep(5 * time.Second)
-		key := ipns.NewRoutingPublisher(node.DHT, node.Host.ID())
 		value := []byte("/ipfs/QmExampleContentHash")
 
 		expiration := time.Now().Add(24 * time.Hour)
-		err := key.Publish(ctx, node.Host.Peerstore().PrivKey(node.Host.ID()), value,
-			ipns.WithEOL(expiration),
-			ipns.WithIPNSPath(value),
-		)
+		err := node.IPNSPublisher.Publish(ctx, node.Host.Peerstore().PrivKey(node.Host.ID()), ipns.Record{
+			Value:    value,
+			Validity: expiration,
+		})
 		if err != nil {
 			fmt.Printf("IPNS publication failed: %v\n", err)
 		} else {

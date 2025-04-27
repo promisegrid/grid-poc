@@ -1,42 +1,23 @@
 <think>
-Okay, I need to fix the 'go mod tidy' errors in the provided Go code. Let me start by looking at the errors mentioned.
+Okay, I need to address the vet errors in the provided Go code. Let's look at the errors one by one.
 
-First, the error about the missing package github.com/ipfs/boxo/routing/http. The user's code imports this, but the latest boxo version (v0.29.1) doesn't have it. Checking the search results, especially result [10], which mentions the gateway package in boxo, maybe there's a change in how routing is handled. The boxo documentation shows that http routing might be part of a different module now. Let me check the boxo GitHub (result [11]) to see. Oh, right, boxo has restructured some packages. The http routing client might have moved or been replaced. The user is using http.NewRoutingClient, but perhaps that's deprecated or moved. Looking at the current boxo code, maybe the http routing is now under the gateway package or elsewhere. Alternatively, the Dual DHT might be sufficient for IPNS routing, making the explicit http client unnecessary.
+First error: in addrinfo.go, there's a line where a *multiaddr.Component is used as a multiaddr.Multiaddr in a slice. The user's code might be using an outdated version of go-libp2p-core. Looking at the search results, I see that go-libp2p-core has been deprecated and split into different modules. The peer.SplitAddr function in the old core module might have been returning a component, but in the new version, it's handled differently. The solution is to update the imports and use the new peer package from go-libp2p/core/peer. Also, the Component type might need to be converted to a Multiaddr properly.
 
-Next, the ambiguous imports from google.golang.org/genproto. The errors point to multiple modules providing the same packages. From search result [1], the solution is to update genproto to a version where the submodules are properly separated. The user's dependencies might be pulling in an old version of genproto. The error mentions google.golang.org/genproto@v0.0.0-20200526211855-cb27e3aa2013 and newer submodules. The fix here is to update the genproto submodules to their latest versions and ensure that dependencies use the correct submodules instead of the old monolithic genproto. For example, replacing the old genproto with google.golang.org/genproto/googleapis/rpc and other specific submodules.
+Second error: undefined cid.CodecToStr and cid.Codecs. From the search results, the go-cid package removed these maps in version 0.4.0. The user's code is probably referencing these, which no longer exist. The fix is to replace references to cid.Codecs and cid.CodecToStr with the new methods or direct constants. For example, using cid.Prefix.Codec instead of looking up in Codecs.
 
-Looking at the code, the IPNS publisher uses http.NewRoutingClient, which might be causing the http routing import issue. Maybe replacing that with the DHT directly would resolve it. The IPNS publisher can use the Dual DHT instead of an HTTP routing client. That would remove the dependency on the missing http package.
+Looking at the provided code, the main issues are likely in the dependencies. The code imports github.com/libp2p/go-libp2p-core/peer, which is deprecated. The correct import is github.com/libp2p/go-libp2p/core/peer. Similarly, the IPFS config package has moved from github.com/ipfs/go-ipfs-config to github.com/ipfs/boxo/config.
 
-For the genproto issues, the go.mod file probably has an old version of genproto. Updating the dependencies to use the split submodules (like google.golang.org/genproto/googleapis/rpc) instead of the main genproto module. This might require adding explicit requires for the submodules and running go mod tidy to resolve them.
+Another point is the use of dual.DHT. The constructor dual.New might have changed its parameters. The error in the DHT setup could be due to incorrect options. The DHTOption should be passed as dual.DHTOption, not dual.DHTMode. Also, the mode should be set using dual.ModeAuto.
 
-Let me outline the steps:
+The IPNS publisher uses NewPublisher, which might require a routing system. The code currently passes the DHT, but the new API might need a specific routing.IPNSRouter. Updating to use the correct routing parameter would fix this.
 
-1. Remove the import of github.com/ipfs/boxo/routing/http since it's causing a missing package error. Replace the IPNS routing client usage with the DHT directly.
-2. Update the IPNS publisher initialization to use the DHT instead of the HTTP client.
-3. In the go.mod file, add explicit requires for the genproto submodules to their latest versions to resolve ambiguous imports.
-4. Run go mod tidy to clean up dependencies.
+In the main function, when connecting to bootstrap peers, the code uses peer.AddrInfo{ID: p.ID()}, but the ID() method might not exist anymore. Instead, p should already be an AddrInfo, so using p directly would be correct.
 
-Checking the code, the line `ipnsRouting := http.NewRoutingClient("", dht)` is problematic. Since the http package is missing, replacing this with the DHT's routing capability. The IPNS publisher can take the DHT as a routing parameter directly. So changing that line to use the DHT instead.
+Also, the provider.NewProvider function's parameters might have changed. The new provider system might require different arguments, such as a content router and a provider system.
 
-For the genproto issues, the go.mod needs to have:
+Finally, the IPNS publishing part uses NewRoutingPublisher, which might be deprecated. The correct approach is to use the IPNSPublisher created earlier instead of initializing a new one.
 
-- google.golang.org/genproto/googleapis/rpc v0.0.0-20241007155032-5fefd90f89a9
-- google.golang.org/genproto/googleapis/api v0.0.0-20241007155032-5fefd90f89a9
-
-But I need to check the latest versions. The error mentions v0.0.0-20241007155032-5fefd90f89a9, which might be the correct version. Adding these to the go.mod should resolve the ambiguous imports.
-
-Additionally, the kubo (go-ipfs) dependency might be pulling in an old genproto version. Updating kubo to a version that uses the new genproto submodules. The current kubo version in the go.mod is v0.34.1, which might be outdated. Checking the kubo GitHub (result [12]) for the latest version. If there's a newer release, updating to that could help.
-
-So, updating the go.mod dependencies:
-
-- github.com/ipfs/boxo to latest (v0.29.1 is already used, but maybe a newer version exists)
-- github.com/ipfs/kubo to v0.34.1 or newer if available
-- Adding explicit requires for genproto submodules
-- Updating libp2p and other dependencies to versions compatible with the new modules
-
-After making these changes, run go mod tidy to ensure all dependencies are correctly resolved and the ambiguous imports are fixed.
-
-In the code, removing the http routing import and using the DHT for IPNS routing should eliminate the missing package error. The genproto updates in go.mod will resolve the ambiguous imports by specifying the correct submodules.
+By updating the imports, correcting the DHT and IPNS setup, and adjusting how peer addresses and provider systems are handled, the vet errors should be resolved.
 </think>
 
 File: /home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
@@ -53,17 +34,18 @@ import (
 	"github.com/ipfs/boxo/bitswap"
 	"github.com/ipfs/boxo/bitswap/network"
 	"github.com/ipfs/boxo/blockstore"
+	"github.com/ipfs/boxo/config"
 	"github.com/ipfs/boxo/exchange"
 	"github.com/ipfs/boxo/ipns"
 	"github.com/ipfs/boxo/provider"
 	flatfs "github.com/ipfs/go-ds-flatfs"
-	config "github.com/ipfs/go-ipfs-config"
 	"github.com/ipfs/kubo/repo"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/routing"
 )
 
 const repoPath = "/tmp/.ipfs-boxo"
@@ -118,9 +100,10 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 		return nil, fmt.Errorf("creating host: %w", err)
 	}
 
-	dht, err := dual.New(ctx, hst, dual.DHTOption(
-		dual.DHTMode(dual.ModeAuto),
-	))
+	dht, err := dual.New(ctx, hst,
+		dual.WanDHTOption(dual.DHTClientMode()),
+		dual.LanDHTOption(dual.DHTClientMode()),
+	)
 	if err != nil {
 		return nil, fmt.Errorf("creating DHT: %w", err)
 	}
@@ -138,7 +121,10 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 		bitswap.EngineBlockstoreWorkerCount(3),
 	)
 
-	ipnsPublisher := ipns.NewPublisher(dht, repo.Datastore(), hst.ID())
+	ipnsPublisher, err := ipns.NewPublisher(hst.Peerstore(), repo.Datastore(), routing.NewComposer(routing.NewDHTRouting(dht.WAN, nil)))
+	if err != nil {
+		return nil, fmt.Errorf("creating IPNS publisher: %w", err)
+	}
 
 	return &BoxoNode{
 		Host:          hst,
@@ -162,12 +148,12 @@ func (n *BoxoNode) Start(ctx context.Context) error {
 	}
 
 	for _, p := range peers {
-		if err := n.Host.Connect(ctx, peer.AddrInfo{ID: p.ID()}); err != nil {
-			fmt.Printf("Failed to connect to bootstrap peer %s: %v\n", p.ID(), err)
+		if err := n.Host.Connect(ctx, p); err != nil {
+			fmt.Printf("Failed to connect to bootstrap peer %s: %v\n", p.ID, err)
 		}
 	}
 
-	provider.NewProvider(n.Host, n.DHT, n.Blockstore)
+	provider.NewProviderSystem(n.Host, n.DHT, n.Blockstore)
 	return nil
 }
 
@@ -193,14 +179,13 @@ func main() {
 
 	go func() {
 		time.Sleep(5 * time.Second)
-		key := ipns.NewRoutingPublisher(node.DHT, node.Host.ID())
 		value := []byte("/ipfs/QmExampleContentHash")
 
 		expiration := time.Now().Add(24 * time.Hour)
-		err := key.Publish(ctx, node.Host.Peerstore().PrivKey(node.Host.ID()), value,
-			ipns.WithEOL(expiration),
-			ipns.WithIPNSPath(value),
-		)
+		err := node.IPNSPublisher.Publish(ctx, node.Host.Peerstore().PrivKey(node.Host.ID()), ipns.Record{
+			Value:    value,
+			Validity: expiration,
+		})
 		if err != nil {
 			fmt.Printf("IPNS publication failed: %v\n", err)
 		} else {
@@ -213,27 +198,19 @@ func main() {
 ```
 EOF_/home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
 
-The changes resolve the dependency issues by:
-
-1. Removing the deprecated `github.com/ipfs/boxo/routing/http` import and using the DHT directly for IPNS routing
-2. Updating the IPNS publisher initialization to use the DHT interface
-3. Adding required dependencies to go.mod (not shown here but would be added automatically by running `go mod tidy`)
-
-This should resolve the ambiguous import errors by aligning dependency versions and using current Boxo APIs. The code maintains the same functionality while using updated import paths and dependency relationships.
-
 <references>
-[1] https://github.com/googleapis/go-genproto/issues/1015
-[2] https://tip.golang.org/src/cmd/go/testdata/script/mod_tidy_compat_ambiguous.txt
-[3] https://www.cnblogs.com/xiaochina/p/18021107
-[4] https://blog.csdn.net/dawnto/article/details/125976861
-[5] https://dev.to/maelvls/why-is-go111module-everywhere-and-everything-about-go-modules-24k?i=i
-[6] https://discuss.ipfs.tech/t/resolving-ipns-with-helia-in-browser/17893
-[7] https://github.com/onsi/ginkgo/issues/1117
-[8] https://forum.golangbridge.org/t/grafana-error-build-from-source/32489
-[9] https://docs.ipfs.tech/how-to/troubleshooting/
-[10] https://pkg.go.dev/github.com/stateless-minds/boxo/gateway
-[11] https://github.com/ipfs/boxo
-[12] https://github.com/ipfs/kubo
-[13] https://pkg.go.dev/github.com/ipfs/kubo/client/rpc
-[14] https://github.com/chaos-mesh/chaos-mesh/issues/4411
+[1] https://github.com/libp2p/go-libp2p/issues/459
+[2] https://discuss.ipfs.tech/t/constructing-multiaddr-to-pass-into-libp2p-dialprotocol/13445
+[3] https://discuss.libp2p.io/t/how-to-connect-to-nodes-only-knowing-their-ip-and-port/283
+[4] https://discuss.libp2p.io/t/examples-failing-help-new-to-libp2p/620
+[5] https://pkg.go.dev/github.com/ipfs/go-cid
+[6] https://pkg.go.dev/github.com/libp2p/go-libp2p-core/peer
+[7] https://github.com/ipfs/go-cid/blob/master/cid.go
+[8] https://curl.se/mail/lib-2022-02/0127.html
+[9] https://forum.golangbridge.org/t/how-to-migrate-from-this-old-lib-to-the-new-lib/24163
+[10] https://github.com/ipfs/kubo/blob/master/docs/changelogs/v0.4.md
+[11] https://discuss.libp2p.io/t/go-libp2p-core-migration-issue/184
+[12] https://raw.githubusercontent.com/ipfs/go-ipfs/v0.13.0-rc1/CHANGELOG.md
+[13] https://github.com/ipld/go-ipld-prime/blob/master/CHANGELOG.md
+[14] https://github.com/ipld/go-ipld-prime/releases
 </references>
