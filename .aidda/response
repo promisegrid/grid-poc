@@ -1,69 +1,23 @@
 <think>
-Okay, let's tackle this problem. The user provided a Go file that's supposed to create an IPFS node using Boxo libraries, but it's failing to compile with several undefined symbols. My task is to fix these errors by updating the code to use the correct Boxo APIs and dependencies.
+Okay, let's tackle this problem. The user wants to fix their Go code that uses Boxo to implement an IPFS node with specific features. The initial code had several compilation errors, so I need to figure out what's wrong and how to correct it.
 
-First, I'll look at the error messages one by one:
+First, looking at the error messages:
 
-1. `undefined: dual.WantMode` – This suggests that the `dual` package's `WantMode` is missing. The `dual` package is part of the DHT implementation, so maybe the import path or the way it's used has changed.
+1. The error `cannot use hst (host.Host) as context.Context` suggests that the `dht.New` function is expecting a context as the first argument. The original code passed `hst` instead. Checking the Boxo documentation or the source code, I see that the `dht.New` function actually requires a context as the first parameter, followed by the host. So the first fix is to add `ctx` as the first argument to `dht.New`.
 
-2. `undefined: network.NewFromIpfsHost` – The `network` package here is from Boxo's bitswap, so perhaps the function name or package structure has been updated.
+2. The undefined `dht.Mode` and `dht.ModeAutoServer` indicate that the way the DHT mode is set has changed. In the `go-libp2p-kad-dht/dual` package, the `Mode` option is now set using `dual.DHTOption` functions. Instead of `dht.ModeAutoServer`, we should use `dual.DHTMode(dht.ModeAutoServer)`.
 
-3. `undefined: bitswap.ProvideEnabled` – The options for configuring Bitswap might have been renamed or restructured.
+3. The `dht.Datastore` is undefined. The correct way to pass the datastore to the DHT is through the `dual.DHTOption` using `dual.DHTOption(dht.Datastore(repo.Datastore()))`.
 
-4. `undefined: provider.NewSystem` – The provider system setup might have changed in Boxo.
+4. The `bsnet.New` function call has incorrect arguments. The original code passed the host and DHT, but the updated `bsnet.NewFromIpfsHost` function requires the host and a content routing instance. Since the DHT implements the `Routing` interface, we can pass `dht` directly.
 
-5. `undefined: path.New` – The `path` package in Boxo might have a different way to create paths now.
+5. The `bitswap.New` function was called with `network` and `bs`, but the parameters might be in the wrong order. The correct order is context, network, blockstore, followed by options. Also, the options should be applied correctly using functional parameters.
 
-Let me start by checking each of these issues.
+6. The `provider.New` function had issues with undefined options. The correct options are `provider.Online` and `provider.Reprovider`, and the direct provider should be the DHT's content routing.
 
-For the first error, `dual.WantMode`, the `dual` package is part of the Kademlia DHT (kad-dht). Looking at the import, it's from `github.com/libp2p/go-libp2p-kad-dht/dual`. Maybe the `WantMode` function is no longer available or has been moved. Alternatively, the way to configure the DHT mode might have changed. In recent versions, perhaps `dual.WantMode` is replaced by directly setting the mode in the DHT options. Let me check the latest documentation or source code for `go-libp2p-kad-dht`.
+7. The IPNS publisher was initialized with the DHT and datastore, but according to the Boxo documentation, it should be created using `namesys.NewPublisher` which takes the DHT, the repository's datastore, and optional parameters.
 
-Upon checking, I find that `dual.DHT` now uses `dht.Mode` options directly. The `dual.New` function might accept `dht.ModeOpt` instead of `dual.WantMode`. So changing `dual.WantMode(dht.ModeClient)` to `dht.Mode(dht.ModeClient)` could fix this.
-
-Next, `network.NewFromIpfsHost` is undefined. The Boxo bitswap network package might have been refactored. The current `network` package in Boxo's bitswap might require creating a new network instance differently. Looking at the Boxo documentation, the correct way to create a bitswap network is using `bsnet.New` with the host and some protocol prefixes. So replacing `network.NewFromIpfsHost(hst, dht)` with `bsnet.New(hst)` might be the solution.
-
-For `bitswap.ProvideEnabled`, this option might have been renamed. In recent Boxo versions, the option to enable providing is probably `bitswap.ProvideEnabled(bool)` as a functional option. Wait, maybe the option is still there but needs to be imported correctly. Alternatively, the parameter might be set via `bitswap.WithProvidingEnabled(true)`.
-
-The `provider.NewSystem` error indicates that the provider package's NewSystem function has changed. Looking at Boxo's provider package, the `NewSystem` function now requires more parameters. The current signature might be `provider.NewSystem(ctx, lc, h, ds, opts...)`. Wait, checking the Boxo provider documentation, the provider system is initialized with a context, datastore, and other options. The user's code was passing `n.DHT` and `n.Blockstore`, but the new API might require different parameters. The provider system now might need a routing system and a blockstore. The correct way might be to use `provider.NewNoopProvider()` if the provider system isn't needed, but that's not ideal. Alternatively, using `provider.New` with the right parameters. Let me check the Boxo provider package's latest code.
-
-Looking at the provider package in Boxo, the `NewSystem` function might have been replaced. The correct way to create a provider system is using `provider.New` with the routing system and blockstore. So `provSys := provider.New(n.DHT, n.Blockstore)` might be the right approach now. Also, the `Run` method might have been replaced with starting the system with a context. So maybe `provSys.Run(ctx)` instead of just `provSys.Run()`.
-
-The `path.New` error suggests that the way to create a path has changed. In Boxo, `path.New` might be replaced with `path.FromCID` if creating a path from a CID. Alternatively, using `path.Path` or `cid.Cid` directly. The line `valuePath := path.New("/ipfs/QmExampleContentHash")` is incorrect because `QmExampleContentHash` is not a valid CID. The user probably intended to use a placeholder CID. To fix this, we can parse a CID string using `cid.Decode` or use a valid test CID. But for the example, maybe using `path.Join` or constructing a path correctly.
-
-Now, let's go through each error step by step and adjust the code.
-
-1. **DHT Configuration**:
-   Original code: `dual.WantMode(dht.ModeClient)`
-   Updated to: `dht.Mode(dht.ModeClient)`
-   Because `dual.New` accepts `dht.ModeOpt` options, and `dht.Mode` is the correct function to set the mode.
-
-2. **Bitswap Network**:
-   Original code: `network.NewFromIpfsHost(hst, dht)`
-   Updated to: `bsnet.New(hst, bsnet.Protocols(ProtocolBitswap, ProtocolBitswapNoVers))`
-   Wait, checking the Boxo bitswap network package, the correct way is to use `bsnet.NewFromIpfsHost` which might have been renamed to `bsnet.New`. Alternatively, the function signature might have changed. Looking at the Boxo bitswap network code, `New` requires a host and a protocol ID. So perhaps the correct code is `network.New(hst)` if the protocol is set by default.
-
-3. **Bitswap Options**:
-   Original code: `bitswap.ProvideEnabled(true)`
-   This might be replaced with `bitswap.WithProvidingEnabled(true)` as a functional option.
-
-4. **Provider System**:
-   Original code: `provider.NewSystem(n.DHT, n.Blockstore)`
-   The new provider system in Boxo requires more parameters. Looking at the provider package, creating a provider system now might involve using `provider.New` with a routing system, blockstore, and other options. However, if the provider system is not needed, maybe it's better to remove it or use a no-op provider. Alternatively, check the latest provider examples. The correct code might be `provSys := provider.NewSystem(ctx, n.DHT, n.Blockstore)` but I need to verify.
-
-5. **Path Creation**:
-   Original code: `path.New("/ipfs/QmExampleContentHash")`
-   Since `QmExampleContentHash` is not a valid CID, replace it with a valid CID string, or use `cid.Parse`. For example, using `cid.MustParse("QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG")` (the IPFS website CID). Then create the path with `path.FromCid(c)`.
-
-Putting all these fixes together, here's the corrected code:
-
-- Update DHT configuration to use `dht.Mode(dht.ModeClient)`
-- Change network creation to `bsnet.New(hst)`
-- Replace `bitswap.ProvideEnabled(true)` with `bitswap.WithProvidingEnabled(true)`
-- Update the provider system creation using `provider.NewNoopProvider()` since the previous setup might be incorrect, or find the correct way to initialize it.
-- Fix the path creation by parsing a valid CID and using `path.FromCid(cid)`
-
-Additionally, check for other deprecated functions or packages. For example, `namesys.NewIPNSPublisher` might have been replaced with a different constructor.
-
-After making these changes, the code should compile without errors. Testing each part to ensure that the dependencies are correctly imported and the functions match the latest Boxo APIs is essential.
+By addressing each error step-by-step, checking the correct function signatures and options, and ensuring that all dependencies are correctly imported and used, the code should compile and function as intended.
 </think>
 
 File: /home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
@@ -82,16 +36,19 @@ import (
 	"github.com/ipfs/boxo/blockstore"
 	"github.com/ipfs/boxo/exchange"
 	"github.com/ipfs/boxo/namesys"
-	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/boxo/provider"
-	flatfs "github.com/ipfs/go-ds-flatfs"
-	"github.com/ipfs/kubo/config"
+	config "github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/repo"
+	flatfs "github.com/ipfs/go-ds-flatfs"
+	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/routing"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/multiformats/go-multihash"
 )
 
 const repoPath = "/tmp/.ipfs-boxo"
@@ -102,7 +59,9 @@ type BoxoNode struct {
 	PubSub        *pubsub.PubSub
 	Blockstore    blockstore.Blockstore
 	Bitswap       exchange.Interface
-	IPNSPublisher *namesys.IPNSPublisher
+	IPNSPublisher *namesys.Publisher
+	Repo          repo.Repo
+	ProviderSys   provider.System
 }
 
 func setupRepo(ctx context.Context, path string) (repo.Repo, error) {
@@ -156,18 +115,22 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 			"/ip6/::/tcp/4001",
 		),
 		libp2p.NATPortMap(),
+		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
+			return dual.New(ctx, h,
+				dual.DHTOption(
+					dht.Datastore(repo.Datastore()),
+				),
+				dual.DHTMode(dht.ModeAutoServer),
+			)
+		}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating host: %w", err)
 	}
 
-	dht, err := dual.New(
-		ctx,
-		hst,
-		dual.DHTOption(dht.Mode(dht.ModeAuto)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("creating DHT: %w", err)
+	dht, ok := hst.(routing.Routing).(*dual.DHT)
+	if !ok {
+		return nil, fmt.Errorf("could not cast routing to dual.DHT")
 	}
 
 	ps, err := pubsub.NewGossipSub(ctx, hst)
@@ -176,15 +139,21 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 	}
 
 	bs := blockstore.NewBlockstore(repo.Datastore())
-	bswap := bitswap.New(
-		ctx,
-		bsnet.NewFromIpfsHost(hst, dht),
-		bs,
-		bitswap.Provider(repo.Datastore()),
+	network := bsnet.NewFromIpfsHost(hst, dht)
+	bswap := bitswap.New(ctx, network, bs,
 		bitswap.EngineBlockstoreWorkerCount(3),
 	)
 
-	ipnsPublisher := namesys.NewIPNSPublisher(dht, repo.Datastore())
+	ipnsPublisher, err := namesys.NewPublisher(dht, repo.Datastore())
+	if err != nil {
+		return nil, fmt.Errorf("creating IPNS publisher: %w", err)
+	}
+
+	providerSys := provider.NewSystem(
+		provider.NewProvider(bs),
+		provider.Reprovider(time.Hour),
+		provider.Online(dht),
+	)
 
 	return &BoxoNode{
 		Host:          hst,
@@ -193,6 +162,8 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 		Blockstore:    bs,
 		Bitswap:       bswap,
 		IPNSPublisher: ipnsPublisher,
+		Repo:          repo,
+		ProviderSys:   providerSys,
 	}, nil
 }
 
@@ -202,19 +173,20 @@ func (n *BoxoNode) Start(ctx context.Context) error {
 	}
 
 	cfg, _ := config.Init(os.Stdout, 2048)
-	peers, err := cfg.BootstrapPeers()
+	bootstrapPeers, err := cfg.BootstrapPeers()
 	if err != nil {
 		return fmt.Errorf("getting bootstrap peers: %w", err)
 	}
 
-	for _, p := range peers {
-		if err := n.Host.Connect(ctx, p); err != nil {
+	for _, p := range bootstrapPeers {
+		if err := n.Host.Connect(ctx, peer.AddrInfo{ID: p.ID}); err != nil {
 			fmt.Printf("Failed to connect to bootstrap peer %s: %v\n", p.ID, err)
 		}
 	}
 
-	provSys := provider.New(n.DHT, n.Blockstore)
-	go provSys.Run(ctx)
+	if err := n.ProviderSys.Run(); err != nil {
+		return fmt.Errorf("starting provider system: %w", err)
+	}
 
 	return nil
 }
@@ -242,10 +214,12 @@ func main() {
 	go func() {
 		time.Sleep(5 * time.Second)
 		privKey := node.Host.Peerstore().PrivKey(node.Host.ID())
-		cid := path.FromCid(node.Blockstore.(interface{ GenesisCID() path.Resolved }).GenesisCID())
+
+		mh, _ := multihash.Sum([]byte("example"), multihash.SHA2_256, -1)
+		exampleCid := cid.NewCidV1(cid.Raw, mh)
 		expiration := time.Now().Add(24 * time.Hour)
 
-		err := node.IPNSPublisher.Publish(ctx, privKey, cid, namesys.PublishWithEOL(expiration))
+		err := node.IPNSPublisher.Publish(ctx, privKey, "/ipfs/"+exampleCid.String(), 0, time.Hour, namesys.WithEOL(expiration))
 		if err != nil {
 			fmt.Printf("IPNS publication failed: %v\n", err)
 		} else {
@@ -259,22 +233,20 @@ func main() {
 EOF_/home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
 
 <references>
-[1] https://forum.coreform.com/t/node-add-command-doesnt-seem-to-work/1087
-[2] https://forums.nexusmods.com/topic/13498033-i-get-this-error-message-whenever-i-try-to-add-mods-then-wont-load-up-in-game-either-cannot-set-properties-of-undefined-setting-node/
-[3] https://community.intel.com/t5/Intel-Quartus-Prime-Software/How-to-replace-undefined-entities-with-black-boxes/td-p/132129
-[4] https://github.com/ipfs/boxo
-[5] https://pkg.go.dev/github.com/ipfs/boxo/bitswap
-[6] https://forum.xod.io/t/mode-switching-in-xod/5176
-[7] https://github.com/Orange-Cyberdefense/GOAD/issues/359
-[8] https://discuss.ipfs.tech/t/unable-to-get-blocks-when-the-node-is-connected-to-multiple-peers/18711
-[9] https://pkg.go.dev/github.com/ipfs/boxo/provider
-[10] https://github.com/ipfs/go-ipfs-provider
-[11] https://www.boxo.io
-[12] https://www.tarantool.io/en/doc/latest/reference/reference_lua/box_error/new/
-[13] https://www.cisco.com/c/en/us/support/docs/smb/routers/cisco-rv-series-small-business-routers/smb4242-dual-wan-configuration-on-rv320-and-rv325-vpn-router-series.html
-[14] https://coywolf.pro/webdev/ipfs-distributed-web-cloudflare-host-site/
-[15] https://github.com/sandboxie-plus/Sandboxie/issues/4611
-[16] https://boxousa.com
-[17] https://github.com/ipfs/boxo/issues/215
-[18] https://discuss.ipfs.tech/t/how-to-use-boxo-library-or-sdk-for-ipfs-with-go-language/16848
+[1] https://github.com/libp2p/go-libp2p-kad-dht/blob/master/dht.go
+[2] https://pt.w3d.community/aiengineer13/libp2p-pubsub-descoberta-de-pares-com-kademlia-dht-5hej
+[3] https://pkg.go.dev/github.com/ipfs/boxo/bitswap
+[4] https://discuss.libp2p.io/t/is-it-possible-to-advertise-a-record-across-private-network/507
+[5] https://github.com/ipfs/go-bitswap/issues/525
+[6] https://discuss.libp2p.io/t/how-to-limit-gossip-pubsub-peer-discovery/556
+[7] https://discuss.libp2p.io/t/how-to-create-bootstrap-node-correctly-always-searching-for-other-peers/1389
+[8] https://developer.box.com/guides/api-calls/permissions-and-errors/common-errors/
+[9] https://betterstack.com/community/guides/scaling-nodejs/nodejs-errors/
+[10] https://ultahost.com/knowledge-base/how-to-fix-the-npm-command-not-found-error/
+[11] https://pkg.go.dev/github.com/ipfs/boxo
+[12] https://discuss.ipfs.tech/t/spamming-dht-errors-ignoring-incoming-dht-message-while-not-in-server-mode/17254
+[13] https://docs.npmjs.com/common-errors/
+[14] https://discuss.ipfs.tech/t/unable-to-get-blocks-when-the-node-is-connected-to-multiple-peers/18711
+[15] https://pkg.go.dev/github.com/ipfs/boxo/coreiface
+[16] https://github.com/ipfs/kubo/blob/master/docs/config.md
 </references>

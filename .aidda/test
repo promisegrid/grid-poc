@@ -1,0 +1,20 @@
+
+
+stdout:
+FAIL	node-boxo [build failed]
+
+
+stderr:# node-boxo
+./node-boxo.go:99:10: undefined: dual.DHTMode
+./node-boxo.go:118:19: undefined: bsnet.NewFromIpfsHost
+./node-boxo.go:119:37: cannot use bs (variable of interface type blockstore.Blockstore) as "github.com/libp2p/go-libp2p/core/routing".ContentDiscovery value in argument to bitswap.New: blockstore.Blockstore does not implement "github.com/libp2p/go-libp2p/core/routing".ContentDiscovery (missing method FindProvidersAsync)
+./node-boxo.go:120:3: cannot use bitswap.EngineBlockstoreWorkerCount(3) (value of struct type bitswap.Option) as blockstore.Blockstore value in argument to bitswap.New: bitswap.Option does not implement blockstore.Blockstore (missing method AllKeysChan)
+./node-boxo.go:123:32: undefined: namesys.NewPublisher
+./node-boxo.go:128:26: undefined: provider.NewSystem
+./node-boxo.go:129:12: undefined: provider.NewProvider
+./node-boxo.go:130:23: cannot convert time.Hour (constant 3600000000000 of int64 type time.Duration) to type provider.Reprovider: time.Duration does not implement provider.Reprovider (missing method Reprovide)
+./node-boxo.go:163:26: n.ProviderSys.Run undefined (type provider.System has no field or method Run)
+./node-boxo.go:198:29: node.IPNSPublisher.Publish undefined (type *namesys.Publisher is pointer to interface, not interface)
+./node-boxo.go:198:29: too many errors
+
+

@@ -12,16 +12,19 @@ import (
 	"github.com/ipfs/boxo/blockstore"
 	"github.com/ipfs/boxo/exchange"
 	"github.com/ipfs/boxo/namesys"
-	"github.com/ipfs/boxo/path"
 	"github.com/ipfs/boxo/provider"
-	flatfs "github.com/ipfs/go-ds-flatfs"
-	"github.com/ipfs/kubo/config"
+	config "github.com/ipfs/kubo/config"
 	"github.com/ipfs/kubo/repo"
+	flatfs "github.com/ipfs/go-ds-flatfs"
+	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/dual"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/routing"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/multiformats/go-multihash"
 )
 
 const repoPath = "/tmp/.ipfs-boxo"
@@ -32,7 +35,9 @@ type BoxoNode struct {
 	PubSub        *pubsub.PubSub
 	Blockstore    blockstore.Blockstore
 	Bitswap       exchange.Interface
-	IPNSPublisher *namesys.IPNSPublisher
+	IPNSPublisher *namesys.Publisher
+	Repo          repo.Repo
+	ProviderSys   provider.System
 }
 
 func setupRepo(ctx context.Context, path string) (repo.Repo, error) {
@@ -86,18 +91,22 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 			"/ip6/::/tcp/4001",
 		),
 		libp2p.NATPortMap(),
+		libp2p.Routing(func(h host.Host) (routing.PeerRouting, error) {
+			return dual.New(ctx, h,
+				dual.DHTOption(
+					dht.Datastore(repo.Datastore()),
+				),
+				dual.DHTMode(dht.ModeAutoServer),
+			)
+		}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating host: %w", err)
 	}
 
-	dht, err := dual.New(
-		ctx,
-		hst,
-		dual.DHTOption(dht.Mode(dht.ModeAuto)),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("creating DHT: %w", err)
+	dht, ok := hst.(routing.Routing).(*dual.DHT)
+	if !ok {
+		return nil, fmt.Errorf("could not cast routing to dual.DHT")
 	}
 
 	ps, err := pubsub.NewGossipSub(ctx, hst)
@@ -106,15 +115,21 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 	}
 
 	bs := blockstore.NewBlockstore(repo.Datastore())
-	bswap := bitswap.New(
-		ctx,
-		bsnet.NewFromIpfsHost(hst, dht),
-		bs,
-		bitswap.Provider(repo.Datastore()),
+	network := bsnet.NewFromIpfsHost(hst, dht)
+	bswap := bitswap.New(ctx, network, bs,
 		bitswap.EngineBlockstoreWorkerCount(3),
 	)
 
-	ipnsPublisher := namesys.NewIPNSPublisher(dht, repo.Datastore())
+	ipnsPublisher, err := namesys.NewPublisher(dht, repo.Datastore())
+	if err != nil {
+		return nil, fmt.Errorf("creating IPNS publisher: %w", err)
+	}
+
+	providerSys := provider.NewSystem(
+		provider.NewProvider(bs),
+		provider.Reprovider(time.Hour),
+		provider.Online(dht),
+	)
 
 	return &BoxoNode{
 		Host:          hst,
@@ -123,6 +138,8 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 		Blockstore:    bs,
 		Bitswap:       bswap,
 		IPNSPublisher: ipnsPublisher,
+		Repo:          repo,
+		ProviderSys:   providerSys,
 	}, nil
 }
 
@@ -132,19 +149,20 @@ func (n *BoxoNode) Start(ctx context.Context) error {
 	}
 
 	cfg, _ := config.Init(os.Stdout, 2048)
-	peers, err := cfg.BootstrapPeers()
+	bootstrapPeers, err := cfg.BootstrapPeers()
 	if err != nil {
 		return fmt.Errorf("getting bootstrap peers: %w", err)
 	}
 
-	for _, p := range peers {
-		if err := n.Host.Connect(ctx, p); err != nil {
+	for _, p := range bootstrapPeers {
+		if err := n.Host.Connect(ctx, peer.AddrInfo{ID: p.ID}); err != nil {
 			fmt.Printf("Failed to connect to bootstrap peer %s: %v\n", p.ID, err)
 		}
 	}
 
-	provSys := provider.New(n.DHT, n.Blockstore)
-	go provSys.Run(ctx)
+	if err := n.ProviderSys.Run(); err != nil {
+		return fmt.Errorf("starting provider system: %w", err)
+	}
 
 	return nil
 }
@@ -172,10 +190,12 @@ func main() {
 	go func() {
 		time.Sleep(5 * time.Second)
 		privKey := node.Host.Peerstore().PrivKey(node.Host.ID())
-		cid := path.FromCid(node.Blockstore.(interface{ GenesisCID() path.Resolved }).GenesisCID())
+
+		mh, _ := multihash.Sum([]byte("example"), multihash.SHA2_256, -1)
+		exampleCid := cid.NewCidV1(cid.Raw, mh)
 		expiration := time.Now().Add(24 * time.Hour)
 
-		err := node.IPNSPublisher.Publish(ctx, privKey, cid, namesys.PublishWithEOL(expiration))
+		err := node.IPNSPublisher.Publish(ctx, privKey, "/ipfs/"+exampleCid.String(), 0, time.Hour, namesys.WithEOL(expiration))
 		if err != nil {
 			fmt.Printf("IPNS publication failed: %v\n", err)
 		} else {
