@@ -1,8 +1,4 @@
-fix errors
-
-vet: ./ipfs-lite-flatfs.go:32:46: too many arguments in call to flatfs.Open
-	have (string, *flatfs.ShardIdV1, bool)
-	want (string, bool)
+replace flatfs with badger
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -17,11 +13,13 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
-  x/ipfs-lite-flatfs/ipfs-lite-flatfs.go
+  x/node-ipfs-lite/node-ipfs-lite.go
 Out:
-  x/ipfs-lite-flatfs/ipfs-lite-flatfs.go
+  x/node-ipfs-lite/node-ipfs-lite.go
 
 .stop
+
+  x/ipfs-lite-flatfs/ipfs-lite-flatfs.go
 
 understand caching
 

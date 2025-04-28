@@ -13,11 +13,10 @@ import (
 	datastore "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	"github.com/ipfs/go-datastore/query"
-	flatfs "github.com/ipfs/go-ds-flatfs"
+	badgerds "github.com/ipfs/go-ds-badger"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/multiformats/go-multiaddr"
-	// badgerds "github.com/ipfs/go-ds-badger"
 )
 
 type safeDS struct {
@@ -96,28 +95,19 @@ func Main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	repoPath := "/tmp/ipfs-lite"
-	shardFunc := flatfs.NextToLast(2)
+	repoPath := "/tmp/ipfs-lite-badger"
 
 	if err := os.MkdirAll(repoPath, 0755); err != nil {
 		panic(err)
 	}
 
-	ds, err := flatfs.CreateOrOpen(repoPath, shardFunc, false)
+	ds, err := badgerds.NewDatastore(repoPath, nil)
 	if err != nil {
 		panic(err)
 	}
 	defer ds.Close()
 
-	// blocksDs := &safeDS{ds: ds}
 	blocksDs := ds
-
-	/*
-		blocksDs, err := badgerds.NewDatastore(path string, opts *Options) (*Datastore, error)
-		if err != nil {
-			panic(err)
-		}
-	*/
 
 	metadataDs := namespace.Wrap(ds, datastore.NewKey("metadata"))
 
