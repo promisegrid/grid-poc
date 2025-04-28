@@ -20,7 +20,7 @@ func main() {
 	ctx := context.Background()
 
 	// 1. Create or open a FlatFS datastore directory
-	flatfsDir := "./flatfs-data"
+	flatfsDir := "/tmp/ipfs-lite-flatfs"
 	if err := os.MkdirAll(flatfsDir, 0755); err != nil {
 		panic(err)
 	}
