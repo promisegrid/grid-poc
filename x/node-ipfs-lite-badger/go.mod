@@ -1,4 +1,4 @@
-module github.com/ipfs/kubo
+module node-ipfs-lite-badger
 
 go 1.24
 
