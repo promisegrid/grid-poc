@@ -17,6 +17,7 @@ import (
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/multiformats/go-multiaddr"
+	// badgerds "github.com/ipfs/go-ds-badger"
 )
 
 type safeDS struct {
@@ -108,7 +109,16 @@ func Main() {
 	}
 	defer ds.Close()
 
-	blocksDs := &safeDS{ds: ds}
+	// blocksDs := &safeDS{ds: ds}
+	blocksDs := ds
+
+	/*
+		blocksDs, err := badgerds.NewDatastore(path string, opts *Options) (*Datastore, error)
+		if err != nil {
+			panic(err)
+		}
+	*/
+
 	metadataDs := namespace.Wrap(ds, datastore.NewKey("metadata"))
 
 	priv, _, err := crypto.GenerateKeyPair(crypto.RSA, 2048)

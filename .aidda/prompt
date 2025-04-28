@@ -1,11 +1,39 @@
-store the file in the local datastore
-
-After fetching the file, store it in the local datastore.  
-
 fix errors
 
-# command-line-arguments
-./node-ipfs-lite.go:53:21: undefined: flatfs.DataStore
+vet: ./ipfs-lite-flatfs.go:32:46: too many arguments in call to flatfs.Open
+	have (string, *flatfs.ShardIdV1, bool)
+	want (string, bool)
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p,
+  prefer recent examples to avoid deprecated APIs.  Please verify that
+  the code compiles and runs without errors -- do not hallucinate
+  library methods, structs, or functions that do not exist. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file.  Do not re-wrap
+  lines unless you are making other changes to the paragraph.  Lines
+  must be wrapped at 70 characters.  
+In: 
+  x/ipfs-lite-flatfs/ipfs-lite-flatfs.go
+Out:
+  x/ipfs-lite-flatfs/ipfs-lite-flatfs.go
+
+.stop
+
+understand caching
+
+According to the timings when running the code, the first fetch seems
+to not be using the local flatfs cache -- it's taking about 50ms to
+fetch the file.  The subsequent fetches are taking 100-300us, which
+is what I would expect if the file is being fetched from the local
+flatfs cache.  I think the first fetch is going to the network, and
+the subsequent fetches are going to the local flatfs cache.  
+
+Research how to ensure the the local cache is checked before going to  
+the network.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -22,7 +50,7 @@ Sysmsg:
 In: 
   x/node-ipfs-lite/node-ipfs-lite.go
 Out:
-  x/node-ipfs-lite/node-ipfs-lite.go
+  x/node-ipfs-lite/caching.md
 
 .stop
 
