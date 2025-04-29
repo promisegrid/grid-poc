@@ -44,11 +44,12 @@ change once systems are in use.  This is because:
 PromiseGrid is implemented using a message-passing microkernel architecture:
 
 - Message-passing: agents exchange structured messages
-- Microkernel: minimal core, most services run as applications
+- Microkernel: minimal core, just enough to support message-passing
+  agents
 
 More on this later.
 
-![:img DVM, 40%](images/dvm.svg)
+![:img DVM, 70%](images/dvm.svg)
 
 ---
 
@@ -110,6 +111,8 @@ one user-space process does not affect the entire system.
 This property of microkernels is important for decentralized systems,
 where each agent may be running on a different machine or device and
 where the agents are of variable reliability.
+
+![:img DVM Fault, 70%](images/dvm-fault.svg)
 
 ---
 

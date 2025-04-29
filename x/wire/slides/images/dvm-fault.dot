@@ -9,7 +9,7 @@ graph PromiseGridArchitecture {
         style=filled;
         fillcolor="#F0F8FF";
         
-        gpu1_agent [label="Agent A\n(GPU)", shape=ellipse];
+        gpu1_agent [label="Agent A\n(GPU)", shape=ellipse, fillcolor="#FFCCCB"];
         storage_agent [label="Agent B\n(Storage)", shape=ellipse];
         compute_agent [label="Agent C\n(Compute)", shape=ellipse];
         ml_model_agent [label="Agent E\n(ML Model)", shape=ellipse];
@@ -37,7 +37,7 @@ graph PromiseGridArchitecture {
         style=filled;
         fillcolor="#F0F8FF";
         
-        gpu2_agent [label="Agent I\n(GPU)", shape=ellipse];
+        gpu2_agent [label="Agent I\n(GPU)", shape=ellipse, color="#00FF00"];
     }
 
     // Message Flow

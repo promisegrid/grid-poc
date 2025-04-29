@@ -32,7 +32,7 @@
 <!-- gpu1_agent -->
 <g id="node1" class="node">
 <title>gpu1_agent</title>
-<ellipse fill="#e0f2f7" stroke="black" cx="724.01" cy="-115" rx="45.92" ry="26.74"/>
+<ellipse fill="#ffcccb" stroke="black" cx="724.01" cy="-115" rx="45.92" ry="26.74"/>
 <text text-anchor="middle" x="724.01" y="-118.8" font-family="Helvetica,sans-Serif" font-size="14.00">Agent A</text>
 <text text-anchor="middle" x="724.01" y="-103.8" font-family="Helvetica,sans-Serif" font-size="14.00">(GPU)</text>
 </g>
@@ -70,7 +70,7 @@
 <!-- gpu2_agent -->
 <g id="node8" class="node">
 <title>gpu2_agent</title>
-<ellipse fill="#e0f2f7" stroke="black" cx="724.01" cy="-216" rx="41.94" ry="26.74"/>
+<ellipse fill="#e0f2f7" stroke="#00ff00" cx="724.01" cy="-216" rx="41.94" ry="26.74"/>
 <text text-anchor="middle" x="724.01" y="-219.8" font-family="Helvetica,sans-Serif" font-size="14.00">Agent I</text>
 <text text-anchor="middle" x="724.01" y="-204.8" font-family="Helvetica,sans-Serif" font-size="14.00">(GPU)</text>
 </g>
