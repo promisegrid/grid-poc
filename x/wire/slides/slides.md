@@ -3,6 +3,7 @@ class: center, middle
 # PromiseGrid Wire Protocol
 
 ### Steve Traugott
+### Rebecca Snyder
 ### 2025-04-29
 
 ---
