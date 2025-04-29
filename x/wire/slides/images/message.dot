@@ -1,12 +1,8 @@
-File: /home/stevegt/lab/grid-poc/x/wire/slides/images/message.dot
-```dot
 digraph WireMessage {
   rankdir=LR;
   node [shape=record, fontname="Helvetica", fontsize=10];
 
   // This record-format node represents a PromiseGrid wire message using CBOR.
   // It shows the CBOR tag number and the contents: protocol CID and payload.
-  message [label="{PromiseGrid Wire Message| {Tag Number: 0x67726964}| {Protocol CID | Payload}}"];
+  message [label="{CBOR Tag Number: 0x67726964 ('grid') | Protocol CID | Payload}"];
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/wire/slides/images/message.dot

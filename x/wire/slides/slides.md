@@ -143,34 +143,61 @@ Analogies between microkernel architectures and PromiseGrid:
 
 ---
 
-## PromiseGrid Wire Protocol Overview
+## It's Promises All The Way Down
 
-Using a microkernel-inspired architecture, the PromiseGrid wire protocol
-is based on the following principles:
+An agent sending a PromiseGrid message is making this promise:
 
-- message-passing between agents, regardless of their location
-- content-addressable storage using CIDs
+> "I promise that the following payload is a valid message according to the
+> protocol spec document identified by the protocol hash CID."
+
+![:img Message, 60%](images/message.svg)
+
+Protocol spec documents would typically be stored in IPFS or other
+decentralized content-addressable storage systems for ease of
+retrieval by developers and recipients.  
+
+---
+
+## PromiseGrid Messages
+
+A PromiseGrid message consists of a nested CBOR structure with the following
+components:
+
+- A tag (0x67726964, ASCII 'grid') indicating the message is a PromiseGrid message
+- A protocol hash CID that identifies the protocol spec document
+- A message payload that contains the actual message data
+
+![:img Message, 60%](images/message.svg)
+
+Tag 0x67726964 ('grid') will be registered with the Internet Assigned
+Numbers Authority (IANA) as a CBOR tag.  
 
 A 'CID' (Content Identifier) is a unique identifier for content in
 IPFS and compatible systems, including Bluesky.  
 
 The protocol hash serves as a versioning mechanism, enabling future
-updates without breaking existing implementations.
+updates without breaking existing implementations.  By using a hash
+instead of a version number, we do not need a centralized registry for
+protocol variants or versions.  
 
----
+The payload can be anything that is valid according to the protocol spec
+document identified by the protocol hash CID.  This allows for
+flexibility in the types of messages that can be sent, while still
+ensuring that the messages are valid and can be processed by the
+recipient.
 
-## Key Design Goals
-- Future-proof extensibility through hash of protocol documents
-- IoT compatibility with minimal message overhead
-- Cross-platform execution (WASM, CLI, containers, bare metal)
+Ref: RFC-8949: CBOR https://datatracker.ietf.org/doc/html/rfc8949
 
 ---
 
 ## What is a CID?
 
-A CID (Content Identifier) is a unique identifier for content in
-IPFS and compatible systems.  It is a self-describing data structure
-that contains information about the content, including:
+A CID (Content Identifier) is a unique identifier for content in IPFS
+and compatible systems.  CIDs solve the problem of needing to support
+multiple hash algorithms and endcoding formats, including those not
+yet invented.  CIDs are in use by IPFS, Bluesky, Filecoin,
+and other decentralized systems.  A CID is a self-describing data
+structure that contains information about the content, including:
 
 - the version of the CID (currently CIDv0 or CIDv1)
 - the content's multicodec (e.g., raw bytes, DAG-CBOR)
@@ -178,34 +205,13 @@ that contains information about the content, including:
 - the encoding format (e.g., base32, base58)
 - the hash of the content itself
 
-![:img Example CID, 70%](images/cid.png)
+![:img Example CID, 60%](images/cid.png)
 
 
-Ref: https://proto.school/anatomy-of-a-cid
+### References: 
 
----
-
-## Core Protocol Components
-### Message Structure
-- Nested CBOR format
-  - `grid` tag (0x67726964)
-    - Protocol hash CID
-    - Message payload
-
-Tag 0x67726964 ("grid") will be registered with IANA.
-
-The format of the message payload is described in the document(s)
-referred to by the protocol hash CID. Protocol documents would
-typically be stored in IPFS for ease of retrieval by developers.
-
-Ref:  RFC-8949  https://datatracker.ietf.org/doc/html/rfc8949
-
----
-
-## Cryptographic Foundations
-- Public key infrastructure integrated with CIDs
-- Multihash-derived addresses for agent identification
-  - TBD whether we use Bluesky-style DIDs or IPFS-style CIDs
+- https://proto.school/anatomy-of-a-cid
+- https://github.com/multiformats
 
 ---
 
@@ -225,7 +231,7 @@ This definition of 'agent' is consistent with that of Promise Theory
 
 ## PromiseGrid Agents are a subset of Promise Theory Agents
 
-As PromiseGrid (PG) is a practical implementation of Promise Theory,
+As PromiseGrid is a practical implementation of Promise Theory,
 the engineering constraints involved in building network and security
 protocols mean that we need to choose a reasonable subset of Promise
 Theory's definition of an agent.  In particular:
@@ -259,8 +265,14 @@ book "Thinking in Promises", page 9:
 Is is possible that the grid could serve as a generic IoT network
 fabric similar in spirit to the local I2C bus?
 
-- Comparative analysis with MQTT/HTTP bridges
-- Grid-as-backbone architecture vs traditional IoT hubs
+MQTT and HTTP are both widely used protocols for IoT right now, but
+they are not decentralized.  They rely on a centralized broker or
+server to manage communication between devices.  
+
+By comparison, a grid-based IoT network would allow devices to communicate
+directly with each other without the need for a centralized broker or
+server.  This would make the network more resilient and less
+vulnerable to single points of failure.
 
 ---
 
@@ -294,4 +306,10 @@ example of remote execution of a simple function in a CLI demo:
   - Advisor/Executor model
   - IoT sensor data, e.g. optical encoder, temperature, humidity, etc.
   - ...
+
+---
+
+## Questions/Discussion
+
+
 

@@ -1,14 +1,20 @@
-rename nodes
+create a wire protocol diagram using graphviz
 
-rename all of the agent nodes to something meanigingful instead of
-agentN_N.
+Using a graphviz record-format node, create a diagram of a PRomiseGrid
+wire message showing the CBOR structure of the message.  The
+diagram should show the following fields:
+
+- tag number
+- protocol CID
+- payload 
 
 Sysmsg: 
   You are a graphviz expert. Please make the requested changes to the given code or documentation.
 In: 
-  x/wire/slides/images/dvm.dot
+  x/wire/wire.go
+  x/wire/wire_test.go
 Out:
-  x/wire/slides/images/dvm.dot
+  x/wire/slides/images/message.dot
 
 .stop
 
