@@ -1,6 +1,9 @@
 class: center, middle
 
-# PromiseGrid Wire Protocol Design
+# PromiseGrid Wire Protocol
+
+### Steve Traugott
+### 2025-04-29
 
 ---
 
