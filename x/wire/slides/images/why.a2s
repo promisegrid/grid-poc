@@ -1,0 +1,25 @@
++-----------------------------+       +-----------------------------+
+|   Well-Designed Protocol    |       | Poorly-Designed Protocol    |
+|-----------------------------|       |-----------------------------|
+|  > Clear, compact message   |       |  > Bloated, ambiguous       |
+|    formats                  |       |    message formats          |
+|  > Versioning & extensible  |       |  > No clear versioning      |
+|  > Efficient for all agents |       |  > Inefficient for IoT      |
+|  > Secure, authenticated    |       |  > Vulnerable to attacks    |
+|  > Decentralization ready   |       |  > Centralization pressure  |
++-------------+---------------+       +-------------+---------------+
+              |                                     |
+              |                                     |
+              v                                     v
++-----------------------------+       +-----------------------------+
+| Agents can be full OS,      |       | Agents can be full OS only, |
+| Browser, IoT, Mobile, etc.  |       | IoT excluded by bloat       |
++-------------+---------------+       +-------------+---------------+
+              |                                     |
+              |                                     |
+              v                                     v
++-----------------------------+       +-----------------------------+
+|  > Broad adoption           |       |  > Limited adoption         |
+|  > General purpose          |       |  > Narrow use cases         |
+|  > Durable, long-term use   |       |  > Short-lived, temporary   |
++-----------------------------+       +-----------------------------+

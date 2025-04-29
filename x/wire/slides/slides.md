@@ -14,21 +14,28 @@ A wire protocol is a set of rules that define:
 - how to manage connections and sessions
 - how to authenticate and authorize agents
 
+![:img IPv4 headers, 70%](images/IPv4_Packet-en.svg)
+
 ---
 
-## Why Wire Protocol Design Matters in Early Development
+### Why Wire Protocol Design Matters in Early Development
 
-PromiseGrid implements a decentralized virtual machine where agents
-of all sorts exchange messages using a standardized wire protocol. 
+Early design decisions about the wire protocol can be difficult to
+change once systems are in use.  This is because:
 
-A poorly designed wire protocol could lead to:
+- A bad design can make it difficult to evolve the protocol
+  without breaking existing installations.
+- A bad design can lead early adopters to consider early versions of
+  the protocol to be a defacto standard, making evolution difficult
+  from a community perspective.
 
-- Version incompatibilities
-- Lack of future-proofing
-- Security vulnerabilities
-- Centralization pressures
-- exclusion of IoT devices due to bloated requirements for message
-  formats
+![:img Choice of wire protocol, 100%](images/choices.svg)
+
+---
+
+### Why Wire Protocol Design Matters in Early Development
+
+![:img Why Wire Protocol Design, 70%](images/why.svg)
 
 ---
 
@@ -40,6 +47,8 @@ PromiseGrid is implemented using a message-passing microkernel architecture:
 - Microkernel: minimal core, most services run as applications
 
 More on this later.
+
+![:img DVM, 40%](images/dvm.svg)
 
 ---
 

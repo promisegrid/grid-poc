@@ -1,0 +1,43 @@
+digraph PromiseGridArchitecture {
+    rankdir=LR;
+    node [shape=box, style="rounded,filled", fillcolor="#E0F2F7", fontname="Helvetica"];
+    edge [fontname="Helvetica", fontsize=10];
+
+    // Microkernel Nodes (Hosts)
+    subgraph cluster_microkernel1 {
+        label="Microkernel Node 1";
+        style=filled;
+        fillcolor="#F0F8FF";
+        
+        agent1_1 [label="Agent A\n(GPU)", shape=ellipse];
+        agent1_2 [label="Agent B\n(Storage)", shape=ellipse];
+        agent1_3 [label="Agent C\n(Compute)", shape=ellipse];
+        agent1_4 [label="Agent E\n(ML Model)", shape=ellipse];
+    }
+
+    subgraph cluster_microkernel2 {
+        label="Microkernel Node 2";
+        style=filled;
+        fillcolor="#F0F8FF";
+        
+        agent2_1 [label="Agent D\n(IoT Bridge)", shape=ellipse];
+    }
+
+    subgraph cluster_microkernel3 {
+        label="Microkernel Node 3";
+        style=filled;
+        fillcolor="#F0F8FF";
+        
+        agent3_1 [label="Agent F\n(Payment)", shape=ellipse];
+        agent3_2 [label="Agent G\n(Data Feed)", shape=ellipse];
+    }
+
+    // Message Flow
+    agent1_1 -> agent2_1 ;
+    agent1_2 -> agent3_2 ;
+    agent1_4 -> agent1_3 ;
+    agent3_1 -> agent2_1 ;
+    agent1_3 -> agent3_1 ;
+
+}
+

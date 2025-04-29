@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -154,8 +155,10 @@ func buildSlides() {
 	log.Println("Rebuilt slides.html successfully.")
 }
 
-// watchSlides sets up a file watcher on slides.md and slides.thtml. On modifications, it rebuilds slides.html
-// and notifies connected websocket clients to reload.
+// watchSlides sets up a file watcher on all files in the current
+// directory and subdirectories. When a file is modified, it rebuilds
+// slides.html using the buildSlides function and notifies connected
+// websocket clients to reload.
 func watchSlides(hub *Hub) {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -163,33 +166,66 @@ func watchSlides(hub *Hub) {
 	}
 	defer watcher.Close()
 
-	// Watch the current directory for changes.
+	// Use a debounce timer to avoid multiple rebuilds for a single save.
+	var debounce <-chan time.Time
+
+	// trigger a rebuild after debouncing
+	var remake bool
+
+	// Watch the current directory and ./images for changes.
 	err = watcher.Add(".")
 	if err != nil {
 		log.Fatalf("Error adding watcher: %v", err)
 	}
-
-	// Use a debounce timer to avoid multiple rebuilds for a single save.
-	var debounce <-chan time.Time
+	err = watcher.Add("./images")
+	if err != nil {
+		log.Fatalf("Error adding watcher: %v", err)
+	}
 
 	for {
+
 		select {
 		case event, ok := <-watcher.Events:
 			if !ok {
 				return
 			}
 
-			for _, fn := range []string{"slides.md", "slides.thtml"} {
+			// ignore slides.html because it is what we are generating
+			if strings.HasSuffix(event.Name, "slides.html") {
+				continue
+			}
 
-				// If file was modified, created, or renamed, set the debounce timer.
-				if strings.HasSuffix(event.Name, fn) && (event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Rename == fsnotify.Rename) {
-					// Debounce: wait briefly for successive events.
-					debounce = time.After(1000 * time.Millisecond)
-				}
+			// if the change is in the images directory, re-run 'make'
+			// in that directory
+			if strings.HasPrefix(event.Name, "images") {
+				fmt.Printf("File changed in images: %s\n", event.Name)
+				remake = true
+			}
+
+			// If file was modified, created, or renamed, set the debounce timer.
+			if event.Op&fsnotify.Write == fsnotify.Write || event.Op&fsnotify.Create == fsnotify.Create || event.Op&fsnotify.Rename == fsnotify.Rename {
+				// Debounce: wait briefly for successive events.
+				debounce = time.After(1000 * time.Millisecond)
+				fmt.Printf("File changed: %s\n", event.Name)
 			}
 		case <-debounce:
+
+			if remake {
+				fmt.Println("Running make in images directory...")
+				cmd := exec.Command("make")
+				cmd.Dir = "./images"
+				cmd.Stdout = os.Stdout
+				cmd.Stderr = os.Stderr
+				if err := cmd.Run(); err != nil {
+					log.Printf("Error running make in images directory: %v", err)
+				}
+				remake = false
+			}
+
+			fmt.Println("Rebuilding slides.html...")
 			buildSlides()
 			// Notify connected clients to reload.
+			fmt.Println("Notifying clients to reload slides.html")
 			hub.broadcast <- []byte("reload")
 		case err, ok := <-watcher.Errors:
 			if !ok {

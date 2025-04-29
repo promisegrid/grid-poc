@@ -1,0 +1,29 @@
+digraph WireProtocolDesign {
+    // Rotate the graph to landscape orientation
+    rankdir=LR;
+
+    node [shape=box, style=filled, fillcolor="#f9f9f9", fontname="Helvetica"]
+
+    EarlyDesignChoices [label="Early Design Choices"]
+    WireProtocol [label="Wire Protocol Design"]
+    GoodDesign [label="Good Design"]
+    BadDesign [label="Bad Design"]
+    Flexible [label="Flexible & Extensible"]
+    HardToEvolve [label="Hard to Evolve\n(Breaks old installs)"]
+    CommunityEvolves [label="Community Evolves Together"]
+    DeFactoStandard [label="Early Versions Become\ndefacto Standard\n(Hard to Change)"]
+    ProtocolAdapts [label="Protocol can adapt & improve"]
+    Ossification [label="Ossification:\n- Incompatibilities\n- Stagnation"]
+
+    // Edges
+    EarlyDesignChoices -> WireProtocol
+    WireProtocol -> GoodDesign
+    WireProtocol -> BadDesign
+    GoodDesign -> Flexible
+    BadDesign -> HardToEvolve
+    Flexible -> CommunityEvolves
+    HardToEvolve -> DeFactoStandard
+    CommunityEvolves -> ProtocolAdapts
+    DeFactoStandard -> Ossification
+}
+
