@@ -50,6 +50,8 @@ PromiseGrid is implemented using a message-passing microkernel architecture:
 - Message-passing: agents exchange structured messages
 - Microkernel: minimal core, just enough to support message-passing
   agents
+- "There is no center" -- no centralized authority or control.
+
 
 More on this later.
 
@@ -105,6 +107,8 @@ security, and modularity.
 ![:img Local Image, 30%](images/Microkernel.jpeg)
 ![:img Local Image, 50%](images/OS-structure.svg)
 
+TODO: make an equivalent image for PromiseGrid stack
+
 ---
 
 # Fault Tolerance
@@ -159,6 +163,14 @@ An agent sending a PromiseGrid message is making this promise:
 Protocol spec documents would typically be stored in IPFS or other
 decentralized content-addressable storage systems for ease of
 retrieval by developers and recipients.  
+
+Unlike traditional protocols, where the protocol number is typically
+assigned by a central authority such as IANA, the protocol hash CID
+is a self-describing identifier gives us a world in which:
+
+- Anyone can write a protocol spec document and publish it to IPFS.
+- Anyone can write a PromiseGrid message that references the protocol
+  spec document.
 
 ---
 
@@ -252,12 +264,19 @@ book "Thinking in Promises", page 9:
   [...] When an intention is publicly declared to an audience (called
   its scope) it then becomes a promise.
 
+Note:  Under US law, a promise is a legally binding agreement between two
+or more parties.  When we say "promise" in the context of PromiseGrid, we are
+referring to a technical promise, not a legal promise.  These
+technical promises are roughly equivalent to a letter of intent --
+Mark Burgess' use of the word "intention" in the quote above is
+useful here.
+
 ---
 
 ## IoT Integration Strategy
 ### Constrained Device Support
 - Example minimum viable agent requirements:
-  - Aruino UNO
+  - Arduino UNO
     - 32KB RAM
     - ability to run sha256 hash algorithm
     - ability to run ed25519 signature algorithm
@@ -266,7 +285,7 @@ book "Thinking in Promises", page 9:
 
 ## Decentralized IoT Standard
 
-Is is possible that the grid could serve as a generic IoT network
+Is it possible that the grid could serve as a generic IoT network
 fabric similar in spirit to the local I2C bus?
 
 MQTT and HTTP are both widely used protocols for IoT right now, but
@@ -309,6 +328,7 @@ example of remote execution of a simple function in a CLI demo:
   - Personal currencies
   - Advisor/Executor model
   - IoT sensor data, e.g. optical encoder, temperature, humidity, etc.
+  - CAD software agents -- solid modeling, simulation, etc.
   - ...
 
 ---
