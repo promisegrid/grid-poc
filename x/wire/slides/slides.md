@@ -328,7 +328,6 @@ example of remote execution of a simple function in a CLI demo:
   - Personal currencies
   - Advisor/Executor model
   - IoT sensor data, e.g. optical encoder, temperature, humidity, etc.
-  - CAD software agents -- solid modeling, simulation, etc.
   - ...
 
 ---
