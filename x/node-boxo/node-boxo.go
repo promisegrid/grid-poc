@@ -20,8 +20,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	dual "github.com/libp2p/go-libp2p-kad-dht/dual"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	// other imports omitted intentionally
-	"path"
 )
 
 const repoPath = "~/.ipfs-boxo"
@@ -31,7 +29,7 @@ type BoxoNode struct {
 	DHT           *dual.DHT
 	PubSub        *pubsub.PubSub
 	Blockstore    blockstore.Blockstore
-	Bitswap       interface{}
+	Bitswap       *bsserver.Server
 	IPNSPublisher *ipns.Publisher
 }
 
@@ -92,7 +90,7 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 		return nil, fmt.Errorf("repo setup failed: %w", err)
 	}
 	// Since we are using repo.Mock, extract the datastore
-	ds := r.(*repo.Mock).D
+	dstore := r.(*repo.Mock).D
 
 	// Create libp2p host with recommended options
 	hst, err := libp2p.New(
@@ -121,13 +119,19 @@ func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
 	}
 
 	// Initialize blockstore and Bitswap server
-	bs := blockstore.NewBlockstore(ds)
-	net := bsnet.NewFromIpfsHost(hst)
-	bswap := bsserver.New(ctx, net, bs)
-	net.Start(bswap)
+	bs := blockstore.NewBlockstore(dstore)
+	network := bsnet.NewFromIpfsHost(hst)
+	bswap := bsserver.New(ctx, network, bs)
+	network.Start(bswap)
+
+	// Retrieve the host's private key for IPNS
+	priv, ok := hst.Peerstore().PrivKey(hst.ID())
+	if !ok {
+		return nil, fmt.Errorf("no private key found for host")
+	}
 
 	// Set up IPNS publisher using the DHT as the routing interface.
-	ipnsPublisher := ipns.NewPublisher(dht, ds, hst.ID())
+	ipnsPublisher := ipns.NewPublisher(dht, dstore, priv)
 
 	return &BoxoNode{
 		Host:          hst,
@@ -179,8 +183,13 @@ func (n *BoxoNode) StartIPNSPublication(ctx context.Context) {
 		value := []byte("/ipfs/QmExampleContentHash")
 		// Publish with 24h validity
 		expiration := time.Now().Add(24 * time.Hour)
-		err := n.IPNSPublisher.Publish(ctx, n.Host.Peerstore().PrivKey(n.Host.ID()),
-			value, ipns.WithEOL(expiration), ipns.WithIPNSPath(value))
+		priv, ok := n.Host.Peerstore().PrivKey(n.Host.ID())
+		if !ok {
+			fmt.Println("IPNS publication failed: no private key")
+			return
+		}
+		err := n.IPNSPublisher.Publish(ctx, priv, value,
+			ipns.WithEOL(expiration))
 		if err != nil {
 			fmt.Printf("IPNS publication failed: %v\n", err)
 		} else {

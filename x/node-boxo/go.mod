@@ -1,4 +1,4 @@
-module node-boxo
+module node-boxo-bitswap
 
 go 1.24
 
