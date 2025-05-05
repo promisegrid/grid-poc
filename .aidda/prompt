@@ -1,12 +1,16 @@
-add gossipsub
+fix gossipsub
 
-Add a gossipsub demo to node-boxo-bitswap-plus.  The demo should
-simply send "hello world" to the peer; the peer should receive the
-message and send a response back to the sender.  The sender should print
-the response to the console.  
+The gossipsub implementation is not working.  The listening node never
+receives the message sent by the sender node.  Either the sender node is
+not actually sending the message, or the receiver node is not 
+receiving the message.  Neither node is reporting any errors.  
 
-Move the gossipsub and bitswap demos from main() into their own
-functions.
+Research, investigate other implementations, and fix the problem.  
+
+Some ideas to try:
+
+- send the message repeatedly in a loop until a response is received
+- add a sleep before each send
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

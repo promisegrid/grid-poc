@@ -11,6 +11,7 @@ import (
 	mrand "math/rand"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ipfs/go-datastore"
 	dsync "github.com/ipfs/go-datastore/sync"
@@ -91,7 +92,8 @@ func main() {
 // is provided, this node acts as the responder, waiting for a "hello world" and
 // replying with "hello back".
 func runGossipDemo(ctx context.Context, h host.Host, target string) error {
-	ps, err := pubsub.NewGossipSub(ctx, h)
+	// Enable flood publishing to ensure messages reach all peers
+	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true))
 	if err != nil {
 		return err
 	}
@@ -117,24 +119,47 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 		if err := h.Connect(ctx, *info); err != nil {
 			return err
 		}
-		if err := topic.Publish(ctx, []byte("hello world")); err != nil {
-			return err
+
+		// Allow time for connection and mesh formation
+		log.Println("Waiting 2 seconds for connection stabilization...")
+		select {
+		case <-time.After(2 * time.Second):
+		case <-ctx.Done():
+			return ctx.Err()
 		}
-		log.Println("Published message: hello world")
-		// Wait for a "hello back" response.
-		log.Println("Waiting for response on gossipsub (topic: gossip-demo)...")
-		for {
-			msg, err := sub.Next(ctx)
-			if err != nil {
-				return err
+
+		// Publish with retries
+		const maxRetries = 5
+		for i := 0; i < maxRetries; i++ {
+			if err := topic.Publish(ctx, []byte("hello world")); err != nil {
+				log.Printf("Publish attempt %d failed: %v", i+1, err)
+			} else {
+				log.Printf("Published message: hello world (attempt %d)", i+1)
 			}
-			// Ignore messages sent by ourselves.
+
+			// Wait before next attempt
+			select {
+			case <-time.After(1 * time.Second):
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		log.Println("Waiting for response on gossipsub (topic: gossip-demo)...")
+		responseCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		for {
+			msg, err := sub.Next(responseCtx)
+			if err != nil {
+				return fmt.Errorf("failed to receive response: %w", err)
+			}
 			if msg.ReceivedFrom == h.ID() {
 				continue
 			}
 			if string(msg.Data) == "hello back" {
 				log.Printf("Received response: %s", string(msg.Data))
-				break
+				return nil
 			}
 		}
 	} else {
@@ -145,20 +170,26 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 			if err != nil {
 				return err
 			}
-			// Ignore our own messages.
 			if msg.ReceivedFrom == h.ID() {
 				continue
 			}
 			if string(msg.Data) == "hello world" {
 				log.Println("Received 'hello world' message, sending response")
-				if err := topic.Publish(ctx, []byte("hello back")); err != nil {
-					return err
+				
+				// Send response with retries
+				const maxRetries = 3
+				for i := 0; i < maxRetries; i++ {
+					if err := topic.Publish(ctx, []byte("hello back")); err != nil {
+						log.Printf("Response publish attempt %d failed: %v", i+1, err)
+					} else {
+						log.Printf("Sent 'hello back' response (attempt %d)", i+1)
+					}
+					time.Sleep(500 * time.Millisecond)
 				}
-				break
+				return nil
 			}
 		}
 	}
-	return nil
 }
 
 // runBitswapDemo runs the Bitswap demo. If target is empty, it runs in server
