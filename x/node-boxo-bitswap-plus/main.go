@@ -19,6 +19,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multiaddr"
@@ -48,10 +49,11 @@ func main() {
 	// Parse options from the command line
 	targetF := flag.String("d", "", "target peer to dial")
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
+	gsF := flag.Bool("gs", false, "Run gossipsub demo")
 	flag.Parse()
 
 	// For this example we are going to be transferring data using Bitswap over libp2p
-	// This means we need to create a libp2p host first
+	// or demonstrating gossipsub. This means we need to create a libp2p host first.
 
 	// Make a host that listens on the given multiaddress
 	h, err := makeHost(0, *seedF)
@@ -63,6 +65,51 @@ func main() {
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
 
+	// If the gossipsub demo is requested, run it.
+	if *gsF {
+		ps, err := pubsub.NewGossipSub(ctx, h)
+		if err != nil {
+			log.Fatal(err)
+		}
+		topic, err := ps.Join("gossip-demo")
+		if err != nil {
+			log.Fatal(err)
+		}
+		sub, err := topic.Subscribe()
+		if err != nil {
+			log.Fatal(err)
+		}
+		// If target peer is provided, act as the publisher.
+		if *targetF != "" {
+			maddr, err := multiaddr.NewMultiaddr(*targetF)
+			if err != nil {
+				log.Fatal(err)
+			}
+			info, err := peer.AddrInfoFromP2pAddr(maddr)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := h.Connect(ctx, *info); err != nil {
+				log.Fatal(err)
+			}
+			err = topic.Publish(ctx, []byte("hello world"))
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Println("Published message: hello world")
+		} else {
+			// Otherwise, subscribe and wait to receive a message.
+			log.Println("Waiting for message on gossipsub (topic: gossip-demo)...")
+			msg, err := sub.Next(ctx)
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Printf("Received message: %s", string(msg.Data))
+		}
+		return
+	}
+
+	// Original Bitswap demo code follows below.
 	if *targetF == "" {
 		c, bs, err := startDataServer(ctx, h)
 		if err != nil {
@@ -106,7 +153,7 @@ func makeHost(listenPort int, randseed int64) (host.Host, error) {
 
 	// Some basic libp2p options, see the go-libp2p docs for more details
 	opts := []libp2p.Option{
-		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", listenPort)), // port we are listening on, limiting to a single interface and protocol for simplicity
+		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", listenPort)),
 		libp2p.Identity(priv),
 	}
 
@@ -124,7 +171,8 @@ func getHostAddress(h host.Host) string {
 }
 
 // The CID of the file with the number 0 to 100k, built with the parameters:
-// CIDv1 links, a 256bit sha2-256 hash function, raw-leaves, a balanced layout, 256kiB chunks, and 174 max links per block
+// CIDv1 links, a 256bit sha2-256 hash function, raw-leaves, a balanced layout, 
+// 256kiB chunks, and 174 max links per block
 const fileCid = "bafybeiecq2irw4fl5vunnxo6cegoutv4de63h7n27tekkjtak3jrvrzzhe"
 
 // createFile0to100k creates a file with the number 0 to 100k
@@ -140,7 +188,8 @@ func createFile0to100k() ([]byte, error) {
 	return []byte(b.String()), nil
 }
 
-func startDataServer(ctx context.Context, h host.Host) (cid.Cid, *bsserver.Server, error) {
+func startDataServer(ctx context.Context, h host.Host) (cid.Cid, *bsserver.Server,
+	error) {
 	fileBytes, err := createFile0to100k()
 	if err != nil {
 		return cid.Undef, nil, err
@@ -149,24 +198,29 @@ func startDataServer(ctx context.Context, h host.Host) (cid.Cid, *bsserver.Serve
 
 	ds := dsync.MutexWrap(datastore.NewMapDatastore())
 	bs := blockstore.NewBlockstore(ds)
-	bs = blockstore.NewIdStore(bs) // handle identity multihashes, these don't require doing any actual lookups
+	bs = blockstore.NewIdStore(bs) // handle identity multihashes, these don't require
+	// doing any actual lookups
 
 	bsrv := blockservice.New(bs, offline.Exchange(bs))
 	dsrv := merkledag.NewDAGService(bsrv)
 
-	// Create a UnixFS graph from our file, parameters described here but can be visualized at https://dag.ipfs.tech/
+	// Create a UnixFS graph from our file, parameters described here but
+	// can be visualized at https://dag.ipfs.tech/
 	ufsImportParams := uih.DagBuilderParams{
 		Maxlinks:  uih.DefaultLinksPerBlock, // Default max of 174 links per block
-		RawLeaves: true,                     // Leave the actual file bytes untouched instead of wrapping them in a dag-pb protobuf wrapper
+		RawLeaves: true,                     // Leave the actual file bytes untouched instead
+		// of wrapping them in a dag-pb protobuf wrapper
 		CidBuilder: cid.V1Builder{ // Use CIDv1 for all links
 			Codec:    uint64(multicodec.DagPb),
 			MhType:   uint64(multicodec.Sha2_256), // Use SHA2-256 as the hash function
-			MhLength: -1,                          // Use the default hash length for the given hash function (in this case 256 bits)
+			MhLength: -1,                          // Use the default hash length for the given
+			// hash function (in this case 256 bits)
 		},
 		Dagserv: dsrv,
 		NoCopy:  false,
 	}
-	ufsBuilder, err := ufsImportParams.New(chunker.NewSizeSplitter(fileReader, chunker.DefaultBlockSize)) // Split the file up into fixed sized 256KiB chunks
+	ufsBuilder, err := ufsImportParams.New(chunker.NewSizeSplitter(fileReader,
+		chunker.DefaultBlockSize)) // Split the file up into fixed sized 256KiB chunks
 	if err != nil {
 		return cid.Undef, nil, err
 	}
@@ -176,14 +230,16 @@ func startDataServer(ctx context.Context, h host.Host) (cid.Cid, *bsserver.Serve
 	}
 
 	// Start listening on the Bitswap protocol
-	// For this example we're not leveraging any content routing (DHT, IPNI, delegated routing requests, etc.) as we know the peer we are fetching from
+	// For this example we're not leveraging any content routing (DHT, IPNI,
+	// delegated routing requests, etc.) as we know the peer we are fetching from
 	n := bsnet.NewFromIpfsHost(h)
 	bswap := bsserver.New(ctx, n, bs)
 	n.Start(bswap)
 	return nd.Cid(), bswap, nil
 }
 
-func runClient(ctx context.Context, h host.Host, c cid.Cid, targetPeer string) ([]byte, error) {
+func runClient(ctx context.Context, h host.Host, c cid.Cid, targetPeer string) ([]byte,
+	error) {
 	n := bsnet.NewFromIpfsHost(h)
 	bswap := bsclient.New(ctx, n, nil, blockstore.NewBlockstore(datastore.NewNullDatastore()))
 	n.Start(bswap)
@@ -201,14 +257,16 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid, targetPeer string) (
 		return nil, err
 	}
 
-	// Directly connect to the peer that we know has the content
-	// Generally this peer will come from whatever content routing system is provided, however go-bitswap will also
-	// ask peers it is connected to for content so this will work
+	// Directly connect to the peer that we know has the content.
+	// Generally this peer will come from whatever content routing system is provided,
+	// however go-bitswap will also ask peers it is connected to for content so this will work.
 	if err := h.Connect(ctx, *info); err != nil {
 		return nil, err
 	}
 
-	dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx, merkledag.NewDAGService(blockservice.New(blockstore.NewBlockstore(datastore.NewNullDatastore()), bswap))))
+	dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
+		merkledag.NewDAGService(blockservice.New(blockstore.NewBlockstore(datastore.
+			NewNullDatastore()), bswap))))
 	nd, err := dserv.Get(ctx, c)
 	if err != nil {
 		return nil, err

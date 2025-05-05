@@ -1,15 +1,8 @@
-refactor node-boxo based on node-boxo-bitswap
+add gossipsub
 
-The node-box code doesn't compile.  Refactor it, keeping the same
-functionality.  Use the node-boxo-bitswap code as a guide.  
-
-Fix the following issues:
-
-# github.com/libp2p/go-libp2p-core/peer
-../../../../go/1.24.0/pkg/mod/github.com/libp2p/go-libp2p-core@v0.6.1/peer/addrinfo.go:85:25: cannot use p2ppart (variable of type *multiaddr.Component) as multiaddr.Multiaddr value in array or slice literal
-../../../../go/1.24.0/pkg/mod/github.com/libp2p/go-libp2p-core@v0.6.1/peer/peer.go:201:12: undefined: cid.CodecToStr
-# github.com/ipfs/interface-go-ipfs-core/options
-../../../../go/1.24.0/pkg/mod/github.com/ipfs/interface-go-ipfs-core@v0.4.0/options/block.go:53:23: undefined: cid.Codecs
+Add a gossipsub demo to node-boxo-bitswap-plus.  The demo should
+simply send "hello world" to the peer; the peer should receive the
+message and print it to the console.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -24,12 +17,9 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
-  x/node-boxo/go.mod
-  x/node-boxo/node-boxo.go
-  x/node-boxo-bitswap/go.mod
-  x/node-boxo-bitswap/main.go
+  x/node-boxo-bitswap-plus/main.go
 Out:
-  x/node-boxo/node-boxo.go
+  x/node-boxo-bitswap-plus/main.go
 
 .stop
 

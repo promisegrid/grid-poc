@@ -1,230 +1,292 @@
-File: /home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
+File: /home/stevegt/lab/grid-poc/x/node-boxo-bitswap-plus/main.go
 ```go
 package main
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"flag"
 	"fmt"
-	"os"
-	"path/filepath"
-	"time"
+	"io"
+	"log"
+	mrand "math/rand"
+	"strconv"
+	"strings"
 
-	"github.com/ipfs/boxo/bitswap/network/bsnet"
-	bsserver "github.com/ipfs/boxo/bitswap/server"
-	"github.com/ipfs/boxo/blockstore"
-	"github.com/ipfs/boxo/ipns"
-	"github.com/ipfs/boxo/provider"
-	config "github.com/ipfs/go-ipfs-config"
-	ds "github.com/ipfs/go-datastore"
-	flatfs "github.com/ipfs/go-ds-flatfs"
-	repo "github.com/ipfs/kubo/repo"
+	"github.com/ipfs/go-datastore"
+	dsync "github.com/ipfs/go-datastore/sync"
+
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
-	dual "github.com/libp2p/go-libp2p-kad-dht/dual"
+	"github.com/libp2p/go-libp2p/core/peer"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+
+	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multicodec"
+
+	"github.com/ipfs/boxo/blockservice"
+	blockstore "github.com/ipfs/boxo/blockstore"
+	chunker "github.com/ipfs/boxo/chunker"
+	offline "github.com/ipfs/boxo/exchange/offline"
+	"github.com/ipfs/boxo/ipld/merkledag"
+	unixfile "github.com/ipfs/boxo/ipld/unixfs/file"
+	"github.com/ipfs/boxo/ipld/unixfs/importer/balanced"
+	uih "github.com/ipfs/boxo/ipld/unixfs/importer/helpers"
+
+	bsclient "github.com/ipfs/boxo/bitswap/client"
+	bsnet "github.com/ipfs/boxo/bitswap/network/bsnet"
+	bsserver "github.com/ipfs/boxo/bitswap/server"
+	"github.com/ipfs/boxo/files"
 )
 
-const repoPath = "~/.ipfs-boxo"
-
-type BoxoNode struct {
-	Host          host.Host
-	DHT           *dual.DHT
-	PubSub        *pubsub.PubSub
-	Blockstore    blockstore.Blockstore
-	Bitswap       *bsserver.Server
-	IPNSPublisher *ipns.Publisher
-}
-
-func expandPath(p string) (string, error) {
-	if len(p) > 0 && p[0] == '~' {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", err
-		}
-		return filepath.Join(home, p[1:]), nil
-	}
-	return p, nil
-}
-
-func setupRepo(ctx context.Context, p string) (repo.Repo, error) {
-	expandedPath, err := expandPath(p)
-	if err != nil {
-		return nil, fmt.Errorf("expanding repo path: %w", err)
-	}
-	if err := os.MkdirAll(expandedPath, 0755); err != nil {
-		return nil, fmt.Errorf("creating repo directory: %w", err)
-	}
-
-	// Initialize configuration
-	cfg, err := config.Init(os.Stdout, 2048)
-	if err != nil {
-		return nil, fmt.Errorf("initializing config: %w", err)
-	}
-
-	// Configure flatfs datastore
-	cfg.Datastore.Spec = map[string]interface{}{
-		"type":      "flatfs",
-		"path":      "blocks",
-		"sync":      true,
-		"shardFunc": "/repo/flatfs/shard/v1/next-to-last/2",
-	}
-
-	// Open or create the flatfs datastore
-	d, err := flatfs.CreateOrOpen(
-		flatfs.ParseShardFunc(cfg.Datastore.Spec["shardFunc"].(string)),
-		filepath.Join(expandedPath, "blocks"),
-		false,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("opening datastore: %w", err)
-	}
-
-	return &repo.Mock{
-		D: d,
-		C: *cfg,
-	}, nil
-}
-
-func NewBoxoNode(ctx context.Context) (*BoxoNode, error) {
-	// Initialize repository with disk storage
-	r, err := setupRepo(ctx, repoPath)
-	if err != nil {
-		return nil, fmt.Errorf("repo setup failed: %w", err)
-	}
-	// Since we are using repo.Mock, extract the datastore
-	dstore := r.(*repo.Mock).D
-
-	// Create libp2p host with recommended options
-	hst, err := libp2p.New(
-		libp2p.ListenAddrStrings(
-			"/ip4/0.0.0.0/tcp/4001",
-			"/ip6/::/tcp/4001",
-		),
-		libp2p.NATPortMap(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("creating host: %w", err)
-	}
-
-	// Initialize DHT in server mode
-	dht, err := dual.New(ctx, hst, dual.DHTOption(
-		dual.DHTMode(dual.ModeAuto),
-	))
-	if err != nil {
-		return nil, fmt.Errorf("creating DHT: %w", err)
-	}
-
-	// Initialize Gossipsub router
-	ps, err := pubsub.NewGossipSub(ctx, hst)
-	if err != nil {
-		return nil, fmt.Errorf("creating pubsub: %w", err)
-	}
-
-	// Initialize blockstore and Bitswap server
-	bs := blockstore.NewBlockstore(dstore)
-	network := bsnet.NewFromIpfsHost(hst)
-	bswap := bsserver.New(ctx, network, bs)
-	network.Start(bswap)
-
-	// Retrieve the host's private key for IPNS
-	priv, ok := hst.Peerstore().PrivKey(hst.ID())
-	if !ok {
-		return nil, fmt.Errorf("no private key found for host")
-	}
-
-	// Set up IPNS publisher using the DHT as the routing interface.
-	ipnsPublisher := ipns.NewPublisher(dht, dstore, priv)
-
-	return &BoxoNode{
-		Host:          hst,
-		DHT:           dht,
-		PubSub:        ps,
-		Blockstore:    bs,
-		Bitswap:       bswap,
-		IPNSPublisher: ipnsPublisher,
-	}, nil
-}
-
-func (n *BoxoNode) Start(ctx context.Context) error {
-	// Bootstrap DHT
-	if err := n.DHT.Bootstrap(ctx); err != nil {
-		return fmt.Errorf("dht bootstrap failed: %w", err)
-	}
-
-	// Connect to IPFS bootstrap peers using repo configuration.
-	cfg := n.getRepoConfig()
-	peers, err := cfg.BootstrapPeers()
-	if err != nil {
-		return fmt.Errorf("getting bootstrap peers: %w", err)
-	}
-
-	for _, p := range peers {
-		if err := n.Host.Connect(ctx, p); err != nil {
-			fmt.Printf("Failed to connect to bootstrap peer %s: %v\n", p.ID(), err)
-		}
-	}
-
-	// Start content provider
-	provider.NewProvider(n.Host, n.DHT, n.Blockstore)
-	return nil
-}
-
-// getRepoConfig attempts to retrieve the repository configuration.
-func (n *BoxoNode) getRepoConfig() *config.Config {
-	// For this example, we assume the config is stored in the provider's repo.
-	// In a complete implementation, you would store and retrieve the repo config.
-	// Here we simply initialize a new config.
-	cfg, _ := config.Init(os.Stdout, 2048)
-	return cfg
-}
-
-func (n *BoxoNode) StartIPNSPublication(ctx context.Context) {
-	// Example IPNS publication
-	go func() {
-		time.Sleep(5 * time.Second) // Wait for node initialization
-		value := []byte("/ipfs/QmExampleContentHash")
-		// Publish with 24h validity
-		expiration := time.Now().Add(24 * time.Hour)
-		priv, ok := n.Host.Peerstore().PrivKey(n.Host.ID())
-		if !ok {
-			fmt.Println("IPNS publication failed: no private key")
-			return
-		}
-		err := n.IPNSPublisher.Publish(ctx, priv, value,
-			ipns.WithEOL(expiration))
-		if err != nil {
-			fmt.Printf("IPNS publication failed: %v\n", err)
-		} else {
-			fmt.Println("Successfully published IPNS record")
-		}
-	}()
-}
+const exampleBinaryName = "bitswap-transfer"
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	node, err := NewBoxoNode(ctx)
+	// Parse options from the command line
+	targetF := flag.String("d", "", "target peer to dial")
+	seedF := flag.Int64("seed", 0, "set random seed for id generation")
+	gsF := flag.Bool("gs", false, "Run gossipsub demo")
+	flag.Parse()
+
+	// For this example we are going to be transferring data using Bitswap over libp2p
+	// or demonstrating gossipsub. This means we need to create a libp2p host first.
+
+	// Make a host that listens on the given multiaddress
+	h, err := makeHost(0, *seedF)
 	if err != nil {
-		panic(fmt.Errorf("node creation failed: %w", err))
+		log.Fatal(err)
+	}
+	defer h.Close()
+
+	fullAddr := getHostAddress(h)
+	log.Printf("I am %s\n", fullAddr)
+
+	// If the gossipsub demo is requested, run it.
+	if *gsF {
+		ps, err := pubsub.NewGossipSub(ctx, h)
+		if err != nil {
+			log.Fatal(err)
+		}
+		topic, err := ps.Join("gossip-demo")
+		if err != nil {
+			log.Fatal(err)
+		}
+		sub, err := topic.Subscribe()
+		if err != nil {
+			log.Fatal(err)
+		}
+		// If target peer is provided, act as the publisher.
+		if *targetF != "" {
+			maddr, err := multiaddr.NewMultiaddr(*targetF)
+			if err != nil {
+				log.Fatal(err)
+			}
+			info, err := peer.AddrInfoFromP2pAddr(maddr)
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := h.Connect(ctx, *info); err != nil {
+				log.Fatal(err)
+			}
+			err = topic.Publish(ctx, []byte("hello world"))
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Println("Published message: hello world")
+		} else {
+			// Otherwise, subscribe and wait to receive a message.
+			log.Println("Waiting for message on gossipsub (topic: gossip-demo)...")
+			msg, err := sub.Next(ctx)
+			if err != nil {
+				log.Fatal(err)
+			}
+			log.Printf("Received message: %s", string(msg.Data))
+		}
+		return
 	}
 
-	if err := node.Start(ctx); err != nil {
-		panic(fmt.Errorf("node start failed: %w", err))
+	// Original Bitswap demo code follows below.
+	if *targetF == "" {
+		c, bs, err := startDataServer(ctx, h)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer bs.Close()
+		log.Printf("hosting UnixFS file with CID: %s\n", c)
+		log.Println("listening for inbound connections and Bitswap requests")
+		log.Printf("Now run \"./%s -d %s\" on a different terminal\n", exampleBinaryName, fullAddr)
+
+		// Run until canceled.
+		<-ctx.Done()
+	} else {
+		log.Printf("downloading UnixFS file with CID: %s\n", fileCid)
+		fileData, err := runClient(ctx, h, cid.MustParse(fileCid), *targetF)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("found the data")
+		log.Println(string(fileData))
+		log.Println("the file was all the numbers from 0 to 100k!")
 	}
-	defer node.Host.Close()
+}
 
-	fmt.Printf("IPFS node running with ID %s\n", node.Host.ID())
-	fmt.Printf("Listening on addresses:\n")
-	for _, addr := range node.Host.Addrs() {
-		fmt.Printf("  %s/p2p/%s\n", addr, node.Host.ID())
+// makeHost creates a libP2P host with a random peer ID listening on the
+// given multiaddress.
+func makeHost(listenPort int, randseed int64) (host.Host, error) {
+	var r io.Reader
+	if randseed == 0 {
+		r = rand.Reader
+	} else {
+		r = mrand.New(mrand.NewSource(randseed))
 	}
 
-	// Start IPNS publication example
-	node.StartIPNSPublication(ctx)
+	// Generate a key pair for this host. We will use it at least
+	// to obtain a valid host ID.
+	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
+	if err != nil {
+		return nil, err
+	}
 
-	// Keep the node running
-	select {}
+	// Some basic libp2p options, see the go-libp2p docs for more details
+	opts := []libp2p.Option{
+		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", listenPort)),
+		libp2p.Identity(priv),
+	}
+
+	return libp2p.New(opts...)
+}
+
+func getHostAddress(h host.Host) string {
+	// Build host multiaddress
+	hostAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", h.ID().String()))
+
+	// Now we can build a full multiaddress to reach this host
+	// by encapsulating both addresses:
+	addr := h.Addrs()[0]
+	return addr.Encapsulate(hostAddr).String()
+}
+
+// The CID of the file with the number 0 to 100k, built with the parameters:
+// CIDv1 links, a 256bit sha2-256 hash function, raw-leaves, a balanced layout, 
+// 256kiB chunks, and 174 max links per block
+const fileCid = "bafybeiecq2irw4fl5vunnxo6cegoutv4de63h7n27tekkjtak3jrvrzzhe"
+
+// createFile0to100k creates a file with the number 0 to 100k
+func createFile0to100k() ([]byte, error) {
+	b := strings.Builder{}
+	for i := 0; i <= 100000; i++ {
+		s := strconv.Itoa(i)
+		_, err := b.WriteString(s)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return []byte(b.String()), nil
+}
+
+func startDataServer(ctx context.Context, h host.Host) (cid.Cid, *bsserver.Server,
+	error) {
+	fileBytes, err := createFile0to100k()
+	if err != nil {
+		return cid.Undef, nil, err
+	}
+	fileReader := bytes.NewReader(fileBytes)
+
+	ds := dsync.MutexWrap(datastore.NewMapDatastore())
+	bs := blockstore.NewBlockstore(ds)
+	bs = blockstore.NewIdStore(bs) // handle identity multihashes, these don't require
+	// doing any actual lookups
+
+	bsrv := blockservice.New(bs, offline.Exchange(bs))
+	dsrv := merkledag.NewDAGService(bsrv)
+
+	// Create a UnixFS graph from our file, parameters described here but
+	// can be visualized at https://dag.ipfs.tech/
+	ufsImportParams := uih.DagBuilderParams{
+		Maxlinks:  uih.DefaultLinksPerBlock, // Default max of 174 links per block
+		RawLeaves: true,                     // Leave the actual file bytes untouched instead
+		// of wrapping them in a dag-pb protobuf wrapper
+		CidBuilder: cid.V1Builder{ // Use CIDv1 for all links
+			Codec:    uint64(multicodec.DagPb),
+			MhType:   uint64(multicodec.Sha2_256), // Use SHA2-256 as the hash function
+			MhLength: -1,                          // Use the default hash length for the given
+			// hash function (in this case 256 bits)
+		},
+		Dagserv: dsrv,
+		NoCopy:  false,
+	}
+	ufsBuilder, err := ufsImportParams.New(chunker.NewSizeSplitter(fileReader,
+		chunker.DefaultBlockSize)) // Split the file up into fixed sized 256KiB chunks
+	if err != nil {
+		return cid.Undef, nil, err
+	}
+	nd, err := balanced.Layout(ufsBuilder) // Arrange the graph with a balanced layout
+	if err != nil {
+		return cid.Undef, nil, err
+	}
+
+	// Start listening on the Bitswap protocol
+	// For this example we're not leveraging any content routing (DHT, IPNI,
+	// delegated routing requests, etc.) as we know the peer we are fetching from
+	n := bsnet.NewFromIpfsHost(h)
+	bswap := bsserver.New(ctx, n, bs)
+	n.Start(bswap)
+	return nd.Cid(), bswap, nil
+}
+
+func runClient(ctx context.Context, h host.Host, c cid.Cid, targetPeer string) ([]byte,
+	error) {
+	n := bsnet.NewFromIpfsHost(h)
+	bswap := bsclient.New(ctx, n, nil, blockstore.NewBlockstore(datastore.NewNullDatastore()))
+	n.Start(bswap)
+	defer bswap.Close()
+
+	// Turn the targetPeer into a multiaddr.
+	maddr, err := multiaddr.NewMultiaddr(targetPeer)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract the peer ID from the multiaddr.
+	info, err := peer.AddrInfoFromP2pAddr(maddr)
+	if err != nil {
+		return nil, err
+	}
+
+	// Directly connect to the peer that we know has the content.
+	// Generally this peer will come from whatever content routing system is provided,
+	// however go-bitswap will also ask peers it is connected to for content so this will work.
+	if err := h.Connect(ctx, *info); err != nil {
+		return nil, err
+	}
+
+	dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
+		merkledag.NewDAGService(blockservice.New(blockstore.NewBlockstore(datastore.
+			NewNullDatastore()), bswap))))
+	nd, err := dserv.Get(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
+	unixFSNode, err := unixfile.NewUnixfsFile(ctx, dserv, nd)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	if f, ok := unixFSNode.(files.File); ok {
+		if _, err := io.Copy(&buf, f); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
 }
 ```
-EOF_/home/stevegt/lab/grid-poc/x/node-boxo/node-boxo.go
+EOF_/home/stevegt/lab/grid-poc/x/node-boxo-bitswap-plus/main.go
