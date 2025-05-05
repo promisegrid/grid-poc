@@ -1,39 +1,8 @@
-create a wire protocol diagram using graphviz
+refactor node-boxo based on node-boxo-bitswap
 
-Using a graphviz record-format node, create a diagram of a PRomiseGrid
-wire message showing the CBOR structure of the message.  The
-diagram should show the following fields:
+The node-box code doesn't compile.  Refactor it, keeping the same
+functionality.  Use the node-boxo-bitswap code as a guide.  
 
-- tag number
-- protocol CID
-- payload 
-
-Sysmsg: 
-  You are a graphviz expert. Please make the requested changes to the given code or documentation.
-In: 
-  x/wire/wire.go
-  x/wire/wire_test.go
-Out:
-  x/wire/slides/images/message.dot
-
-.stop
-
-
-
-Insert a few slides at the beginning of slides.md that describe
-how PromiseGrid is a decentralized message-passing microkernel
-architecture, and why getting the wire protocol right is important.
-
-- describe the intent of PromiseGrid to be a decentralized virtual machine 
-- describe conventional kernels
-- describe microkernels
-- describe message-passing IPC in microkernels
-- describe how PromiseGrid is a decentralized message-passing
-  microkernel architecture
-
-For each new slide, list summary bullet points first, then as
-sentences, add any details that are needed to explain the summary
-points.  See existing slides for examples of how to do this.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -48,36 +17,13 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
-  x/wire/slides/notes.md
-  x/wire/slides/slides.md
-  x/wire/wire.go
-  x/wire/wire_test.go
+  x/node-boxo/go.mod
+  x/node-boxo/node-boxo.go
+  x/node-boxo-bitswap/go.mod
+  x/node-boxo-bitswap/main.go
 Out:
-  x/wire/slides/slides.md
-
-.stop
-
-
-
-
-replace flatfs with badger
-
-Sysmsg: 
-  You are an expert Go programmer. Please make the requested changes
-  to the given code or documentation. For IPFS, IPLD, or libp2p,
-  prefer recent examples to avoid deprecated APIs.  Please verify that
-  the code compiles and runs without errors -- do not hallucinate
-  library methods, structs, or functions that do not exist. Do not
-  quote or escape single backticks in the code -- Go uses backticks
-  for raw string literals.  Do not remove or alter comments unless
-  they are incorrect or misleading.  Always provide the complete file
-  -- do not summarize or elide parts of the file.  Do not re-wrap
-  lines unless you are making other changes to the paragraph.  Lines
-  must be wrapped at 70 characters.  
-In: 
-  x/node-ipfs-lite/node-ipfs-lite.go
-Out:
-  x/node-ipfs-lite/node-ipfs-lite.go
+  x/node-boxo/go.mod
+  x/node-boxo/node-boxo.go
 
 .stop
 
