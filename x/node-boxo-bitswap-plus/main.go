@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	mrand "math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -73,6 +74,16 @@ func main() {
 
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
+
+	// write the host's peer ID to a file for use in the demos
+	if *targetF == "" {
+		fn := fmt.Sprintf("/tmp/%s-peerid.txt", exampleBinaryName)
+		// call WriteFile to write the peer ID to a file WriteFile is
+		// in the std lib os package.  it returns an error if it fails
+		err = os.WriteFile(fn, []byte(fullAddr), 0644)
+		Ck(err)
+		log.Printf("Peer ID written to %s\n", fn)
+	}
 
 	// If the gossipsub demo is requested, run it.
 	if *gsF {
@@ -193,18 +204,28 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 			}
 			if strings.HasPrefix(string(msg.Data), "hello world") {
 				log.Printf("Received %s, sending response...", string(msg.Data))
-				// Send response with retries
-				const maxRetries = 3
-				for i := 0; i < maxRetries; i++ {
-					ack := Spf("hello back %d", i+1)
-					if err := topic.Publish(ctx, []byte(ack)); err != nil {
-						log.Printf("Response publish attempt %d failed: %v",
-							i+1, err)
-					} else {
-						log.Printf("Sent 'hello back' response (attempt %d)", i+1)
-					}
-					time.Sleep(1 * time.Second)
+				// get the integer from the message
+				parts := strings.Split(string(msg.Data), " ")
+				if len(parts) < 3 {
+					log.Println("Invalid message format, ignoring...")
+					continue
 				}
+				numStr := parts[2]
+				num, err := strconv.Atoi(numStr)
+				if err != nil {
+					log.Printf("Failed to parse number from message: %v", err)
+					continue
+				}
+				log.Printf("Parsed number: %d", num)
+				// Send response
+				ack := Spf("hello back %d", num)
+				err = topic.Publish(ctx, []byte(ack))
+				if err != nil {
+					log.Printf("Response publish attempt failed: %v", err)
+				} else {
+					log.Printf("Response published: %s", ack)
+				}
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}
