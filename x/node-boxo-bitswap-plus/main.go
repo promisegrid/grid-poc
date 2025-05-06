@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	mrand "math/rand"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -17,10 +18,10 @@ import (
 	dsync "github.com/ipfs/go-datastore/sync"
 
 	"github.com/libp2p/go-libp2p"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multiaddr"
@@ -90,7 +91,7 @@ func main() {
 // response. If target is provided, this node acts as the sender, publishing
 // "hello world" and waiting for a "hello back" from the responder.  If no target
 // is provided, this node acts as the responder, waiting for a "hello world" and
-// replying with "hello back".
+// replying with "hello back". The demo exits after a successful message exchange.
 func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 	// Enable flood publishing to ensure messages reach all peers
 	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true))
@@ -139,7 +140,7 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 
 			// Wait before next attempt
 			select {
-			case <-time.After(1 * time.Second):
+			case <-time.After(5 * time.Second):
 			case <-ctx.Done():
 				return ctx.Err()
 			}
@@ -159,6 +160,7 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 			}
 			if string(msg.Data) == "hello back" {
 				log.Printf("Received response: %s", string(msg.Data))
+				os.Exit(0)
 				return nil
 			}
 		}
@@ -175,18 +177,18 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 			}
 			if string(msg.Data) == "hello world" {
 				log.Println("Received 'hello world' message, sending response")
-				
+
 				// Send response with retries
 				const maxRetries = 3
 				for i := 0; i < maxRetries; i++ {
 					if err := topic.Publish(ctx, []byte("hello back")); err != nil {
-						log.Printf("Response publish attempt %d failed: %v", i+1, err)
+						log.Printf("Response publish attempt %d failed: %v",
+							i+1, err)
 					} else {
 						log.Printf("Sent 'hello back' response (attempt %d)", i+1)
 					}
 					time.Sleep(500 * time.Millisecond)
 				}
-				return nil
 			}
 		}
 	}
@@ -288,13 +290,13 @@ func startDataServer(ctx context.Context, h host.Host) (cid.Cid,
 	// Create a UnixFS graph from our file, parameters described here but
 	// can be visualized at https://dag.ipfs.tech/
 	ufsImportParams := uih.DagBuilderParams{
-		Maxlinks:   uih.DefaultLinksPerBlock, // Default max of 174 links per block
-		RawLeaves:  true,                     // Leave the actual file bytes untouched
+		Maxlinks:  uih.DefaultLinksPerBlock, // Default max of 174 links per block
+		RawLeaves: true,                     // Leave the actual file bytes untouched
 		// instead of wrapping them in a dag-pb protobuf wrapper
 		CidBuilder: cid.V1Builder{ // Use CIDv1 for all links
 			Codec:    uint64(multicodec.DagPb),
 			MhType:   uint64(multicodec.Sha2_256), // Use SHA2-256 as the hash function
-			MhLength: -1, // Use the default hash length for the given hash function
+			MhLength: -1,                          // Use the default hash length for the given hash function
 		},
 		Dagserv: dsrv,
 		NoCopy:  false,

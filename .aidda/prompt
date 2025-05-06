@@ -1,16 +1,8 @@
-fix gossipsub
+exit gossipsub demo after sucessfully receiving a message
 
-The gossipsub implementation is not working.  The listening node never
-receives the message sent by the sender node.  Either the sender node is
-not actually sending the message, or the receiver node is not 
-receiving the message.  Neither node is reporting any errors.  
+The "hello world" sender should exit after receiving a valid "hello
+back" message.  
 
-Research, investigate other implementations, and fix the problem.  
-
-Some ideas to try:
-
-- send the message repeatedly in a loop until a response is received
-- add a sleep before each send
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
