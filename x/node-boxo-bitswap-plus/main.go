@@ -22,6 +22,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 
 	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multiaddr"
@@ -73,6 +74,31 @@ func main() {
 
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
+
+	// If targetF is set, ping the target peer using the IPFS ping
+	// algorithm.
+	if *targetF != "" {
+		maddr, err := multiaddr.NewMultiaddr(*targetF)
+		if err != nil {
+			log.Fatal(err)
+		}
+		info, err := peer.AddrInfoFromP2pAddr(maddr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("Pinging peer %s...", info.ID)
+		for {
+			pingCh := ping.Ping(ctx, h, info.ID)
+			result := <-pingCh
+			if result.Error != nil {
+				log.Printf("Ping error: %s", result.Error)
+			} else {
+				log.Printf("Ping RTT: %s", result.RTT)
+				break
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
 
 	// write the host's peer ID to a file for use in the demos
 	if *targetF == "" {
@@ -253,7 +279,13 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string) error {
 			return err
 		}
 		log.Println("found the data")
-		log.Println(string(fileData))
+		// log.Println(string(fileData))
+		// verify the data
+		err = verifyFile0to100k(fileData)
+		if err != nil {
+			log.Println("the file was not all the numbers from 0 to 100k!")
+			return err
+		}
 		log.Println("the file was all the numbers from 0 to 100k!")
 	}
 	return nil
@@ -300,12 +332,24 @@ func createFile0to100k() ([]byte, error) {
 	b := strings.Builder{}
 	for i := 0; i <= 100000; i++ {
 		s := strconv.Itoa(i)
-		_, err := b.WriteString(s)
+		_, err := b.WriteString(s + "\n")
 		if err != nil {
 			return nil, err
 		}
 	}
 	return []byte(b.String()), nil
+}
+
+// verifyFile0to100k verifies that the file contains the number 0 to 100k
+func verifyFile0to100k(fileData []byte) error {
+	lines := strings.Split(string(fileData), "\n")
+	for i := 0; i <= 100000; i++ {
+		s := strconv.Itoa(i)
+		if lines[i] != s {
+			return fmt.Errorf("file does not contain the number %d", i)
+		}
+	}
+	return nil
 }
 
 func startDataServer(ctx context.Context, h host.Host) (cid.Cid,

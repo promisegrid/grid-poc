@@ -1,18 +1,7 @@
-add IPNS
+add an IPFS ping
 
-Add an IPNS demo to the code.  
-
-- If targetF is not set, then the demo should publish an IPNS record
-  named "target27" that contains the fullAddr for the targetF.
-- If targetF is set, then the demo should read the "target27" IPNS record
-  and print the content.
-
-fix errors:
-
-vet: ./main.go:123:59: not enough arguments in call to ipns.Create
-        have ("github.com/libp2p/go-libp2p/core/crypto".PrivKey, []byte, time.Duration)
-        want ("github.com/libp2p/go-libp2p/core/crypto".PrivKey, []byte, uint64, time.Time, time.Duration)
-
+In the main function, if targetF is set, ping the target peer using the
+IPFS ping algorithm, and continue after the ping is complete.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
