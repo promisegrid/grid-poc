@@ -77,32 +77,10 @@ func main() {
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
 
-	// If targetF is set, ping the target peer using the IPFS ping
-	// algorithm.
+	// If targetF is set, ping the target peer using the libp2p ping
+	// protocol.
 	if *targetF != "" {
-		maddr, err := multiaddr.NewMultiaddr(*targetF)
-		if err != nil {
-			log.Fatal(err)
-		}
-		info, err := peer.AddrInfoFromP2pAddr(maddr)
-		if err != nil {
-			log.Fatal(err)
-		}
-		// Add the target address to the peerstore so that ping can
-		// dial the target.
-		h.Peerstore().AddAddr(info.ID, maddr, time.Hour)
-		log.Printf("Pinging peer %s...", info.ID)
-		for {
-			pingCh := ping.Ping(ctx, h, info.ID)
-			result := <-pingCh
-			if result.Error != nil {
-				log.Printf("Ping error: %s", result.Error)
-			} else {
-				log.Printf("Ping RTT: %s", result.RTT)
-				break
-			}
-			time.Sleep(1 * time.Second)
-		}
+		pingWait(ctx, h, *targetF)
 	}
 
 	// write the host's peer ID to a file for use in the demos
@@ -454,4 +432,32 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 	}
 
 	return buf.Bytes(), nil
+}
+
+// pingWait pings the target peer using the libp2p ping protocol and
+// returns when the ping is successful.
+func pingWait(ctx context.Context, h host.Host, target string) {
+	maddr, err := multiaddr.NewMultiaddr(target)
+	if err != nil {
+		log.Fatal(err)
+	}
+	info, err := peer.AddrInfoFromP2pAddr(maddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Add the target address to the peerstore so that ping can
+	// dial the target.
+	h.Peerstore().AddAddr(info.ID, maddr, time.Hour)
+	log.Printf("Pinging peer %s...", info.ID)
+	for {
+		pingCh := ping.Ping(ctx, h, info.ID)
+		result := <-pingCh
+		if result.Error != nil {
+			log.Printf("Ping error: %s", result.Error)
+		} else {
+			log.Printf("Ping RTT: %s", result.RTT)
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
 }
