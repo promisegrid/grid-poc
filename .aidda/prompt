@@ -1,8 +1,10 @@
 exit gossipsub demo after sucessfully receiving a message
 
 The "hello world" sender should exit after receiving a valid "hello
-back" message.  
+back" response.  
 
+I think I'm using the done and ctx incorrectly -- please adjust the
+code to use them correctly.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

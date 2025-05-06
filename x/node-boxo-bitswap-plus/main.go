@@ -129,6 +129,32 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 			return ctx.Err()
 		}
 
+		log.Println("Waiting for response on gossipsub (topic: gossip-demo)...")
+		responseCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		done := make(chan error, 1)
+
+		// start goroutine to handle incoming messages
+		go func() {
+			for {
+				msg, err := sub.Next(responseCtx)
+				if err != nil {
+					log.Printf("Failed to receive message: %v", err)
+					done <- err
+					return
+				}
+				if msg.ReceivedFrom == h.ID() {
+					continue
+				}
+				if string(msg.Data) == "hello back" {
+					log.Printf("Received response: %s", string(msg.Data))
+					done <- nil
+					return
+				}
+			}
+		}()
+
 		// Publish with retries
 		const maxRetries = 5
 		for i := 0; i < maxRetries; i++ {
@@ -138,32 +164,20 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 				log.Printf("Published message: hello world (attempt %d)", i+1)
 			}
 
-			// Wait before next attempt
+			// Wait before next attempt or until response received
 			select {
-			case <-time.After(5 * time.Second):
+			case <-time.After(1 * time.Second):
+			case err := <-done:
+				if err != nil {
+					return err
+				}
+				log.Println("Received response, exiting...")
+				return nil
 			case <-ctx.Done():
 				return ctx.Err()
 			}
 		}
-
-		log.Println("Waiting for response on gossipsub (topic: gossip-demo)...")
-		responseCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-		defer cancel()
-
-		for {
-			msg, err := sub.Next(responseCtx)
-			if err != nil {
-				return fmt.Errorf("failed to receive response: %w", err)
-			}
-			if msg.ReceivedFrom == h.ID() {
-				continue
-			}
-			if string(msg.Data) == "hello back" {
-				log.Printf("Received response: %s", string(msg.Data))
-				os.Exit(0)
-				return nil
-			}
-		}
+		return fmt.Errorf("did not receive a valid 'hello back' response after %d attempts", maxRetries)
 	} else {
 		// Act as responder: wait for "hello world" then send "hello back".
 		log.Println("Waiting for message on gossipsub (topic: gossip-demo)...")
