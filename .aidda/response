@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -26,6 +27,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-ipns"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multicodec"
 
@@ -42,6 +44,8 @@ import (
 	bsnet "github.com/ipfs/boxo/bitswap/network/bsnet"
 	bsserver "github.com/ipfs/boxo/bitswap/server"
 	"github.com/ipfs/boxo/files"
+
+	. "github.com/stevegt/goadapt"
 )
 
 const exampleBinaryName = "bitswap-transfer"
@@ -56,17 +60,19 @@ func main() {
 	defer cancel()
 
 	// Parse options from the command line
-	targetF := flag.String("d", "", "target peer to dial")
+	targetF := flag.String("d", "", "target peer to dial or a hex-encoded IPNS record")
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
 	gsF := flag.Bool("gs", false, "Run gossipsub demo")
+	ipnsF := flag.Bool("ipns", false, "Run IPNS demo")
 	flag.Parse()
 
 	// For this example we are going to be transferring data using Bitswap
-	// over libp2p or demonstrating gossipsub. This means we need to create a
-	// libp2p host first.
+	// over libp2p or demonstrating gossipsub or IPNS. This means we need to
+	// create a libp2p host first.
 
-	// Make a host that listens on the given multiaddress
-	h, err := makeHost(0, *seedF)
+	// Make a host that listens on the given multiaddress.
+	// makeHost now returns the private key as well.
+	h, priv, err := makeHost(0, *seedF)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -74,6 +80,24 @@ func main() {
 
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
+
+	// write the host's peer ID to a file for use in the demos
+	if *targetF == "" && !*ipnsF {
+		fn := fmt.Sprintf("/tmp/%s-peerid.txt", exampleBinaryName)
+		// call WriteFile to write the peer ID to a file. WriteFile is in
+		// the std lib os package. It returns an error if it fails.
+		err = os.WriteFile(fn, []byte(fullAddr), 0644)
+		Ck(err)
+		log.Printf("Peer ID written to %s\n", fn)
+	}
+
+	// If the IPNS demo is requested, run it.
+	if *ipnsF {
+		if err := runIPNSDemo(ctx, h, *targetF, fullAddr, priv); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	// If the gossipsub demo is requested, run it.
 	if *gsF {
@@ -89,13 +113,56 @@ func main() {
 	}
 }
 
+// runIPNSDemo runs an IPNS demo. If target is not provided, this node
+// publishes an IPNS record named "target27" containing fullAddr. If target is
+// provided, then the demo treats it as a hex-encoded IPNS record, decodes it,
+// and prints the content.
+func runIPNSDemo(ctx context.Context, h host.Host, target string,
+	fullAddr string, priv crypto.PrivKey) error {
+	// Publishing an IPNS record.
+	if target == "" {
+		lifetime := 24 * time.Hour
+		// Prepend "target27:" to the published value.
+		value := "target27:" + fullAddr
+		// Use a fixed sequence number of 27.
+		seq := uint64(27)
+		// Set expiry as current time plus lifetime.
+		expiry := time.Now().Add(lifetime)
+		rec, err := ipns.Create(priv, []byte(value), seq, expiry, lifetime)
+		if err != nil {
+			return err
+		}
+		recBytes, err := ipns.Marshal(rec)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Published IPNS record (hex):",
+			fmt.Sprintf("%x", recBytes))
+		return nil
+	} else {
+		// Assume target is a hex-encoded IPNS record.
+		recBytes, err := hex.DecodeString(target)
+		if err != nil {
+			return err
+		}
+		rec, err := ipns.Unmarshal(recBytes)
+		if err != nil {
+			return err
+		}
+		fmt.Println("Resolved IPNS record value:",
+			string(rec.Value))
+		return nil
+	}
+}
+
 // runGossipDemo runs a gossipsub demo that sends a message and waits for a
 // response. If target is provided, this node acts as the sender, publishing
 // "hello world" and waiting for a "hello back" from the responder. If no target
 // is provided, this node acts as the responder, waiting for a "hello world" and
-// replying with "hello back". The demo exits after a successful message exchange.
+// replying with "hello back". The demo exits after a successful message
+// exchange.
 func runGossipDemo(ctx context.Context, h host.Host, target string) error {
-	// Enable flood publishing to ensure messages reach all peers
+	// Enable flood publishing to ensure messages reach all peers.
 	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true))
 	if err != nil {
 		return err
@@ -123,7 +190,7 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 			return err
 		}
 
-		// Allow time for connection and mesh formation
+		// Allow time for connection and mesh formation.
 		log.Println("Waiting 2 seconds for connection stabilization...")
 		select {
 		case <-time.After(2 * time.Second):
@@ -135,49 +202,55 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 		responseCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
-		done := make(chan struct{})
+		done := make(chan error, 1)
 
-		// start goroutine to handle incoming messages
+		// start goroutine to handle incoming messages.
 		go func() {
 			for {
 				msg, err := sub.Next(responseCtx)
 				if err != nil {
 					log.Printf("Failed to receive message: %v", err)
+					done <- err
 					return
 				}
 				if msg.ReceivedFrom == h.ID() {
 					continue
 				}
-				if string(msg.Data) == "hello back" {
-					log.Printf("Received response: %s", string(msg.Data))
-					close(done)
+				if strings.HasPrefix(string(msg.Data), "hello back") {
+					log.Printf("Received %s, exiting...", string(msg.Data))
+					done <- nil
 					return
 				}
 			}
 		}()
 
-		// Publish with retries
+		// Publish with retries.
 		const maxRetries = 5
 		for i := 0; i < maxRetries; i++ {
-			if err := topic.Publish(ctx, []byte("hello world")); err != nil {
+			msg := Spf("hello world %d", i+1)
+			if err := topic.Publish(ctx, []byte(msg)); err != nil {
 				log.Printf("Publish attempt %d failed: %v", i+1, err)
 			} else {
 				log.Printf("Published message: hello world (attempt %d)", i+1)
 			}
 
-			// Wait before next attempt or until response is received
+			// Wait before next attempt or until response is received.
 			select {
 			case <-time.After(1 * time.Second):
-			case <-done:
+			case err := <-done:
+				if err != nil {
+					return err
+				}
 				log.Println("Received response, exiting...")
 				return nil
 			case <-ctx.Done():
 				return ctx.Err()
 			}
 		}
-		return fmt.Errorf("did not receive a valid 'hello back' response after %d attempts", maxRetries)
+		return fmt.Errorf("did not receive a valid 'hello back' response after %d "+
+			"attempts", maxRetries)
 	} else {
-		// Act as responder: wait for "hello world" then send "hello back" and exit.
+		// Act as responder: wait for "hello world" then send "hello back".
 		log.Println("Waiting for message on gossipsub (topic: gossip-demo)...")
 		for {
 			msg, err := sub.Next(ctx)
@@ -187,15 +260,30 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 			if msg.ReceivedFrom == h.ID() {
 				continue
 			}
-			if string(msg.Data) == "hello world" {
-				log.Println("Received 'hello world' message, sending response")
-				// Send response once
-				if err := topic.Publish(ctx, []byte("hello back")); err != nil {
-					log.Printf("Response publish failed: %v", err)
-					return err
+			if strings.HasPrefix(string(msg.Data), "hello world") {
+				log.Printf("Received %s, sending response...", string(msg.Data))
+				// get the integer from the message.
+				parts := strings.Split(string(msg.Data), " ")
+				if len(parts) < 3 {
+					log.Println("Invalid message format, ignoring...")
+					continue
 				}
-				log.Println("Sent 'hello back' response, exiting...")
-				return nil
+				numStr := parts[2]
+				num, err := strconv.Atoi(numStr)
+				if err != nil {
+					log.Printf("Failed to parse number from message: %v", err)
+					continue
+				}
+				log.Printf("Parsed number: %d", num)
+				// Send response.
+				ack := Spf("hello back %d", num)
+				err = topic.Publish(ctx, []byte(ack))
+				if err != nil {
+					log.Printf("Response publish attempt failed: %v", err)
+				} else {
+					log.Printf("Response published: %s", ack)
+				}
+				time.Sleep(1 * time.Second)
 			}
 		}
 	}
@@ -230,8 +318,8 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string) error {
 }
 
 // makeHost creates a libP2P host with a random peer ID listening on the given
-// multiaddress.
-func makeHost(listenPort int, randseed int64) (host.Host, error) {
+// multiaddress. It now returns the host and its private key.
+func makeHost(listenPort int, randseed int64) (host.Host, crypto.PrivKey, error) {
 	var r io.Reader
 	if randseed == 0 {
 		r = rand.Reader
@@ -243,21 +331,27 @@ func makeHost(listenPort int, randseed int64) (host.Host, error) {
 	// valid host ID.
 	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// Some basic libp2p options, see the go-libp2p docs for more details
+	// Some basic libp2p options, see the go-libp2p docs for more details.
 	opts := []libp2p.Option{
-		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", listenPort)),
+		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d",
+			listenPort)),
 		libp2p.Identity(priv),
 	}
 
-	return libp2p.New(opts...)
+	h, err := libp2p.New(opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	return h, priv, nil
 }
 
 func getHostAddress(h host.Host) string {
-	// Build host multiaddress
-	hostAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", h.ID().String()))
+	// Build host multiaddress.
+	hostAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s",
+		h.ID().String()))
 
 	// Now we can build a full multiaddress to reach this host by
 	// encapsulating both addresses:
@@ -265,7 +359,7 @@ func getHostAddress(h host.Host) string {
 	return addr.Encapsulate(hostAddr).String()
 }
 
-// createFile0to100k creates a file with the number 0 to 100k
+// createFile0to100k creates a file with the number 0 to 100k.
 func createFile0to100k() ([]byte, error) {
 	b := strings.Builder{}
 	for i := 0; i <= 100000; i++ {
@@ -315,7 +409,7 @@ func startDataServer(ctx context.Context, h host.Host) (cid.Cid,
 		return cid.Undef, nil, err
 	}
 	nd, err := balanced.Layout(ufsBuilder) // Arrange the graph with a balanced
-	// layout
+	// layout.
 	if err != nil {
 		return cid.Undef, nil, err
 	}

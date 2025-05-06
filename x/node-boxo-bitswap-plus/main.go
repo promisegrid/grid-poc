@@ -58,7 +58,6 @@ func main() {
 	// Parse options from the command line
 	targetF := flag.String("d", "", "target peer to dial")
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
-	gsF := flag.Bool("gs", false, "Run gossipsub demo")
 	flag.Parse()
 
 	// For this example we are going to be transferring data using Bitswap
@@ -85,18 +84,19 @@ func main() {
 		log.Printf("Peer ID written to %s\n", fn)
 	}
 
-	// If the gossipsub demo is requested, run it.
-	if *gsF {
-		if err := runGossipDemo(ctx, h, *targetF); err != nil {
+	// run the Bitswap demo.
+	go func() {
+		if err := runBitswapDemo(ctx, h, *targetF); err != nil {
 			log.Fatal(err)
 		}
-		return
-	}
+	}()
 
-	// Otherwise run the Bitswap demo.
-	if err := runBitswapDemo(ctx, h, *targetF); err != nil {
+	// run the gossipsub demo
+	if err := runGossipDemo(ctx, h, *targetF); err != nil {
 		log.Fatal(err)
 	}
+	return
+
 }
 
 // runGossipDemo runs a gossipsub demo that sends a message and waits for a

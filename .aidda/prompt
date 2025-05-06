@@ -1,10 +1,18 @@
-exit gossipsub demo after sucessfully receiving a message
+add IPNS
 
-The "hello world" sender should exit after receiving a valid "hello
-back" response.  
+Add an IPNS demo to the code.  
 
-I think I'm using the done and ctx incorrectly -- please adjust the
-code to use them correctly.  
+- If targetF is not set, then the demo should publish an IPNS record
+  named "target27" that contains the fullAddr for the targetF.
+- If targetF is set, then the demo should read the "target27" IPNS record
+  and print the content.
+
+fix errors:
+
+vet: ./main.go:123:59: not enough arguments in call to ipns.Create
+        have ("github.com/libp2p/go-libp2p/core/crypto".PrivKey, []byte, time.Duration)
+        want ("github.com/libp2p/go-libp2p/core/crypto".PrivKey, []byte, uint64, time.Time, time.Duration)
+
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
