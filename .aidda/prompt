@@ -3,6 +3,11 @@ add an IPFS ping
 In the main function, if targetF is set, ping the target peer using the
 IPFS ping algorithm, and continue after the ping is complete.  
 
+fix error:
+
+Ping error: failed to dial: failed to dial QmRvZp7GGnVrpZZUF5wsPuGceaR45QnEtRZV9WsRJ47dQk: no addresses
+
+
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
   to the given code or documentation. For IPFS, IPLD, or libp2p,

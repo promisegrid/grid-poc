@@ -22,6 +22,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+
+	// "github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 
 	"github.com/ipfs/go-cid"
@@ -86,6 +88,9 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		// Add the target address to the peerstore so that ping can
+		// dial the target.
+		h.Peerstore().AddAddr(info.ID, maddr, time.Hour)
 		log.Printf("Pinging peer %s...", info.ID)
 		for {
 			pingCh := ping.Ping(ctx, h, info.ID)
