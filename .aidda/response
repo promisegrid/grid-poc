@@ -91,7 +91,7 @@ func main() {
 
 // runGossipDemo runs a gossipsub demo that sends a message and waits for a
 // response. If target is provided, this node acts as the sender, publishing
-// "hello world" and waiting for a "hello back" from the responder.  If no target
+// "hello world" and waiting for a "hello back" from the responder. If no target
 // is provided, this node acts as the responder, waiting for a "hello world" and
 // replying with "hello back". The demo exits after a successful message exchange.
 func runGossipDemo(ctx context.Context, h host.Host, target string) error {
@@ -135,7 +135,7 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 		responseCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 
-		done := make(chan error, 1)
+		done := make(chan struct{})
 
 		// start goroutine to handle incoming messages
 		go func() {
@@ -143,7 +143,6 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 				msg, err := sub.Next(responseCtx)
 				if err != nil {
 					log.Printf("Failed to receive message: %v", err)
-					done <- err
 					return
 				}
 				if msg.ReceivedFrom == h.ID() {
@@ -151,7 +150,7 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 				}
 				if string(msg.Data) == "hello back" {
 					log.Printf("Received response: %s", string(msg.Data))
-					done <- nil
+					close(done)
 					return
 				}
 			}
@@ -166,13 +165,10 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 				log.Printf("Published message: hello world (attempt %d)", i+1)
 			}
 
-			// Wait before next attempt or until response received
+			// Wait before next attempt or until response is received
 			select {
 			case <-time.After(1 * time.Second):
-			case err := <-done:
-				if err != nil {
-					return err
-				}
+			case <-done:
 				log.Println("Received response, exiting...")
 				return nil
 			case <-ctx.Done():
@@ -181,7 +177,7 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 		}
 		return fmt.Errorf("did not receive a valid 'hello back' response after %d attempts", maxRetries)
 	} else {
-		// Act as responder: wait for "hello world" then send "hello back".
+		// Act as responder: wait for "hello world" then send "hello back" and exit.
 		log.Println("Waiting for message on gossipsub (topic: gossip-demo)...")
 		for {
 			msg, err := sub.Next(ctx)
@@ -193,25 +189,20 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 			}
 			if string(msg.Data) == "hello world" {
 				log.Println("Received 'hello world' message, sending response")
-
-				// Send response with retries
-				const maxRetries = 3
-				for i := 0; i < maxRetries; i++ {
-					if err := topic.Publish(ctx, []byte("hello back")); err != nil {
-						log.Printf("Response publish attempt %d failed: %v",
-							i+1, err)
-					} else {
-						log.Printf("Sent 'hello back' response (attempt %d)", i+1)
-					}
-					time.Sleep(500 * time.Millisecond)
+				// Send response once
+				if err := topic.Publish(ctx, []byte("hello back")); err != nil {
+					log.Printf("Response publish failed: %v", err)
+					return err
 				}
+				log.Println("Sent 'hello back' response, exiting...")
+				return nil
 			}
 		}
 	}
 }
 
 // runBitswapDemo runs the Bitswap demo. If target is empty, it runs in server
-// mode hosting a UnixFS file and listening for Bitswap requests.  If target is
+// mode hosting a UnixFS file and listening for Bitswap requests. If target is
 // provided, it runs in client mode and downloads the file from the target.
 func runBitswapDemo(ctx context.Context, h host.Host, target string) error {
 	if target == "" {
@@ -311,8 +302,9 @@ func startDataServer(ctx context.Context, h host.Host) (cid.Cid,
 		// instead of wrapping them in a dag-pb protobuf wrapper
 		CidBuilder: cid.V1Builder{ // Use CIDv1 for all links
 			Codec:    uint64(multicodec.DagPb),
-			MhType:   uint64(multicodec.Sha2_256), // Use SHA2-256 as the hash function
-			MhLength: -1,                          // Use the default hash length for the given hash function
+			MhType:   uint64(multicodec.Sha2_256), // Use SHA2-256 as the hash
+			MhLength: -1,                          // Use the default hash length for the
+			// given hash function
 		},
 		Dagserv: dsrv,
 		NoCopy:  false,
