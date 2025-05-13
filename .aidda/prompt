@@ -1,7 +1,8 @@
-add -ping flag
+troubleshoot gossipsub without ping
 
-Add a -ping flag that, when set, causes the program to send a ping
-message to the given peer.  
+In -dht mode, if I try sending a gossipsub message, the node listening
+on the topic doesn't receive it unless I ping the node first with the
+-ping flag. What's going on?
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -16,9 +17,6 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
-  x/node-boxo-bitswap-plus/main.go
-  x/node-boxo-bitswap-plus/main_test.go
-Out:
   x/node-boxo-bitswap-plus/main.go
   x/node-boxo-bitswap-plus/main_test.go
 

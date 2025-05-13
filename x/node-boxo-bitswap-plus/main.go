@@ -24,6 +24,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	// "github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 
 	"github.com/ipfs/go-cid"
@@ -119,7 +120,7 @@ func main() {
 	}()
 
 	// run the gossipsub demo
-	if err := runGossipDemo(ctx, h, *targetF, *targetDht); err != nil {
+	if err := runGossipDemo(ctx, h, *targetF, *targetDht, dht); err != nil {
 		log.Print(fmt.Errorf("Gossipsub demo failed: %v", err))
 	}
 
@@ -180,12 +181,16 @@ func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
 // "hello world" and waiting for a "hello back" from the responder. If no target
 // is provided, this node acts as the responder, waiting for a "hello world" and
 // replying with "hello back". The demo exits after a successful message exchange.
-func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool) error {
-	// Enable flood publishing to ensure messages reach all peers
-	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true))
-	if err != nil {
-		return err
-	}
+func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool, dht *dht.IpfsDHT) error {
+
+	// Create pubsub instance
+	ps, err := pubsub.NewGossipSub(ctx, h,
+		// use dht for discovery
+		pubsub.WithDiscovery(routing.NewRoutingDiscovery(dht)), // Add DHT-based discovery
+		// enable flood publishing to ensure messages reach all peers
+		pubsub.WithFloodPublish(true),
+	)
+
 	topic, err := ps.Join("gossip-demo")
 	if err != nil {
 		return err
