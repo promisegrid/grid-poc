@@ -402,11 +402,12 @@ func makeHost(listenPort int, randseed int64) (host.Host, error) {
 
 	// Some basic libp2p options, see the go-libp2p docs for more details
 	opts := []libp2p.Option{
-		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", listenPort)),
+		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d",
+			listenPort)),
 		libp2p.Identity(priv),
 		libp2p.EnableNATService(),
 		libp2p.EnableRelayService(),
-		libp2p.AutoRelay(),
+		libp2p.EnableAutoRelay(libp2p.WithPeerSource(autoRelayPeerSource)),
 	}
 
 	return libp2p.New(opts...)
@@ -421,6 +422,15 @@ func getHostAddress(h host.Host) string {
 	// encapsulating both addresses:
 	addr := h.Addrs()[0]
 	return addr.Encapsulate(hostAddr).String()
+}
+
+// autoRelayPeerSource provides a Peer Source function for AutoRelay.
+// It returns an empty channel, allowing auto relay service
+// to start without static relays.
+func autoRelayPeerSource(ctx context.Context, h host.Host) (<-chan peer.AddrInfo, error) {
+	ch := make(chan peer.AddrInfo)
+	close(ch)
+	return ch, nil
 }
 
 // createFile0to100k creates a file with the number 0 to 100k
@@ -569,16 +579,17 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 			return nil, err
 		}
 	} else {
-		var prov *peer.AddrInfo
-		for {
-			log.Println("Searching for providers via DHT...")
-			provChan := dht.FindProvidersAsync(ctx, c, 1)
+		log.Println("Searching for providers via DHT...")
+		want := 5
+		provChan := dht.FindProvidersAsync(ctx, c, want)
+		connected := 0
+		for connected < want {
 			// Wait for a provider to be found with a timeout.
-			found := false
+			var prov *peer.AddrInfo
 			select {
 			case p, ok := <-provChan:
 				if !ok {
-					log.Println("Provider channel closed before receiving a provider")
+					log.Printf("Provider channel closed before receiving %d providers", want)
 					continue
 				}
 				// Skip self.
@@ -591,17 +602,14 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 				for _, maddr := range prov.Addrs {
 					log.Printf("Provider address: %s", maddr)
 				}
-				found = true
-			case <-time.After(9999999 * time.Second):
-				return nil, fmt.Errorf("timeout waiting for provider")
+				if err := h.Connect(ctx, *prov); err != nil {
+					log.Printf("Error connecting to provider %s: %v", prov.ID, err)
+					continue
+				}
+				connected++
+			case <-time.After(10 * time.Second):
+				return nil, fmt.Errorf("timeout waiting for next provider")
 			}
-			if found {
-				break
-			}
-		}
-		if err := h.Connect(ctx, *prov); err != nil {
-			log.Printf("Error connecting to provider %s: %v", prov.ID, err)
-			return nil, err
 		}
 	}
 

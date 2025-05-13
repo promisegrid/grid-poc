@@ -12,7 +12,12 @@ relay the data.  But if the public network needs to relay the data,
 then the provider needs publish its public IP address in the provider
 record.  
 
-Fix this, using /tmp/r5 as a guide
+When trying to turn on auto relay, I get this error:
+
+  panic: Can not create a new relayFinder. Need a Peer Source fn or a list of static relays. Refer to the documentation around `libp2p.EnableAutoRelay`
+
+Fix this.  Do not use static relays.
+
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -27,7 +32,6 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
-  /tmp/r5
   x/node-boxo-bitswap-plus/main.go
   x/node-boxo-bitswap-plus/main_test.go
 Out:

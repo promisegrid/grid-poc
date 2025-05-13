@@ -405,8 +405,7 @@ func makeHost(listenPort int, randseed int64) (host.Host, error) {
 		libp2p.Identity(priv),
 		libp2p.EnableNATService(),
 		libp2p.EnableRelayService(),
-		// XXX libp2p.EnableAutoRelay is deprecated and might need options in able to work
-		libp2p.EnableAutoRelay(),
+		libp2p.EnableAutoRelay(libp2p.WithPeerSource(autoRelayPeerSource)),
 	}
 
 	return libp2p.New(opts...)
@@ -421,6 +420,15 @@ func getHostAddress(h host.Host) string {
 	// encapsulating both addresses:
 	addr := h.Addrs()[0]
 	return addr.Encapsulate(hostAddr).String()
+}
+
+// autoRelayPeerSource provides a Peer Source function for AutoRelay.
+// It returns an empty channel, allowing auto relay service
+// to start without static relays.
+func autoRelayPeerSource(ctx context.Context, h host.Host) (<-chan peer.AddrInfo, error) {
+	ch := make(chan peer.AddrInfo)
+	close(ch)
+	return ch, nil
 }
 
 // createFile0to100k creates a file with the number 0 to 100k
