@@ -403,6 +403,10 @@ func makeHost(listenPort int, randseed int64) (host.Host, error) {
 		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d",
 			listenPort)),
 		libp2p.Identity(priv),
+		libp2p.EnableNATService(),
+		libp2p.EnableRelayService(),
+		// XXX libp2p.EnableAutoRelay is deprecated and might need options in able to work
+		libp2p.EnableAutoRelay(),
 	}
 
 	return libp2p.New(opts...)
@@ -565,16 +569,17 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 			return nil, err
 		}
 	} else {
-		var prov *peer.AddrInfo
-		for {
-			log.Println("Searching for providers via DHT...")
-			provChan := dht.FindProvidersAsync(ctx, c, 1)
+		log.Println("Searching for providers via DHT...")
+		want := 5
+		provChan := dht.FindProvidersAsync(ctx, c, want)
+		connected := 0
+		for connected < want {
 			// Wait for a provider to be found with a timeout.
-			found := false
+			var prov *peer.AddrInfo
 			select {
 			case p, ok := <-provChan:
 				if !ok {
-					log.Println("Provider channel closed before receiving a provider")
+					log.Printf("Provider channel closed before receiving %d providers", want)
 					continue
 				}
 				// Skip self.
@@ -583,24 +588,17 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 					continue
 				}
 				prov = &p
-				found = true
-			case <-time.After(9999999 * time.Second):
-				return nil, fmt.Errorf("timeout waiting for provider")
-			}
-			if found {
-				break
-			}
-		}
-		if false {
-			for {
-				// XXX is this even needed?
-				log.Printf("Connecting to provider %s via DHT", prov.ID)
+				log.Printf("Found provider: %s", prov.ID)
+				for _, maddr := range prov.Addrs {
+					log.Printf("Provider address: %s", maddr)
+				}
 				if err := h.Connect(ctx, *prov); err != nil {
 					log.Printf("Error connecting to provider %s: %v", prov.ID, err)
-					time.Sleep(1 * time.Second)
 					continue
 				}
-				break
+				connected++
+			case <-time.After(10 * time.Second):
+				return nil, fmt.Errorf("timeout waiting for next provider")
 			}
 		}
 	}

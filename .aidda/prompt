@@ -1,8 +1,18 @@
-provision not working when using DHT
+download not working
 
-The bitswap consumer is not finding providers for the CID, despite the
-provider doing a reprovide every 10 seconds.  Figure out what's wrong.
+The bitswap consumer is not able to download the file after finding a
+provider. I'm not sure if this is because we're not connecting
+directly to he provider.  I'm not sure how provision works on the
+public network.  I'm not sure if other nodes on the public network
+will relay the data. 
 
+I think perhaps part of the problem is that either we need to connect
+directly to the provider, or we need to use the public network to
+relay the data.  But if the public network needs to relay the data,
+then the provider needs publish its public IP address in the provider
+record.  
+
+Fix this, using /tmp/r5 as a guide
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -17,7 +27,10 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
-  /tmp/r4
+  /tmp/r5
+  x/node-boxo-bitswap-plus/main.go
+  x/node-boxo-bitswap-plus/main_test.go
+Out:
   x/node-boxo-bitswap-plus/main.go
   x/node-boxo-bitswap-plus/main_test.go
 
