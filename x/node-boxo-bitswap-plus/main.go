@@ -44,8 +44,17 @@ import (
 	bsserver "github.com/ipfs/boxo/bitswap/server"
 	"github.com/ipfs/boxo/files"
 
+	dht "github.com/libp2p/go-libp2p-kad-dht"
+
 	. "github.com/stevegt/goadapt"
 )
+
+// list of public bootstrap peers as recommended for IPFS
+var defaultBootstrapPeers = []string{
+	"/ip4/104.131.131.82/tcp/4001/p2p/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
+	"/ip4/104.131.131.83/tcp/4001/p2p/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
+	"/ip4/104.131.131.84/tcp/4001/p2p/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
+}
 
 const exampleFn = "/tmp/boxo-example-peerid.txt"
 
@@ -73,6 +82,14 @@ func main() {
 		log.Fatal(err)
 	}
 	defer h.Close()
+
+	// Set up the DHT to join the public IPFS network. Bootstrap peers are used
+	// to help the DHT discover the public network.
+	dht, err := setupDHT(ctx, h)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dht.Close()
 
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
@@ -105,6 +122,45 @@ func main() {
 	}
 	return
 
+}
+
+// setupDHT initializes a Kademlia DHT instance for the host and connects to
+// a set of public bootstrap peers so that our node can join the IPFS network.
+func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
+	d, err := dht.New(ctx, h, dht.Mode(dht.ModeAuto))
+	if err != nil {
+		return nil, err
+	}
+	// Connect to each bootstrap peer.
+	var ok, nok int
+	for _, addrStr := range defaultBootstrapPeers {
+		maddr, err := multiaddr.NewMultiaddr(addrStr)
+		if err != nil {
+			log.Printf("Invalid bootstrap address %s: %v", addrStr, err)
+			continue
+		}
+		info, err := peer.AddrInfoFromP2pAddr(maddr)
+		if err != nil {
+			log.Printf("Invalid bootstrap peer info for %s: %v", addrStr,
+				err)
+			continue
+		}
+		if err := h.Connect(ctx, *info); err != nil {
+			log.Printf("Error connecting to bootstrap peer %s: %v", addrStr,
+				err)
+			nok++
+		} else {
+			log.Printf("Connected to bootstrap peer: %s", addrStr)
+			ok++
+		}
+	}
+	// Bootstrap the DHT so that it starts the routing process.
+	if err := d.Bootstrap(ctx); err != nil {
+		return nil, err
+	}
+	log.Printf("DHT bootstrapped successfully: %d/%d peers connected",
+		ok, ok+nok)
+	return d, nil
 }
 
 // runGossipDemo runs a gossipsub demo that sends a message and waits for a
