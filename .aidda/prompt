@@ -1,6 +1,7 @@
-rename -t flag to -dht
+add -ping flag
 
-rename the -t flag to -dht 
+Add a -ping flag that, when set, causes the program to send a ping
+message to the given peer.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

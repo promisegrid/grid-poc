@@ -69,6 +69,7 @@ func main() {
 	// proactively dialing a specific peer.
 	targetDht := flag.Bool("dht", false, "use DHT to find the target peer instead of direct dialing")
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
+	pingF := flag.String("ping", "", "target peer to ping")
 	flag.Parse()
 
 	// For this example we are going to be transferring data using Bitswap
@@ -93,10 +94,12 @@ func main() {
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
 
-	// If -d flag is set and not using DHT mode, ping the target peer using
-	// the libp2p ping protocol.
-	if *targetF != "" && !*targetDht {
-		pingWait(ctx, h, *targetF)
+	// ping targetF or pingF
+	for _, target := range []string{*targetF, *pingF} {
+		if target == "" {
+			continue
+		}
+		pingWait(ctx, h, target)
 	}
 
 	// write the host's peer ID to a file for use in the demos
@@ -111,16 +114,16 @@ func main() {
 	// run the Bitswap demo.
 	go func() {
 		if err := runBitswapDemo(ctx, h, *targetF, *targetDht, dht); err != nil {
-			log.Fatal(err)
+			log.Print(fmt.Errorf("Bitswap demo failed: %v", err))
 		}
 	}()
 
 	// run the gossipsub demo
 	if err := runGossipDemo(ctx, h, *targetF, *targetDht); err != nil {
-		log.Fatal(err)
+		log.Print(fmt.Errorf("Gossipsub demo failed: %v", err))
 	}
-	return
 
+	return
 }
 
 // setupDHT initializes a Kademlia DHT instance for the host and connects to
@@ -192,8 +195,8 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool)
 		return err
 	}
 
-	// If target peer is provided, act as the publisher.
-	if target != "" {
+	// If target peer is provided or DHT mode is enabled, act as sender
+	if target != "" || useDHT {
 		if !useDHT {
 			maddr, err := multiaddr.NewMultiaddr(target)
 			if err != nil {
@@ -324,7 +327,8 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string,
 		log.Printf("hosting UnixFS file with CID: %s\n", c)
 		log.Println("listening for inbound connections and Bitswap requests")
 		// log.Printf("Now run on a different terminal:\ngo run main.go -d %s\n", getHostAddress(h))
-		log.Printf("Now run on a different terminal:\ngo run main.go -d $(cat %s)\n", exampleFn)
+		log.Printf("Now run on a different terminal:\ngo run main.go -d $(cat %s)\n",
+			exampleFn)
 		<-ctx.Done()
 	} else {
 		log.Printf("downloading UnixFS file with CID: %s\n", fileCid)

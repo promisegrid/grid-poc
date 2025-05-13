@@ -71,6 +71,7 @@ func main() {
 	// proactively dialing a specific peer.
 	targetDht := flag.Bool("dht", false, "use DHT to find the target peer instead of direct dialing")
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
+	pingF := flag.Bool("ping", false, "if set, sends a ping message to the given peer")
 	flag.Parse()
 
 	// For this example we are going to be transferring data using Bitswap
@@ -95,10 +96,13 @@ func main() {
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
 
-	// If -d flag is set and not using DHT mode, ping the target peer using
-	// the libp2p ping protocol.
-	if *targetF != "" && !*targetDht {
+	// If -ping flag is set, ping the target peer using the libp2p ping protocol.
+	if *pingF {
+		if *targetF == "" {
+			log.Fatal("-ping flag requires a target peer specified with -d")
+		}
 		pingWait(ctx, h, *targetF)
+		return
 	}
 
 	// write the host's peer ID to a file for use in the demos
@@ -179,7 +183,8 @@ func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
 // "hello world" and waiting for a "hello back" from the responder. If no target
 // is provided, this node acts as the responder, waiting for a "hello world" and
 // replying with "hello back". The demo exits after a successful message exchange.
-func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool) error {
+func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool) 
+	error {
 	// Enable flood publishing to ensure messages reach all peers
 	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true))
 	if err != nil {
@@ -326,7 +331,8 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string,
 		log.Printf("hosting UnixFS file with CID: %s\n", c)
 		log.Println("listening for inbound connections and Bitswap requests")
 		// log.Printf("Now run on a different terminal:\ngo run main.go -d %s\n", getHostAddress(h))
-		log.Printf("Now run on a different terminal:\ngo run main.go -d $(cat %s)\n", exampleFn)
+		log.Printf("Now run on a different terminal:\ngo run main.go -d $(cat %s)\n", 
+			exampleFn)
 		<-ctx.Done()
 	} else {
 		log.Printf("downloading UnixFS file with CID: %s\n", fileCid)
