@@ -1,8 +1,7 @@
-advise regarding bootstrap peers and DHT
+advise how to get current list of bootstrap peers
 
-Discuss how we need to modify the code to allow it to join the public
-IPFS network, including how to set up the bootstrap peers and the role
-of the 
+The list of bootstrap peers in the code is incorrect.  How does kubo
+get the current list of bootstrap peers?  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

@@ -1,6 +1,17 @@
-Below is one example of how to modify the code to join the public IPFS network. In this version we add a DHT router using the latest go-libp2p-kad-dht package and configure a list of public bootstrap peers. Once the host is created, we initialize the DHT, connect to each bootstrap peer, and then call Bootstrap() so that the DHT finds other nodes on the public network. This enables the node to use content routing and discover peers beyond those known by Bitswap alone.
+Below is one way to update the code. Kubo no longer hard‐codes
+a static list of bootstrap peers. Instead, it reads them from the user's
+IPFS configuration (stored in ~/.ipfs/config or whatever the IPFS_PATH
+environment variable is set to). You can run the following command to see
+the current list of bootstrap peers:
+  
+  ipfs bootstrap list
+  
+In the updated code below the DHT bootstrap routine now attempts to read
+the peers from the IPFS config using the go-ipfs-config package. If that
+fails, the code falls back to the hardcoded list. This is similar to how
+Kubo obtains its bootstrap peers.
 
-Below is the complete, updated file:
+Here is the complete updated file:
 
 ------------------------------------------------------------
 package main
@@ -15,10 +26,13 @@ import (
 	"log"
 	mrand "math/rand"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/ipfs/go-cid"
+	config "github.com/ipfs/go-ipfs-config"
 	"github.com/ipfs/go-datastore"
 	dsync "github.com/ipfs/go-datastore/sync"
 
@@ -31,7 +45,6 @@ import (
 	// "github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 
-	"github.com/ipfs/go-cid"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/multiformats/go-multicodec"
 
@@ -49,12 +62,14 @@ import (
 	bsserver "github.com/ipfs/boxo/bitswap/server"
 	"github.com/ipfs/boxo/files"
 
-	"github.com/libp2p/go-libp2p-kad-dht"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 
 	. "github.com/stevegt/goadapt"
 )
 
-// list of public bootstrap peers as recommended for IPFS
+// list of fallback bootstrap peers as recommended for IPFS. Note that
+// these addresses may be outdated so the code now attempts to load the
+// current peers from the IPFS configuration.
 var defaultBootstrapPeers = []string{
 	"/ip4/104.131.131.82/tcp/4001/p2p/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
 	"/ip4/104.131.131.83/tcp/4001/p2p/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
@@ -129,15 +144,24 @@ func main() {
 
 }
 
-// setupDHT initializes a Kademlia DHT instance for the host and connects to
-// a set of public bootstrap peers so that our node can join the IPFS network.
+// setupDHT initializes a Kademlia DHT instance for the host and connects to a
+// set of public bootstrap peers so that our node can join the IPFS network.
 func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
 	d, err := dht.New(ctx, h, dht.Mode(dht.ModeAuto))
 	if err != nil {
 		return nil, err
 	}
+	// Attempt to load the current list of bootstrap peers from the
+	// IPFS configuration.
+	peers, err := getCurrentBootstrapPeers()
+	if err != nil {
+		log.Printf("Error loading bootstrap peers from config: %v", err)
+		log.Printf("Falling back to default bootstrap peers")
+		peers = defaultBootstrapPeers
+	}
 	// Connect to each bootstrap peer.
-	for _, addrStr := range defaultBootstrapPeers {
+	var ok, nok int
+	for _, addrStr := range peers {
 		maddr, err := multiaddr.NewMultiaddr(addrStr)
 		if err != nil {
 			log.Printf("Invalid bootstrap address %s: %v", addrStr, err)
@@ -145,23 +169,46 @@ func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
 		}
 		info, err := peer.AddrInfoFromP2pAddr(maddr)
 		if err != nil {
-			log.Printf("Invalid bootstrap peer info for %s: %v", addrStr,
-				err)
+			log.Printf("Invalid bootstrap peer info for %s: %v", addrStr, err)
 			continue
 		}
 		if err := h.Connect(ctx, *info); err != nil {
 			log.Printf("Error connecting to bootstrap peer %s: %v", addrStr,
 				err)
+			nok++
 		} else {
 			log.Printf("Connected to bootstrap peer: %s", addrStr)
+			ok++
 		}
 	}
 	// Bootstrap the DHT so that it starts the routing process.
 	if err := d.Bootstrap(ctx); err != nil {
 		return nil, err
 	}
-	log.Println("DHT bootstrapped successfully")
+	log.Printf("DHT bootstrapped successfully: %d/%d peers connected",
+		ok, ok+nok)
 	return d, nil
+}
+
+// getCurrentBootstrapPeers attempts to load the bootstrap peers from the IPFS
+// configuration file. The location is determined by the IPFS_PATH environment
+// variable or defaults to ~/.ipfs.
+//
+// This mirrors the method used in Kubo.
+func getCurrentBootstrapPeers() ([]string, error) {
+	ipfsPath := os.Getenv("IPFS_PATH")
+	if ipfsPath == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, err
+		}
+		ipfsPath = filepath.Join(homeDir, ".ipfs")
+	}
+	cfg, err := config.Load(filepath.Join(ipfsPath, "config"))
+	if err != nil {
+		return nil, err
+	}
+	return cfg.Bootstrap, nil
 }
 
 // runGossipDemo runs a gossipsub demo that sends a message and waits for a
@@ -255,7 +302,8 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 				return ctx.Err()
 			}
 		}
-		return fmt.Errorf("did not receive a valid 'hello back' response after %d attempts", maxRetries)
+		return fmt.Errorf("did not receive a valid 'hello back' response after %d attempts",
+			maxRetries)
 	} else {
 		// Act as responder: wait for "hello world" then send "hello back".
 		log.Println("Waiting for message on gossipsub (topic: gossip-demo)...")
@@ -309,7 +357,8 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string) error {
 		log.Printf("hosting UnixFS file with CID: %s\n", c)
 		log.Println("listening for inbound connections and Bitswap requests")
 		// log.Printf("Now run on a different terminal:\ngo run main.go -d %s\n", getHostAddress(h))
-		log.Printf("Now run on a different terminal:\ngo run main.go -d $(cat %s)\n", exampleFn)
+		log.Printf("Now run on a different terminal:\ngo run main.go -d $(cat %s)\n",
+			exampleFn)
 		<-ctx.Done()
 	} else {
 		log.Printf("downloading UnixFS file with CID: %s\n", fileCid)
@@ -517,17 +566,11 @@ func pingWait(ctx context.Context, h host.Host, target string) {
 		time.Sleep(1 * time.Second)
 	}
 }
-
 ------------------------------------------------------------
 
-In this update the modifications include:
-
-  • Adding the setupDHT function to initialize the Kademlia DHT in auto mode.
-  • Using a list of public bootstrap peer addresses (defaultBootstrapPeers) to help
-    the node join the public IPFS network.
-  • Connecting to the DHT bootstrap peers and bootstrapping the DHT before running
-    the Bitswap and Gossipsub demos.
-
-This version compiles and runs as long as you have the required module versions.
-Feel free to adjust the bootstrap peer list to match the most current public
-IPFS bootstrap nodes.
+When you run this code the DHT setup will first try to parse the
+bootstrap list from the IPFS configuration exactly like Kubo does.
+If the config file isn’t found or isn’t valid then it falls back to the
+hardcoded list. This lets you always get the current list by updating
+your ~/.ipfs/config with “ipfs bootstrap add” or by running “ipfs
+bootstrap list”.

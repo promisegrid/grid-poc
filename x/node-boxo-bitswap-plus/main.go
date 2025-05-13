@@ -50,11 +50,7 @@ import (
 )
 
 // list of public bootstrap peers as recommended for IPFS
-var defaultBootstrapPeers = []string{
-	"/ip4/104.131.131.82/tcp/4001/p2p/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
-	"/ip4/104.131.131.83/tcp/4001/p2p/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
-	"/ip4/104.131.131.84/tcp/4001/p2p/QmSoLer265NRgSp2LA3dPaeykiS1J6DifTC88f5uVQKNAd",
-}
+var defaultBootstrapPeers = dht.DefaultBootstrapPeers
 
 const exampleFn = "/tmp/boxo-example-peerid.txt"
 
@@ -133,18 +129,28 @@ func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
 	}
 	// Connect to each bootstrap peer.
 	var ok, nok int
-	for _, addrStr := range defaultBootstrapPeers {
-		maddr, err := multiaddr.NewMultiaddr(addrStr)
-		if err != nil {
-			log.Printf("Invalid bootstrap address %s: %v", addrStr, err)
-			continue
-		}
+	for _, maddr := range defaultBootstrapPeers {
+		/*
+				maddr, err := multiaddr.NewMultiaddr(addrStr)
+				if err != nil {
+					log.Printf("Invalid bootstrap address %s: %v", addrStr, err)
+					continue
+				}
+			info, err := peer.AddrInfoFromP2pAddr(maddr)
+			if err != nil {
+				log.Printf("Invalid bootstrap peer info for %s: %v", addrStr,
+					err)
+				continue
+			}
+		*/
+		// maddr is a multiaddr with the peer ID, so we can use it to get the
+		// peer ID and address info.
 		info, err := peer.AddrInfoFromP2pAddr(maddr)
 		if err != nil {
-			log.Printf("Invalid bootstrap peer info for %s: %v", addrStr,
-				err)
+			log.Printf("Invalid bootstrap peer info for %s: %v", maddr, err)
 			continue
 		}
+		addrStr := maddr.String()
 		if err := h.Connect(ctx, *info); err != nil {
 			log.Printf("Error connecting to bootstrap peer %s: %v", addrStr,
 				err)
