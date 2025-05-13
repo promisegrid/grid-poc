@@ -65,9 +65,9 @@ func main() {
 
 	// Parse options from the command line
 	targetF := flag.String("d", "", "target peer to dial")
-	// The -t flag will cause the code to rely on DHT discovery instead of
+	// The -dht flag will cause the code to rely on DHT discovery instead of
 	// proactively dialing a specific peer.
-	targetT := flag.Bool("t", false, "use DHT to find the target peer instead of direct dialing")
+	targetDht := flag.Bool("dht", false, "use DHT to find the target peer instead of direct dialing")
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
 	flag.Parse()
 
@@ -95,12 +95,12 @@ func main() {
 
 	// If -d flag is set and not using DHT mode, ping the target peer using
 	// the libp2p ping protocol.
-	if *targetF != "" && !*targetT {
+	if *targetF != "" && !*targetDht {
 		pingWait(ctx, h, *targetF)
 	}
 
 	// write the host's peer ID to a file for use in the demos
-	if *targetF == "" && !*targetT {
+	if *targetF == "" && !*targetDht {
 		// call WriteFile to write the peer ID to a file WriteFile is
 		// in the std lib os package.  it returns an error if it fails
 		err = os.WriteFile(exampleFn, []byte(fullAddr), 0644)
@@ -110,13 +110,13 @@ func main() {
 
 	// run the Bitswap demo.
 	go func() {
-		if err := runBitswapDemo(ctx, h, *targetF, *targetT, dht); err != nil {
+		if err := runBitswapDemo(ctx, h, *targetF, *targetDht, dht); err != nil {
 			log.Fatal(err)
 		}
 	}()
 
 	// run the gossipsub demo
-	if err := runGossipDemo(ctx, h, *targetF, *targetT); err != nil {
+	if err := runGossipDemo(ctx, h, *targetF, *targetDht); err != nil {
 		log.Fatal(err)
 	}
 	return
