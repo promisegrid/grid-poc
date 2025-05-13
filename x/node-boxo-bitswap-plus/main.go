@@ -65,6 +65,8 @@ func main() {
 
 	// Parse options from the command line
 	targetF := flag.String("d", "", "target peer to dial")
+	// The -t flag will cause the code to rely on DHT discovery
+	targetT := flag.Bool("t", false, "use DHT to find the target peer instead of direct dialing")
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
 	flag.Parse()
 
@@ -90,14 +92,14 @@ func main() {
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
 
-	// If targetF is set, ping the target peer using the libp2p ping
-	// protocol.
-	if *targetF != "" {
+	// If -d flag is set and not using DHT mode, ping the target peer using
+	// the libp2p ping protocol.
+	if *targetF != "" && !*targetT {
 		pingWait(ctx, h, *targetF)
 	}
 
 	// write the host's peer ID to a file for use in the demos
-	if *targetF == "" {
+	if *targetF == "" && !*targetT {
 		// call WriteFile to write the peer ID to a file WriteFile is
 		// in the std lib os package.  it returns an error if it fails
 		err = os.WriteFile(exampleFn, []byte(fullAddr), 0644)
@@ -107,13 +109,13 @@ func main() {
 
 	// run the Bitswap demo.
 	go func() {
-		if err := runBitswapDemo(ctx, h, *targetF); err != nil {
+		if err := runBitswapDemo(ctx, h, *targetF, *targetT, dht); err != nil {
 			log.Fatal(err)
 		}
 	}()
 
 	// run the gossipsub demo
-	if err := runGossipDemo(ctx, h, *targetF); err != nil {
+	if err := runGossipDemo(ctx, h, *targetF, *targetT); err != nil {
 		log.Fatal(err)
 	}
 	return
@@ -174,7 +176,7 @@ func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
 // "hello world" and waiting for a "hello back" from the responder. If no target
 // is provided, this node acts as the responder, waiting for a "hello world" and
 // replying with "hello back". The demo exits after a successful message exchange.
-func runGossipDemo(ctx context.Context, h host.Host, target string) error {
+func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool) error {
 	// Enable flood publishing to ensure messages reach all peers
 	ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true))
 	if err != nil {
@@ -191,16 +193,20 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 
 	// If target peer is provided, act as the publisher.
 	if target != "" {
-		maddr, err := multiaddr.NewMultiaddr(target)
-		if err != nil {
-			return err
-		}
-		info, err := peer.AddrInfoFromP2pAddr(maddr)
-		if err != nil {
-			return err
-		}
-		if err := h.Connect(ctx, *info); err != nil {
-			return err
+		if !useDHT {
+			maddr, err := multiaddr.NewMultiaddr(target)
+			if err != nil {
+				return err
+			}
+			info, err := peer.AddrInfoFromP2pAddr(maddr)
+			if err != nil {
+				return err
+			}
+			if err := h.Connect(ctx, *info); err != nil {
+				return err
+			}
+		} else {
+			log.Println("Using DHT discovery for gossipsub; not dialing a specific peer")
 		}
 
 		// Allow time for connection and mesh formation
@@ -301,11 +307,14 @@ func runGossipDemo(ctx context.Context, h host.Host, target string) error {
 	}
 }
 
-// runBitswapDemo runs the Bitswap demo. If target is empty, it runs in server
-// mode hosting a UnixFS file and listening for Bitswap requests. If target is
-// provided, it runs in client mode and downloads the file from the target.
-func runBitswapDemo(ctx context.Context, h host.Host, target string) error {
-	if target == "" {
+// runBitswapDemo runs the Bitswap demo. If target is empty and DHT mode is not
+// specified, it runs in server mode hosting a UnixFS file and listening for
+// Bitswap requests. If target is provided or DHT mode is enabled, it runs in
+// client mode and downloads the file from a peer discovered either via a direct
+// dial or via DHT.
+func runBitswapDemo(ctx context.Context, h host.Host, target string,
+	useDHT bool, dht *dht.IpfsDHT) error {
+	if target == "" && !useDHT {
 		c, bs, err := startDataServer(ctx, h)
 		if err != nil {
 			return err
@@ -318,7 +327,8 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string) error {
 		<-ctx.Done()
 	} else {
 		log.Printf("downloading UnixFS file with CID: %s\n", fileCid)
-		fileData, err := runClient(ctx, h, cid.MustParse(fileCid), target)
+		fileData, err := runClient(ctx, h, cid.MustParse(fileCid), target,
+			useDHT, dht)
 		if err != nil {
 			return err
 		}
@@ -354,7 +364,8 @@ func makeHost(listenPort int, randseed int64) (host.Host, error) {
 
 	// Some basic libp2p options, see the go-libp2p docs for more details
 	opts := []libp2p.Option{
-		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d", listenPort)),
+		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d",
+			listenPort)),
 		libp2p.Identity(priv),
 	}
 
@@ -363,7 +374,8 @@ func makeHost(listenPort int, randseed int64) (host.Host, error) {
 
 func getHostAddress(h host.Host) string {
 	// Build host multiaddress
-	hostAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s", h.ID().String()))
+	hostAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s",
+		h.ID().String()))
 
 	// Now we can build a full multiaddress to reach this host by
 	// encapsulating both addresses:
@@ -448,28 +460,52 @@ func startDataServer(ctx context.Context, h host.Host) (cid.Cid,
 }
 
 func runClient(ctx context.Context, h host.Host, c cid.Cid,
-	targetPeer string) ([]byte, error) {
+	target string, useDHT bool, dht *dht.IpfsDHT) ([]byte, error) {
 	n := bsnet.NewFromIpfsHost(h)
 	bswap := bsclient.New(ctx, n, nil,
 		blockstore.NewBlockstore(datastore.NewNullDatastore()))
 	n.Start(bswap)
 	defer bswap.Close()
 
-	// Turn the targetPeer into a multiaddr.
-	maddr, err := multiaddr.NewMultiaddr(targetPeer)
-	if err != nil {
-		return nil, err
-	}
+	if !useDHT {
+		// Turn the targetPeer into a multiaddr.
+		maddr, err := multiaddr.NewMultiaddr(target)
+		if err != nil {
+			return nil, err
+		}
 
-	// Extract the peer ID from the multiaddr.
-	info, err := peer.AddrInfoFromP2pAddr(maddr)
-	if err != nil {
-		return nil, err
-	}
+		// Extract the peer ID from the multiaddr.
+		info, err := peer.AddrInfoFromP2pAddr(maddr)
+		if err != nil {
+			return nil, err
+		}
 
-	// Directly connect to the peer that we know has the content.
-	if err := h.Connect(ctx, *info); err != nil {
-		return nil, err
+		// Directly connect to the peer that we know has the content.
+		if err := h.Connect(ctx, *info); err != nil {
+			return nil, err
+		}
+	} else {
+		log.Println("Searching for providers via DHT...")
+		provChan := dht.FindProvidersAsync(ctx, c, 1)
+		var prov *peer.AddrInfo
+		// Wait for a provider to be found with a timeout.
+		select {
+		case p, ok := <-provChan:
+			if !ok {
+				return nil, fmt.Errorf("no providers found")
+			}
+			// Skip self.
+			if p.ID == h.ID() {
+				return nil, fmt.Errorf("skipping self as provider")
+			}
+			prov = &p
+		case <-time.After(10 * time.Second):
+			return nil, fmt.Errorf("timeout waiting for provider")
+		}
+		log.Printf("Connecting to provider %s via DHT", prov.ID)
+		if err := h.Connect(ctx, *prov); err != nil {
+			return nil, err
+		}
 	}
 
 	dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,

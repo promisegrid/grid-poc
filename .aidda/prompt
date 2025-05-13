@@ -1,7 +1,11 @@
-advise how to get current list of bootstrap peers
+add -t flag 
 
-The list of bootstrap peers in the code is incorrect.  How does kubo
-get the current list of bootstrap peers?  
+When the -d flag is provided, the code will connect to the peer
+provided as the flag's argument.  Now that we have a working
+DHT implementation, we can use the DHT to find the peer.  So let's add
+a -t flag that is a boolean that, if provided, will cause the same
+code that runs with -d to run, but will not proactively connect to a
+particular peer, but will instead rely on the DHT.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -16,6 +20,8 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
+  x/node-boxo-bitswap-plus/main.go
+Out:
   x/node-boxo-bitswap-plus/main.go
 
 .stop
