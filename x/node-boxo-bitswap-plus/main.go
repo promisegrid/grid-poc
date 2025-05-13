@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	mrand "math/rand"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ipfs/go-datastore"
@@ -112,18 +114,28 @@ func main() {
 		log.Printf("Peer ID written to %s\n", exampleFn)
 	}
 
+	wg := sync.WaitGroup{}
+
 	// run the Bitswap demo.
 	go func() {
+		wg.Add(1)
 		if err := runBitswapDemo(ctx, h, *targetF, *targetDht, dht); err != nil {
 			log.Print(fmt.Errorf("Bitswap demo failed: %v", err))
 		}
+		wg.Done()
 	}()
 
 	// run the gossipsub demo
-	if err := runGossipDemo(ctx, h, *targetF, *targetDht, dht); err != nil {
-		log.Print(fmt.Errorf("Gossipsub demo failed: %v", err))
-	}
+	go func() {
+		wg.Add(1)
+		if err := runGossipDemo(ctx, h, *targetF, *targetDht, dht); err != nil {
+			log.Print(fmt.Errorf("Gossipsub demo failed: %v", err))
+		}
+		wg.Done()
+	}()
 
+	time.Sleep(1 * time.Second)
+	wg.Wait()
 	return
 }
 
@@ -253,7 +265,7 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool,
 		}()
 
 		// Publish with retries
-		const maxRetries = 5
+		const maxRetries = math.MaxInt
 		for i := 0; i < maxRetries; i++ {
 			msg := Spf("hello world %d", i+1)
 			if err := topic.Publish(ctx, []byte(msg)); err != nil {
@@ -495,22 +507,31 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 			return nil, err
 		}
 	} else {
-		log.Println("Searching for providers via DHT...")
-		provChan := dht.FindProvidersAsync(ctx, c, 1)
 		var prov *peer.AddrInfo
-		// Wait for a provider to be found with a timeout.
-		select {
-		case p, ok := <-provChan:
-			if !ok {
-				return nil, fmt.Errorf("no providers found")
+		for {
+			log.Println("Searching for providers via DHT...")
+			provChan := dht.FindProvidersAsync(ctx, c, 1)
+			// Wait for a provider to be found with a timeout.
+			found := false
+			select {
+			case p, ok := <-provChan:
+				if !ok {
+					log.Println("Provider channel closed before receiving a provider")
+					continue
+				}
+				// Skip self.
+				if p.ID == h.ID() {
+					log.Println("Skipping self as provider")
+					continue
+				}
+				prov = &p
+				found = true
+			case <-time.After(9999999 * time.Second):
+				return nil, fmt.Errorf("timeout waiting for provider")
 			}
-			// Skip self.
-			if p.ID == h.ID() {
-				return nil, fmt.Errorf("skipping self as provider")
+			if found {
+				break
 			}
-			prov = &p
-		case <-time.After(10 * time.Second):
-			return nil, fmt.Errorf("timeout waiting for provider")
 		}
 		log.Printf("Connecting to provider %s via DHT", prov.ID)
 		if err := h.Connect(ctx, *prov); err != nil {
