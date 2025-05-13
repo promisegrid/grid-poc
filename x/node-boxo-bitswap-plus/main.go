@@ -47,7 +47,7 @@ import (
 	. "github.com/stevegt/goadapt"
 )
 
-const exampleBinaryName = "bitswap-transfer"
+const exampleFn = "/tmp/boxo-example-peerid.txt"
 
 // The CID of the file with the number 0 to 100k, built with the parameters:
 // CIDv1 links, a 256bit sha2-256 hash function, raw-leaves, a balanced layout,
@@ -85,12 +85,11 @@ func main() {
 
 	// write the host's peer ID to a file for use in the demos
 	if *targetF == "" {
-		fn := fmt.Sprintf("/tmp/%s-peerid.txt", exampleBinaryName)
 		// call WriteFile to write the peer ID to a file WriteFile is
 		// in the std lib os package.  it returns an error if it fails
-		err = os.WriteFile(fn, []byte(fullAddr), 0644)
+		err = os.WriteFile(exampleFn, []byte(fullAddr), 0644)
 		Ck(err)
-		log.Printf("Peer ID written to %s\n", fn)
+		log.Printf("Peer ID written to %s\n", exampleFn)
 	}
 
 	// run the Bitswap demo.
@@ -252,8 +251,8 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string) error {
 		defer bs.Close()
 		log.Printf("hosting UnixFS file with CID: %s\n", c)
 		log.Println("listening for inbound connections and Bitswap requests")
-		log.Printf("Now run \"./%s -d %s\" on a different terminal\n",
-			exampleBinaryName, getHostAddress(h))
+		// log.Printf("Now run on a different terminal:\ngo run main.go -d %s\n", getHostAddress(h))
+		log.Printf("Now run on a different terminal:\ngo run main.go -d $(cat %s)\n", exampleFn)
 		<-ctx.Done()
 	} else {
 		log.Printf("downloading UnixFS file with CID: %s\n", fileCid)
