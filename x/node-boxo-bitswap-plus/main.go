@@ -60,7 +60,10 @@ const exampleFn = "/tmp/boxo-example-peerid.txt"
 // The CID of the file with the number 0 to 100k, built with the parameters:
 // CIDv1 links, a 256bit sha2-256 hash function, raw-leaves, a balanced layout,
 // 256kiB chunks, and 174 max links per block
-const fileCid = "bafybeiecq2irw4fl5vunnxo6cegoutv4de63h7n27tekkjtak3jrvrzzhe"
+// const fileCid = "bafybeiecq2irw4fl5vunnxo6cegoutv4de63h7n27tekkjtak3jrvrzzhe"
+
+// dynamically generated fileCid
+var fileCid string
 
 func main() {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -142,7 +145,8 @@ func main() {
 // setupDHT initializes a Kademlia DHT instance for the host and connects to
 // a set of public bootstrap peers so that our node can join the IPFS network.
 func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
-	d, err := dht.New(ctx, h, dht.Mode(dht.ModeAuto))
+	// d, err := dht.New(ctx, h, dht.Mode(dht.ModeAuto))
+	d, err := dht.New(ctx, h, dht.Mode(dht.ModeServer))
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +252,15 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool,
 					continue
 				}
 				if strings.HasPrefix(string(msg.Data), "hello back") {
-					log.Printf("Received %s, exiting...", string(msg.Data))
+					// log.Printf("Received %s, exiting...", string(msg.Data))
+					log.Printf("Received %s", string(msg.Data))
+					parts := strings.Split(string(msg.Data), " ")
+					if len(parts) < 3 {
+						log.Println("Invalid message format, ignoring...")
+						continue
+					}
+					fileCid = parts[3]
+					log.Printf("Parsed fileCid: %s", fileCid)
 					done <- nil
 					return
 				}
@@ -306,7 +318,13 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool,
 				}
 				log.Printf("Parsed number: %d", num)
 				// Send response
-				ack := Spf("hello back %d", num)
+				// ack := Spf("hello back %d", num)
+				if fileCid == "" {
+					log.Println("fileCid is empty, can't send response yet")
+					continue
+				}
+				// Send fileCid in the response
+				ack := Spf("hello back %d %s", num, fileCid)
 				err = topic.Publish(ctx, []byte(ack))
 				if err != nil {
 					log.Printf("Response publish attempt failed: %v", err)
@@ -340,6 +358,10 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string,
 			exampleFn)
 		<-ctx.Done()
 	} else {
+		for fileCid == "" {
+			log.Println("Waiting for fileCid to be set...")
+			time.Sleep(1 * time.Second)
+		}
 		log.Printf("downloading UnixFS file with CID: %s\n", fileCid)
 		fileData, err := runClient(ctx, h, cid.MustParse(fileCid), target,
 			useDHT, dht)
@@ -351,7 +373,7 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string,
 		// verify the data
 		err = verifyFile0to100k(fileData)
 		if err != nil {
-			log.Println("the file was not all the numbers from 0 to 100k!")
+			log.Println("the file was NOT all the numbers from 0 to 100k!")
 			return err
 		}
 		log.Println("the file was all the numbers from 0 to 100k!")
@@ -458,15 +480,34 @@ func startDataServer(ctx context.Context, h host.Host, dht *dht.IpfsDHT) (cid.Ci
 	if err != nil {
 		return cid.Undef, nil, err
 	}
-	nd, err := balanced.Layout(ufsBuilder) // Arrange the graph with a balanced
-	// layout
+	// Arrange the graph with a balanced layout
+	nd, err := balanced.Layout(ufsBuilder)
 	if err != nil {
 		return cid.Undef, nil, err
 	}
 	rootCid := nd.Cid()
 
+	// hang onto the fileCid so we can respond with it in pubsub
+	fileCid = rootCid.String()
+
+	/*
+		// verify that the file we created has the expected CID
+		if rootCid.String() != fileCid {
+			return cid.Undef, nil, fmt.Errorf("CID mismatch: expected %s, got %s",
+				fileCid, rootCid.String())
+		}
+	*/
+
+	// verify that we can fetch the file we created
+	// XXX
+	/*
+		if string(ufsBytes) != string(fileBytes) {
+			return cid.Undef, nil, fmt.Errorf("file mismatch")
+		}
+	*/
+
 	// Advertise CID through DHT if available
-	Pf("DHT: %v", dht)
+	Pf("DHT: %p\n", dht)
 	if dht != nil {
 		if err := dht.Provide(ctx, rootCid, true); err != nil {
 			return cid.Undef, nil, fmt.Errorf("failed to announce CID via DHT: %v", err)
@@ -550,9 +591,17 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 				break
 			}
 		}
-		log.Printf("Connecting to provider %s via DHT", prov.ID)
-		if err := h.Connect(ctx, *prov); err != nil {
-			return nil, err
+		if false {
+			for {
+				// XXX is this even needed?
+				log.Printf("Connecting to provider %s via DHT", prov.ID)
+				if err := h.Connect(ctx, *prov); err != nil {
+					log.Printf("Error connecting to provider %s: %v", prov.ID, err)
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				break
+			}
 		}
 	}
 

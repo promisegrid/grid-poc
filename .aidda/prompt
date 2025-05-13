@@ -1,7 +1,8 @@
-periodically reprovide
+provision not working when using DHT
 
-Add a goroutine to reprovide the CID of the file being shared every 10
-seconds.
+The bitswap consumer is not finding providers for the CID, despite the
+provider doing a reprovide every 10 seconds.  Figure out what's wrong.
+
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -17,9 +18,6 @@ Sysmsg:
   must be wrapped at 70 characters.  
 In: 
   /tmp/r4
-  x/node-boxo-bitswap-plus/main.go
-  x/node-boxo-bitswap-plus/main_test.go
-Out:
   x/node-boxo-bitswap-plus/main.go
   x/node-boxo-bitswap-plus/main_test.go
 
