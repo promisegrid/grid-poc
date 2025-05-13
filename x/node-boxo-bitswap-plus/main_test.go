@@ -26,7 +26,7 @@ func TestBitswapFetch(t *testing.T) {
 		}
 		defer client.Close()
 
-		c, bs, err := startDataServer(ctx, server)
+		c, bs, err := startDataServer(ctx, server, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -87,7 +87,7 @@ func TestBitswapFetch(t *testing.T) {
 		defer clientDht.Close()
 
 		// Start the data server.
-		c, bs, err := startDataServer(ctx, server)
+		c, bs, err := startDataServer(ctx, server, serverDht)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -97,11 +97,7 @@ func TestBitswapFetch(t *testing.T) {
 			t.Fatalf("expected CID %s, got %s", expectedCid, c)
 		}
 
-		// Announce the file provider via the DHT.
-		// Provide may take some time to propagate.
-		if err := serverDht.Provide(ctx, c, true); err != nil {
-			t.Fatal(err)
-		}
+		// The Provide call is now handled within startDataServer, so we remove it.
 		// Give the provider announcement a moment to propagate.
 		time.Sleep(1 * time.Second)
 

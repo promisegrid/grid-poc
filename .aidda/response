@@ -1,198 +1,711 @@
-<think>
-
-Okay, let's tackle this problem. The user is having an issue where
-their GossipSub messages aren't being received unless they ping the
-node first when using DHT mode. Hmm. I need to figure out why the ping
-is necessary and how to fix it without requiring the ping.
-
-First, I'll look at the code they provided. The main.go file sets up a
-libp2p host with DHT and GossipSub. In the runGossipDemo function,
-when using DHT, they don't dial a specific peer but rely on DHT for
-discovery. The problem arises when messages aren't received unless a
-ping happens first.
-
-I remember from the search results that GossipSub relies on ambient
-peer discovery. The DHT is used to find peers, but maybe the code
-isn't properly integrating DHT-based discovery with GossipSub. Looking
-at the setup, the DHT is initialized, but in the GossipSub setup, the
-WithDiscovery option isn't used. Oh, right! The user's code creates
-the GossipSub instance without specifying a discovery mechanism. In
-the code, they have:
-
-ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithFloodPublish(true))
-
-But according to search result [13], the WithDiscovery option should
-be provided to GossipSub to use the DHT for peer discovery. The user's
-code isn't passing the DHT discovery to GossipSub, so GossipSub
-doesn't know how to find peers on the topic. That's probably why the
-messages aren't being delivered—peers aren't discovering each other
-via DHT for the topic.
-
-In the runGossipDemo function, they need to configure GossipSub with
-the DHT-based discovery. The correct approach is to create a routing
-discovery from the DHT and pass it to GossipSub using
-pubsub.WithDiscovery. The user's code currently doesn't do this. Let
-me check how to create a routing discovery. From the DHT
-documentation, using dht.NewDHT should allow creating a routing
-discovery.
-
-Wait, in the user's code, when setting up the DHT, they use dht.New
-with ModeAuto. Then, in the GossipSub setup, they need to use that DHT
-instance to enable discovery. The code should modify the NewGossipSub
-call to include the discovery option. For example:
-
-discovery := routing.NewRoutingDiscovery(dht)
-ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithDiscovery(discovery), pubsub.WithFloodPublish(true))
-
-But in the current code, the WithDiscovery option isn't set. That's
-the missing piece. Without it, GossipSub doesn't have a way to
-discover peers for the topic via DHT. Hence, unless a ping establishes
-a connection first, the peers aren't connected, and messages don't get
-through.
-
-Another thing to check is whether the DHT is properly advertising the
-peer's presence in the topic. The user's code might not be announcing
-the peer's support for the GossipSub topic in the DHT. In the DHT
-setup, after Bootstrap, they might need to call Provide or Advertise
-for the topic. But in the provided code, the DHT is set up, but
-there's no explicit advertisement for the GossipSub topic.
-
-Wait, search result [13] shows that WithDiscovery adds a discovery
-mechanism to GossipSub. So if the user's code isn't passing the
-DHT-based discovery to GossipSub, then GossipSub can't find peers for
-the topic. The ping might be establishing a direct connection, which
-then allows the GossipSub mesh to form, but without that initial
-connection, the DHT-based discovery isn't active.
-
-The fix would be to create a discovery instance using the DHT and pass
-it to GossipSub. In the code, the setupDHT function returns a
-*dht.IpfsDHT instance. To create a discovery from that, they can use
-the routing discovery wrapper. For example:
-
-discovery := discovery.NewRoutingDiscovery(dht)
-
-Then, pass that to GossipSub:
-
-ps, err := pubsub.NewGossipSub(ctx, h, pubsub.WithDiscovery(discovery), pubsub.WithFloodPublish(true))
-
-This way, GossipSub will use the DHT to discover peers subscribed to
-the same topic. Without this, even though the DHT is set up, GossipSub
-isn't configured to use it for discovery, so it doesn't know how to
-find other peers in the topic.
-
-Additionally, the user's code might need to ensure that the DHT is
-properly finding and connecting to peers for the topic. The DHT's
-Provide or FindProviders methods might need to be called for the topic
-CID. Wait, but in GossipSub, the discovery is typically handled by the
-topic itself. The user's code uses a topic named "gossip-demo", so the
-DHT needs to be queried for peers interested in that topic.
-
-Wait, but how does the DHT map topics to peer advertisements? In some
-implementations, the topic is converted into a CID that's used in the
-DHT to find providers. For example, in the search result [4], there's
-a function that converts the pubsub topic into a DHT key. The user's
-code might need to advertise their presence in the topic using the
-DHT. However, if GossipSub is properly configured with the DHT
-discovery, this should be handled automatically.
-
-Another possibility is that the DHT needs some time to discover peers,
-and the code isn't waiting long enough. The user's code has a 2-second
-wait, but maybe in some cases, the DHT takes longer to bootstrap and
-find peers. However, the ping might force a connection, bypassing the
-need for DHT discovery.
-
-In summary, the main issue is that the GossipSub instance isn't
-configured with DHT-based discovery. The fix is to create a routing
-discovery from the DHT and pass it to NewGossipSub using
-WithDiscovery. This should enable GossipSub to find peers via the DHT
-without requiring an initial ping.
-
-</think>
-
-To resolve the issue where Gossipsub messages aren't delivered without
-an initial ping in DHT mode, we need to properly configure DHT-based
-peer discovery for the PubSub system. Here's the solution:
-
+File: /home/stevegt/lab/grid-poc/x/node-boxo-bitswap-plus/main.go
 ```go
-// In runGossipDemo function, modify the PubSub initialization:
-ps, err := pubsub.NewGossipSub(ctx, h,
-    pubsub.WithDiscovery(routing.NewRoutingDiscovery(dht)), // Add DHT-based discovery
-    pubsub.WithFloodPublish(true),
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"math"
+	mrand "math/rand"
+	"os"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/ipfs/go-datastore"
+	dsync "github.com/ipfs/go-datastore/sync"
+
+	"github.com/libp2p/go-libp2p"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
+
+	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
+
+	"github.com/ipfs/go-cid"
+	"github.com/multiformats/go-multiaddr"
+	"github.com/multiformats/go-multicodec"
+
+	"github.com/ipfs/boxo/blockservice"
+	blockstore "github.com/ipfs/boxo/blockstore"
+	chunker "github.com/ipfs/boxo/chunker"
+	offline "github.com/ipfs/boxo/exchange/offline"
+	"github.com/ipfs/boxo/ipld/merkledag"
+	unixfile "github.com/ipfs/boxo/ipld/unixfs/file"
+	"github.com/ipfs/boxo/ipld/unixfs/importer/balanced"
+	uih "github.com/ipfs/boxo/ipld/unixfs/importer/helpers"
+
+	bsclient "github.com/ipfs/boxo/bitswap/client"
+	bsnet "github.com/ipfs/boxo/bitswap/network/bsnet"
+	bsserver "github.com/ipfs/boxo/bitswap/server"
+	"github.com/ipfs/boxo/files"
+
+	dht "github.com/libp2p/go-libp2p-kad-dht"
+
+	. "github.com/stevegt/goadapt"
 )
+
+// list of public bootstrap peers as recommended for IPFS
+var defaultBootstrapPeers = dht.DefaultBootstrapPeers
+
+const exampleFn = "/tmp/boxo-example-peerid.txt"
+
+// The CID of the file with the number 0 to 100k, built with the parameters:
+// CIDv1 links, a 256bit sha2-256 hash function, raw-leaves, a balanced layout,
+// 256kiB chunks, and 174 max links per block
+const fileCid = "bafybeiecq2irw4fl5vunnxo6cegoutv4de63h7n27tekkjtak3jrvrzzhe"
+
+func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Parse options from the command line
+	targetF := flag.String("d", "", "target peer to dial")
+	// The -dht flag will cause the code to rely on DHT discovery instead of
+	// proactively dialing a specific peer.
+	targetDht := flag.Bool("dht", false, "use DHT to find the target peer instead of direct dialing")
+	seedF := flag.Int64("seed", 0, "set random seed for id generation")
+	pingF := flag.String("ping", "", "target peer to ping")
+	flag.Parse()
+
+	// For this example we are going to be transferring data using Bitswap
+	// over libp2p or demonstrating gossipsub. This means we need to create a
+	// libp2p host first.
+
+	// Make a host that listens on the given multiaddress
+	h, err := makeHost(0, *seedF)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer h.Close()
+
+	// Set up the DHT to join the public IPFS network. Bootstrap peers are used
+	// to help the DHT discover the public network.
+	dht, err := setupDHT(ctx, h)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dht.Close()
+
+	fullAddr := getHostAddress(h)
+	log.Printf("I am %s\n", fullAddr)
+
+	// ping targetF or pingF
+	for _, target := range []string{*targetF, *pingF} {
+		if target == "" {
+			continue
+		}
+		pingWait(ctx, h, target)
+	}
+
+	// write the host's peer ID to a file for use in the demos
+	if *targetF == "" && !*targetDht {
+		// call WriteFile to write the peer ID to a file WriteFile is
+		// in the std lib os package.  it returns an error if it fails
+		err = os.WriteFile(exampleFn, []byte(fullAddr), 0644)
+		Ck(err)
+		log.Printf("Peer ID written to %s\n", exampleFn)
+	}
+
+	wg := sync.WaitGroup{}
+
+	// run the Bitswap demo.
+	go func() {
+		wg.Add(1)
+		if err := runBitswapDemo(ctx, h, *targetF, *targetDht, dht); err != nil {
+			log.Print(fmt.Errorf("Bitswap demo failed: %v", err))
+		}
+		wg.Done()
+	}()
+
+	// run the gossipsub demo
+	go func() {
+		wg.Add(1)
+		if err := runGossipDemo(ctx, h, *targetF, *targetDht, dht); err != nil {
+			log.Print(fmt.Errorf("Gossipsub demo failed: %v", err))
+		}
+		wg.Done()
+	}()
+
+	time.Sleep(1 * time.Second)
+	wg.Wait()
+	return
+}
+
+// setupDHT initializes a Kademlia DHT instance for the host and connects to
+// a set of public bootstrap peers so that our node can join the IPFS network.
+func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
+	d, err := dht.New(ctx, h, dht.Mode(dht.ModeAuto))
+	if err != nil {
+		return nil, err
+	}
+	// Connect to each bootstrap peer.
+	var ok, nok int
+	for _, maddr := range defaultBootstrapPeers {
+		// maddr is a multiaddr with the peer ID, so we can use it to get the
+		// peer ID and address info.
+		info, err := peer.AddrInfoFromP2pAddr(maddr)
+		if err != nil {
+			log.Printf("Invalid bootstrap peer info for %s: %v", maddr, err)
+			continue
+		}
+		addrStr := maddr.String()
+		if err := h.Connect(ctx, *info); err != nil {
+			log.Printf("Error connecting to bootstrap peer %s: %v", addrStr, err)
+			nok++
+		} else {
+			log.Printf("Connected to bootstrap peer: %s", addrStr)
+			ok++
+		}
+	}
+	// Bootstrap the DHT so that it starts the routing process.
+	if err := d.Bootstrap(ctx); err != nil {
+		return nil, err
+	}
+	log.Printf("DHT bootstrapped successfully: %d/%d peers connected",
+		ok, ok+nok)
+	return d, nil
+}
+
+// runGossipDemo runs a gossipsub demo that sends a message and waits for a
+// response. If target is provided, this node acts as the sender, publishing
+// "hello world" and waiting for a "hello back" from the responder. If no target
+// is provided, this node acts as the responder, waiting for a "hello world" and
+// replying with "hello back". The demo exits after a successful message exchange.
+func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool, dht *dht.IpfsDHT) error {
+
+	// Create pubsub instance
+	ps, err := pubsub.NewGossipSub(ctx, h,
+		// use dht for discovery
+		pubsub.WithDiscovery(routing.NewRoutingDiscovery(dht)), // Add DHT-based discovery
+		// enable flood publishing to ensure messages reach all peers
+		pubsub.WithFloodPublish(true),
+	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create pubsub: %w", err)
+	}
+
+	topic, err := ps.Join("gossip-demo")
+	if err != nil {
+		return err
+	}
+	sub, err := topic.Subscribe()
+	if err != nil {
+		return err
+	}
+
+	// If target peer is provided or DHT mode is enabled, act as sender
+	if target != "" || useDHT {
+		if !useDHT {
+			maddr, err := multiaddr.NewMultiaddr(target)
+			if err != nil {
+				return err
+			}
+			info, err := peer.AddrInfoFromP2pAddr(maddr)
+			if err != nil {
+				return err
+			}
+			if err := h.Connect(ctx, *info); err != nil {
+				return err
+			}
+		} else {
+			log.Println("Using DHT discovery for gossipsub; not dialing a specific peer")
+		}
+
+		// Allow time for connection and mesh formation
+		log.Println("Waiting 2 seconds for connection stabilization...")
+		select {
+		case <-time.After(2 * time.Second):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+
+		log.Println("Waiting for response on gossipsub (topic: gossip-demo)...")
+		responseCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+
+		done := make(chan error, 1)
+
+		// start goroutine to handle incoming messages
+		go func() {
+			for {
+				msg, err := sub.Next(responseCtx)
+				if err != nil {
+					log.Printf("Failed to receive message: %v", err)
+					done <- err
+					return
+				}
+				if msg.ReceivedFrom == h.ID() {
+					continue
+				}
+				if strings.HasPrefix(string(msg.Data), "hello back") {
+					log.Printf("Received %s, exiting...", string(msg.Data))
+					done <- nil
+					return
+				}
+			}
+		}()
+
+		// Publish with retries
+		const maxRetries = math.MaxInt
+		for i := 0; i < maxRetries; i++ {
+			msg := Spf("hello world %d", i+1)
+			if err := topic.Publish(ctx, []byte(msg)); err != nil {
+				log.Printf("Publish attempt %d failed: %v", i+1, err)
+			} else {
+				log.Printf("Published message: hello world (attempt %d)", i+1)
+			}
+
+			// Wait before next attempt or until response is received
+			select {
+			case <-time.After(1 * time.Second):
+			case err := <-done:
+				if err != nil {
+					return err
+				}
+				log.Println("Received response, exiting...")
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return fmt.Errorf("did not receive a valid 'hello back' response after %d attempts", maxRetries)
+	} else {
+		// Act as responder: wait for "hello world" then send "hello back".
+		log.Println("Waiting for message on gossipsub (topic: gossip-demo)...")
+		for {
+			msg, err := sub.Next(ctx)
+			if err != nil {
+				return err
+			}
+			if msg.ReceivedFrom == h.ID() {
+				continue
+			}
+			if strings.HasPrefix(string(msg.Data), "hello world") {
+				log.Printf("Received %s, sending response...", string(msg.Data))
+				// get the integer from the message
+				parts := strings.Split(string(msg.Data), " ")
+				if len(parts) < 3 {
+					log.Println("Invalid message format, ignoring...")
+					continue
+				}
+				numStr := parts[2]
+				num, err := strconv.Atoi(numStr)
+				if err != nil {
+					log.Printf("Failed to parse number from message: %v", err)
+					continue
+				}
+				log.Printf("Parsed number: %d", num)
+				// Send response
+				ack := Spf("hello back %d", num)
+				err = topic.Publish(ctx, []byte(ack))
+				if err != nil {
+					log.Printf("Response publish attempt failed: %v", err)
+				} else {
+					log.Printf("Response published: %s", ack)
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}
+	}
+}
+
+// runBitswapDemo runs the Bitswap demo. If target is empty and DHT mode is not
+// specified, it runs in server mode hosting a UnixFS file and listening for
+// Bitswap requests. If target is provided or DHT mode is enabled, it runs in
+// client mode and downloads the file from a peer discovered either via a direct
+// dial or via DHT.
+func runBitswapDemo(ctx context.Context, h host.Host, target string,
+	useDHT bool, dht *dht.IpfsDHT) error {
+	if target == "" && !useDHT {
+		// Pass DHT instance to startDataServer
+		c, bs, err := startDataServer(ctx, h, dht)
+		if err != nil {
+			return err
+		}
+		defer bs.Close()
+		log.Printf("hosting UnixFS file with CID: %s\n", c)
+		log.Println("listening for inbound connections and Bitswap requests")
+		// log.Printf("Now run on a different terminal:\ngo run main.go -d %s\n", getHostAddress(h))
+		log.Printf("Now run on a different terminal:\ngo run main.go -d $(cat %s)\n",
+			exampleFn)
+		<-ctx.Done()
+	} else {
+		log.Printf("downloading UnixFS file with CID: %s\n", fileCid)
+		fileData, err := runClient(ctx, h, cid.MustParse(fileCid), target,
+			useDHT, dht)
+		if err != nil {
+			return err
+		}
+		log.Println("found the data")
+		// log.Println(string(fileData))
+		// verify the data
+		err = verifyFile0to100k(fileData)
+		if err != nil {
+			log.Println("the file was not all the numbers from 0 to 100k!")
+			return err
+		}
+		log.Println("the file was all the numbers from 0 to 100k!")
+	}
+	return nil
+}
+
+// makeHost creates a libP2P host with a random peer ID listening on the given
+// multiaddress.
+func makeHost(listenPort int, randseed int64) (host.Host, error) {
+	var r io.Reader
+	if randseed == 0 {
+		r = rand.Reader
+	} else {
+		r = mrand.New(mrand.NewSource(randseed))
+	}
+
+	// Generate a key pair for this host. We will use it at least to obtain a
+	// valid host ID.
+	priv, _, err := crypto.GenerateKeyPairWithReader(crypto.RSA, 2048, r)
+	if err != nil {
+		return nil, err
+	}
+
+	// Some basic libp2p options, see the go-libp2p docs for more details
+	opts := []libp2p.Option{
+		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d",
+			listenPort)),
+		libp2p.Identity(priv),
+	}
+
+	return libp2p.New(opts...)
+}
+
+func getHostAddress(h host.Host) string {
+	// Build host multiaddress
+	hostAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/p2p/%s",
+		h.ID().String()))
+
+	// Now we can build a full multiaddress to reach this host by
+	// encapsulating both addresses:
+	addr := h.Addrs()[0]
+	return addr.Encapsulate(hostAddr).String()
+}
+
+// createFile0to100k creates a file with the number 0 to 100k
+func createFile0to100k() ([]byte, error) {
+	b := strings.Builder{}
+	for i := 0; i <= 100000; i++ {
+		s := strconv.Itoa(i)
+		_, err := b.WriteString(s + "\n")
+		if err != nil {
+			return nil, err
+		}
+	}
+	return []byte(b.String()), nil
+}
+
+// verifyFile0to100k verifies that the file contains the number 0 to 100k
+func verifyFile0to100k(fileData []byte) error {
+	lines := strings.Split(string(fileData), "\n")
+	for i := 0; i <= 100000; i++ {
+		s := strconv.Itoa(i)
+		if lines[i] != s {
+			return fmt.Errorf("file does not contain the number %d", i)
+		}
+	}
+	return nil
+}
+
+func startDataServer(ctx context.Context, h host.Host, dht *dht.IpfsDHT) (cid.Cid,
+	*bsserver.Server, error) {
+	fileBytes, err := createFile0to100k()
+	if err != nil {
+		return cid.Undef, nil, err
+	}
+	fileReader := bytes.NewReader(fileBytes)
+
+	ds := dsync.MutexWrap(datastore.NewMapDatastore())
+	bs := blockstore.NewBlockstore(ds)
+	bs = blockstore.NewIdStore(bs) // handle identity multihashes, these don't
+	// do any actual lookups
+
+	bsrv := blockservice.New(bs, offline.Exchange(bs))
+	dsrv := merkledag.NewDAGService(bsrv)
+
+	// Create a UnixFS graph from our file, parameters described here but
+	// can be visualized at https://dag.ipfs.tech/
+	ufsImportParams := uih.DagBuilderParams{
+		Maxlinks:  uih.DefaultLinksPerBlock, // Default max of 174 links per block
+		RawLeaves: true,                     // Leave the actual file bytes untouched
+		// instead of wrapping them in a dag-pb protobuf wrapper
+		CidBuilder: cid.V1Builder{ // Use CIDv1 for all links
+			Codec:    uint64(multicodec.DagPb),
+			MhType:   uint64(multicodec.Sha2_256), // Use SHA2-256 as the hash
+			MhLength: -1,                          // Use the default hash length for the
+			// given hash function
+		},
+		Dagserv: dsrv,
+		NoCopy:  false,
+	}
+	ufsBuilder, err := ufsImportParams.New(
+		chunker.NewSizeSplitter(fileReader, chunker.DefaultBlockSize))
+	if err != nil {
+		return cid.Undef, nil, err
+	}
+	nd, err := balanced.Layout(ufsBuilder) // Arrange the graph with a balanced
+	// layout
+	if err != nil {
+		return cid.Undef, nil, err
+	}
+	rootCid := nd.Cid()
+
+	// Advertise CID through DHT
+	if err := dht.Provide(ctx, rootCid, true); err != nil {
+		return cid.Undef, nil, fmt.Errorf("failed to announce CID via DHT: %v", err)
+	}
+
+	// Start Bitswap server
+	n := bsnet.NewFromIpfsHost(h)
+	bswap := bsserver.New(ctx, n, bs)
+	n.Start(bswap)
+	
+	return rootCid, bswap, nil
+}
+
+func runClient(ctx context.Context, h host.Host, c cid.Cid,
+	target string, useDHT bool, dht *dht.IpfsDHT) ([]byte, error) {
+	n := bsnet.NewFromIpfsHost(h)
+	bswap := bsclient.New(ctx, n, nil,
+		blockstore.NewBlockstore(datastore.NewNullDatastore()))
+	n.Start(bswap)
+	defer bswap.Close()
+
+	if !useDHT {
+		// Turn the targetPeer into a multiaddr.
+		maddr, err := multiaddr.NewMultiaddr(target)
+		if err != nil {
+			return nil, err
+		}
+
+		// Extract the peer ID from the multiaddr.
+		info, err := peer.AddrInfoFromP2pAddr(maddr)
+		if err != nil {
+			return nil, err
+		}
+
+		// Directly connect to the peer that we know has the content.
+		if err := h.Connect(ctx, *info); err != nil {
+			return nil, err
+		}
+	} else {
+		var prov *peer.AddrInfo
+		for {
+			log.Println("Searching for providers via DHT...")
+			provChan := dht.FindProvidersAsync(ctx, c, 1)
+			// Wait for a provider to be found with a timeout.
+			found := false
+			select {
+			case p, ok := <-provChan:
+				if !ok {
+					log.Println("Provider channel closed before receiving a provider")
+					continue
+				}
+				// Skip self.
+				if p.ID == h.ID() {
+					log.Println("Skipping self as provider")
+					continue
+				}
+				prov = &p
+				found = true
+			case <-time.After(9999999 * time.Second):
+				return nil, fmt.Errorf("timeout waiting for provider")
+			}
+			if found {
+				break
+			}
+		}
+		log.Printf("Connecting to provider %s via DHT", prov.ID)
+		if err := h.Connect(ctx, *prov); err != nil {
+			return nil, err
+		}
+	}
+
+	dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
+		merkledag.NewDAGService(blockservice.New(
+			blockstore.NewBlockstore(datastore.NewNullDatastore()), bswap))))
+	nd, err := dserv.Get(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+
+	unixFSNode, err := unixfile.NewUnixfsFile(ctx, dserv, nd)
+	if err != nil {
+		return nil, err
+	}
+
+	var buf bytes.Buffer
+	if f, ok := unixFSNode.(files.File); ok {
+		if _, err := io.Copy(&buf, f); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+// pingWait pings the target peer using the libp2p ping protocol and
+// returns when the ping is successful.
+func pingWait(ctx context.Context, h host.Host, target string) {
+	maddr, err := multiaddr.NewMultiaddr(target)
+	if err != nil {
+		log.Fatal(err)
+	}
+	info, err := peer.AddrInfoFromP2pAddr(maddr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// Add the target address to the peerstore so that ping can
+	// dial the target.
+	h.Peerstore().AddAddr(info.ID, maddr, time.Hour)
+	log.Printf("Pinging peer %s...", info.ID)
+	for {
+		pingCh := ping.Ping(ctx, h, info.ID)
+		result := <-pingCh
+		if result.Error != nil {
+			log.Printf("Ping error: %s", result.Error)
+		} else {
+			log.Printf("Ping RTT: %s", result.RTT)
+			break
+		}
+		time.Sleep(1 * time.Second)
+	}
+}
 ```
+EOF_/home/stevegt/lab/grid-poc/x/node-boxo-bitswap-plus/main.go
 
-**Technical Explanation:**
+File: /home/stevegt/lab/grid-poc/x/node-boxo-bitswap-plus/main_test.go
+```go
+package main
 
-1. **Missing Discovery Integration:**
-   - The original code didn't connect the DHT to Gossipsub's peer discovery
-   - Gossipsub requires explicit discovery configuration to find peers through DHT [15][13]
+import (
+	"bytes"
+	"context"
+	"testing"
+	"time"
 
-2. **Discovery Process Flow:**
-   ```mermaid
-   graph TD
-     A[Gossipsub] -->|WithDiscovery| B(DHT)
-     B -->|Bootstrap| C[Public Network]
-     C -->|Peer Info| D[Routing Table]
-     D -->|Topic Advertisements| E[Mesh Formation]
-   ```
+	"github.com/ipfs/go-cid"
 
-3. **Critical Code Fix Details:**
-   ```
-   Before:
-   ┌───────────────────────┐       ┌───────┐
-   │      Gossipsub        │       │  DHT  │
-   └───────────────────────┘       └───────┘
-   
-   After:
-   ┌───────────────────────┐       ┌───────┐
-   │      Gossipsub        │◄──────│  DHT  │
-   └───────────────────────┘       └───────┘
-   ```
+	"github.com/libp2p/go-libp2p/core/peer"
+)
 
-4. **Key Components:**
-   - `routing.NewRoutingDiscovery(dht)` creates discovery interface
-   - Automatic topic advertisement via DHT (default interval 5 minutes)
-   - Hybrid approach combining DHT and direct peer connections [3][6]
+func TestBitswapFetch(t *testing.T) {
+	t.Run("direct", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		server, err := makeHost(0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer server.Close()
+		client, err := makeHost(0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
 
-**Verification Steps:**
-1. Run two nodes in DHT mode:
-   ```bash
-   # Node 1
-   go run main.go -dht
-   
-   # Node 2 
-   go run main.go -dht
-   ```
-2. Observe debug output for:
-   ```
-   DHT:PEER_FOUND - <peer ID>
-   PUBSUB:gossipsub - Connected to peer: <peer ID>
-   ```
+		c, bs, err := startDataServer(ctx, server, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer bs.Close()
 
-**Expected Message Flow:**
-1. DHT bootstrap completes (≈30s)
-2. Topic advertisements propagate through DHT
-3. Gossipsub forms mesh network via discovered peers
-4. Messages flow without manual ping
+		expectedCid := cid.MustParse(fileCid)
+		if !expectedCid.Equals(c) {
+			t.Fatalf("expected CID %s, got %s", expectedCid, c)
+		}
+		multiaddrs, err := peer.AddrInfoToP2pAddrs(&peer.AddrInfo{
+			ID:    server.ID(),
+			Addrs: server.Addrs(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(multiaddrs) != 1 {
+			t.Fatalf("expected a single multiaddr")
+		}
+		out, err := runClient(ctx, client, c, multiaddrs[0].String(), false, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fileBytes, err := createFile0to100k()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(out, fileBytes) {
+			t.Fatalf("retrieved bytes did not match sent bytes")
+		}
+	})
 
-This solution maintains the DHT's role in network bootstrapping while properly integrating it with Gossipsub's peer discovery requirements. The ping dependency is eliminated as direct connections are established through coordinated DHT advertisements.
+	t.Run("dht", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		// Setup server and client hosts.
+		server, err := makeHost(0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer server.Close()
+		client, err := makeHost(0, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer client.Close()
 
-<references>
-[1] https://github.com/libp2p/go-libp2p-pubsub-router
-[2] https://discuss.libp2p.io/t/how-to-limit-gossip-pubsub-peer-discovery/556
-[3] https://hackernoon.com/kickoff-your-application-with-js-libp2p-zsr3zzz
-[4] https://discuss.libp2p.io/t/how-to-set-up-gossipsub-to-use-delegated-router-to-discover-peers/2538
-[5] https://pkg.go.dev/github.com/libp2p/go-libp2p-pubsub
-[6] https://dev.to/moxystudio/kickoff-your-application-with-js-libp2p-4n8h
-[7] https://www.npmjs.com/package/@jimpick%2Flibp2p
-[8] https://discuss.ipfs.tech/t/libp2p-connect-to-nodes-with-pubsub-enabled/10881
-[9] https://github.com/libp2p/js-libp2p-example-discovery-mechanisms
-[10] https://blog.csdn.net/weixin_43988498/article/details/120488890
-[11] https://discuss.libp2p.io/t/gossipsub-how-does-it-work-without-peer-discovery/2373
-[12] https://ldej.nl/post/building-an-echo-application-with-libp2p/
-[13] https://github.com/libp2p/go-libp2p-pubsub/blob/master/pubsub.go
-[14] https://discuss.libp2p.io/t/gossipsub-out-of-the-box-peer-discovery-connectivity/861
-[15] https://docs.libp2p.io/concepts/pubsub/overview/
-[16] https://discuss.libp2p.io/t/pubsub-discovery-fails-if-node-initially-starts-with-no-peers/1004
-[17] https://discuss.libp2p.io/t/why-arent-my-libp2p-pubsub-messages-being-delivered/466
-</references>
+		// Setup DHT instances for both hosts.
+		serverDht, err := setupDHT(ctx, server)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer serverDht.Close()
+		clientDht, err := setupDHT(ctx, client)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer clientDht.Close()
+
+		// Start the data server.
+		c, bs, err := startDataServer(ctx, server, serverDht)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer bs.Close()
+		expectedCid := cid.MustParse(fileCid)
+		if !expectedCid.Equals(c) {
+			t.Fatalf("expected CID %s, got %s", expectedCid, c)
+		}
+
+		// The Provide call is now handled within startDataServer, so we remove it.
+		// Give the provider announcement a moment to propagate.
+		time.Sleep(1 * time.Second)
+
+		out, err := runClient(ctx, client, c, "", true, clientDht)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fileBytes, err := createFile0to100k()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(out, fileBytes) {
+			t.Fatalf("retrieved bytes did not match sent bytes")
+		}
+	})
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/node-boxo-bitswap-plus/main_test.go

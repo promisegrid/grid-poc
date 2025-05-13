@@ -149,19 +149,6 @@ func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
 	// Connect to each bootstrap peer.
 	var ok, nok int
 	for _, maddr := range defaultBootstrapPeers {
-		/*
-				maddr, err := multiaddr.NewMultiaddr(addrStr)
-				if err != nil {
-					log.Printf("Invalid bootstrap address %s: %v", addrStr, err)
-					continue
-				}
-			info, err := peer.AddrInfoFromP2pAddr(maddr)
-			if err != nil {
-				log.Printf("Invalid bootstrap peer info for %s: %v", addrStr,
-					err)
-				continue
-			}
-		*/
 		// maddr is a multiaddr with the peer ID, so we can use it to get the
 		// peer ID and address info.
 		info, err := peer.AddrInfoFromP2pAddr(maddr)
@@ -202,6 +189,10 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool,
 		// enable flood publishing to ensure messages reach all peers
 		pubsub.WithFloodPublish(true),
 	)
+
+	if err != nil {
+		return fmt.Errorf("failed to create pubsub: %w", err)
+	}
 
 	topic, err := ps.Join("gossip-demo")
 	if err != nil {
@@ -336,7 +327,8 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool,
 func runBitswapDemo(ctx context.Context, h host.Host, target string,
 	useDHT bool, dht *dht.IpfsDHT) error {
 	if target == "" && !useDHT {
-		c, bs, err := startDataServer(ctx, h)
+		// Pass DHT instance to startDataServer
+		c, bs, err := startDataServer(ctx, h, dht)
 		if err != nil {
 			return err
 		}
@@ -430,7 +422,7 @@ func verifyFile0to100k(fileData []byte) error {
 	return nil
 }
 
-func startDataServer(ctx context.Context, h host.Host) (cid.Cid,
+func startDataServer(ctx context.Context, h host.Host, dht *dht.IpfsDHT) (cid.Cid,
 	*bsserver.Server, error) {
 	fileBytes, err := createFile0to100k()
 	if err != nil {
@@ -471,14 +463,19 @@ func startDataServer(ctx context.Context, h host.Host) (cid.Cid,
 	if err != nil {
 		return cid.Undef, nil, err
 	}
+	rootCid := nd.Cid()
 
-	// Start listening on the Bitswap protocol. For this example we're not
-	// leveraging any content routing (DHT, IPNI, delegated routing requests, etc.)
-	// as we know the peer we are fetching from.
+	// Advertise CID through DHT
+	if err := dht.Provide(ctx, rootCid, true); err != nil {
+		return cid.Undef, nil, fmt.Errorf("failed to announce CID via DHT: %v", err)
+	}
+
+	// Start Bitswap server
 	n := bsnet.NewFromIpfsHost(h)
 	bswap := bsserver.New(ctx, n, bs)
 	n.Start(bswap)
-	return nd.Cid(), bswap, nil
+
+	return rootCid, bswap, nil
 }
 
 func runClient(ctx context.Context, h host.Host, c cid.Cid,

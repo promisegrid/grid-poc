@@ -1,8 +1,7 @@
-troubleshoot gossipsub without ping
+Enable DHT in startDataServer()
 
-In -dht mode, if I try sending a gossipsub message, the node listening
-on the topic doesn't receive it unless I ping the node first with the
--ping flag. What's going on?
+In the startDataServer() function, make it possible for others to find
+the data via the DHT.  Use the content of /tmp/r4 as a guide.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -17,6 +16,10 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
+  /tmp/r4
+  x/node-boxo-bitswap-plus/main.go
+  x/node-boxo-bitswap-plus/main_test.go
+Out:
   x/node-boxo-bitswap-plus/main.go
   x/node-boxo-bitswap-plus/main_test.go
 
