@@ -27,6 +27,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
+	// "github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 
@@ -159,7 +160,8 @@ func setupDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
 		}
 		addrStr := maddr.String()
 		if err := h.Connect(ctx, *info); err != nil {
-			log.Printf("Error connecting to bootstrap peer %s: %v", addrStr, err)
+			log.Printf("Error connecting to bootstrap peer %s: %v", addrStr,
+				err)
 			nok++
 		} else {
 			log.Printf("Connected to bootstrap peer: %s", addrStr)
@@ -465,16 +467,35 @@ func startDataServer(ctx context.Context, h host.Host, dht *dht.IpfsDHT) (cid.Ci
 	}
 	rootCid := nd.Cid()
 
-	// Advertise CID through DHT
-	if err := dht.Provide(ctx, rootCid, true); err != nil {
-		return cid.Undef, nil, fmt.Errorf("failed to announce CID via DHT: %v", err)
+	// Advertise CID through DHT if available
+	if dht != nil {
+		if err := dht.Provide(ctx, rootCid, true); err != nil {
+			return cid.Undef, nil, fmt.Errorf("failed to announce CID via DHT: %v", err)
+		}
+		// Start a goroutine to periodically reprovide the CID every 10 seconds.
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if err := dht.Provide(ctx, rootCid, true); err != nil {
+						log.Printf("failed to reprovide CID: %v", err)
+					} else {
+						log.Printf("reprovided CID: %s", rootCid)
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
 	}
 
 	// Start Bitswap server
 	n := bsnet.NewFromIpfsHost(h)
 	bswap := bsserver.New(ctx, n, bs)
 	n.Start(bswap)
-	
+
 	return rootCid, bswap, nil
 }
 
@@ -619,6 +640,7 @@ func TestBitswapFetch(t *testing.T) {
 		}
 		defer client.Close()
 
+		// In direct mode, dht is nil.
 		c, bs, err := startDataServer(ctx, server, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -690,7 +712,7 @@ func TestBitswapFetch(t *testing.T) {
 			t.Fatalf("expected CID %s, got %s", expectedCid, c)
 		}
 
-		// The Provide call is now handled within startDataServer, so we remove it.
+		// The Provide call is now handled within startDataServer.
 		// Give the provider announcement a moment to propagate.
 		time.Sleep(1 * time.Second)
 

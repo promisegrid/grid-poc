@@ -26,6 +26,7 @@ func TestBitswapFetch(t *testing.T) {
 		}
 		defer client.Close()
 
+		// In direct mode, dht is nil.
 		c, bs, err := startDataServer(ctx, server, nil)
 		if err != nil {
 			t.Fatal(err)
@@ -97,7 +98,7 @@ func TestBitswapFetch(t *testing.T) {
 			t.Fatalf("expected CID %s, got %s", expectedCid, c)
 		}
 
-		// The Provide call is now handled within startDataServer, so we remove it.
+		// The Provide call is now handled within startDataServer.
 		// Give the provider announcement a moment to propagate.
 		time.Sleep(1 * time.Second)
 

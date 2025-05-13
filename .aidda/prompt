@@ -1,7 +1,36 @@
-Enable DHT in startDataServer()
+periodically reprovide
 
-In the startDataServer() function, make it possible for others to find
-the data via the DHT.  Use the content of /tmp/r4 as a guide.
+Add a goroutine to reprovide the CID of the file being shared every 10
+seconds.
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p,
+  prefer recent examples to avoid deprecated APIs.  Please verify that
+  the code compiles and runs without errors -- do not hallucinate
+  library methods, structs, or functions that do not exist. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file.  Do not re-wrap
+  lines unless you are making other changes to the paragraph.  Lines
+  must be wrapped at 70 characters.  
+In: 
+  /tmp/r4
+  x/node-boxo-bitswap-plus/main.go
+  x/node-boxo-bitswap-plus/main_test.go
+Out:
+  x/node-boxo-bitswap-plus/main.go
+  x/node-boxo-bitswap-plus/main_test.go
+
+.stop
+
+add pubsub provider request
+
+Add code to startDataServer and runClient such that when a node is
+unable to find providers for a CID, it sends a message on the pubsub
+topic "provider-requests" with the CID as the payload.  Upon receiving
+the message, the other node should reprovide the CID.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes

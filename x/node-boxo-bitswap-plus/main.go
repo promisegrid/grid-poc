@@ -465,9 +465,29 @@ func startDataServer(ctx context.Context, h host.Host, dht *dht.IpfsDHT) (cid.Ci
 	}
 	rootCid := nd.Cid()
 
-	// Advertise CID through DHT
-	if err := dht.Provide(ctx, rootCid, true); err != nil {
-		return cid.Undef, nil, fmt.Errorf("failed to announce CID via DHT: %v", err)
+	// Advertise CID through DHT if available
+	Pf("DHT: %v", dht)
+	if dht != nil {
+		if err := dht.Provide(ctx, rootCid, true); err != nil {
+			return cid.Undef, nil, fmt.Errorf("failed to announce CID via DHT: %v", err)
+		}
+		// Start a goroutine to periodically reprovide the CID every 10 seconds.
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					if err := dht.Provide(ctx, rootCid, true); err != nil {
+						log.Printf("failed to reprovide CID: %v", err)
+					} else {
+						log.Printf("reprovided CID: %s", rootCid)
+					}
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
 	}
 
 	// Start Bitswap server
