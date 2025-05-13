@@ -65,7 +65,8 @@ func main() {
 
 	// Parse options from the command line
 	targetF := flag.String("d", "", "target peer to dial")
-	// The -t flag will cause the code to rely on DHT discovery
+	// The -t flag will cause the code to rely on DHT discovery instead of
+	// proactively dialing a specific peer.
 	targetT := flag.Bool("t", false, "use DHT to find the target peer instead of direct dialing")
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
 	flag.Parse()

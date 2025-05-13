@@ -7,6 +7,8 @@ a -t flag that is a boolean that, if provided, will cause the same
 code that runs with -d to run, but will not proactively connect to a
 particular peer, but will instead rely on the DHT.
 
+Update the test cases accordingly.  
+
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
   to the given code or documentation. For IPFS, IPLD, or libp2p,
@@ -21,8 +23,10 @@ Sysmsg:
   must be wrapped at 70 characters.  
 In: 
   x/node-boxo-bitswap-plus/main.go
+  x/node-boxo-bitswap-plus/main_test.go
 Out:
   x/node-boxo-bitswap-plus/main.go
+  x/node-boxo-bitswap-plus/main_test.go
 
 .stop
 
