@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -448,7 +449,7 @@ func makeHost(ctx context.Context, listenPort int, randseed int64) (host.Host, e
 		return nil, err
 	}
 
-	peerSource, err := autoRelayPeerSource(ctx, p2pHost)
+	peerSource, err := autoRelayPeerSource(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -490,14 +491,14 @@ func getHostAddress(h host.Host) string {
 //
 // Returns a function with this signature:
 // type PeerSource func(ctx context.Context, num int) <-chan peer.AddrInfo
-func autoRelayPeerSource(ctx context.Context, h host.Host) (fn autorelay.PeerSource, err error) {
+func autoRelayPeerSource(ctx context.Context) (fn autorelay.PeerSource, err error) {
 	fn = func(ctx context.Context, num int) <-chan peer.AddrInfo {
 		ch := make(chan peer.AddrInfo)
 		go func() {
 			ticker := time.NewTicker(10 * time.Second)
 			defer ticker.Stop()
 			for {
-				if h == nil {
+				if p2pHost == nil {
 					log.Println("Host is nil, waiting for it to be set...")
 					time.Sleep(1 * time.Second)
 					continue
@@ -505,12 +506,12 @@ func autoRelayPeerSource(ctx context.Context, h host.Host) (fn autorelay.PeerSou
 				select {
 				case <-ticker.C:
 					// Iterate over connected peers and send them as candidate relays.
-					for _, pid := range h.Network().Peers() {
+					for _, pid := range p2pHost.Network().Peers() {
 						// Skip self.
-						if pid == h.ID() {
+						if pid == p2pHost.ID() {
 							continue
 						}
-						addrs := h.Peerstore().Addrs(pid)
+						addrs := p2pHost.Peerstore().Addrs(pid)
 						if len(addrs) == 0 {
 							continue
 						}
@@ -547,12 +548,21 @@ func createFile0to100k() ([]byte, error) {
 
 // verifyFile0to100k verifies that the file contains the number 0 to 100k
 func verifyFile0to100k(fileData []byte) error {
-	lines := strings.Split(string(fileData), "\n")
-	for i := 0; i <= 100000; i++ {
+	i := 0
+	// create scanner
+	scanner := bufio.NewScanner(bytes.NewReader(fileData))
+	// read each line
+	for scanner.Scan() {
+		line := scanner.Text()
+		// check if the line is equal to the number
 		s := strconv.Itoa(i)
-		if lines[i] != s {
+		if line != s {
+			// dump fileData to stdout
+			fmt.Printf("fileData: %s\n", fileData)
+			log.Printf("file does not contain the number %d: %s", i, line)
 			return fmt.Errorf("file does not contain the number %d", i)
 		}
+		i++
 	}
 	return nil
 }
@@ -679,65 +689,79 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 		}
 	} else {
 		log.Println("Searching for providers via DHT...")
-		want := 5
-		connected := 0
-		for connected < want {
-			// Wait for a provider to be found with a timeout.
-			var prov *peer.AddrInfo
-			provChan := dht.FindProvidersAsync(ctx, c, want)
-			select {
-			case p, ok := <-provChan:
-				if !ok {
-					log.Printf("Provider channel closed before receiving %d providers", want)
-					time.Sleep(1 * time.Second)
-					continue
-				}
-				// Skip self.
-				if p.ID == h.ID() {
-					log.Println("Skipping self as provider")
-					continue
-				}
-				prov = &p
-				log.Printf("Found provider: %s", prov.ID)
-				if len(prov.Addrs) == 0 {
-					log.Printf("Provider %s has no addresses", prov.ID)
-					continue
-				}
-				for _, maddr := range prov.Addrs {
-					log.Printf("Provider address: %s", maddr)
-				}
-				if err := h.Connect(ctx, *prov); err != nil {
-					log.Printf("Error connecting to provider %s: %v", prov.ID, err)
-					continue
-				}
-				connected++
-			case <-time.After(10 * time.Second):
-				return nil, fmt.Errorf("timeout waiting for next provider")
+		// try providers until file is fetched
+		tried := 0
+		provChan := make(<-chan peer.AddrInfo)
+		open := false
+		for {
+			if !open {
+				Pl("Starting DHT FindProvidersAsync")
+				// dht.FindProvidersAsync starts a goroutine to find providers
+				provChan = dht.FindProvidersAsync(ctx, c, 999)
+				open = true
 			}
+			// get next provider
+			Pf("tried %d providers, waiting for next...\n", tried)
+			prov, ok := <-provChan
+			if !ok {
+				log.Println("Provider channel closed")
+				open = false
+				continue
+			}
+			Pf("got candidate provider %s\n", prov.ID)
+			// Skip self.
+			if prov.ID == h.ID() {
+				log.Println("Skipping self as provider")
+				continue
+			}
+			log.Printf("Found provider: %s", prov.ID)
+			if len(prov.Addrs) == 0 {
+				log.Printf("Provider %s has no addresses", prov.ID)
+				continue
+			}
+			for _, maddr := range prov.Addrs {
+				log.Printf("Provider address: %s", maddr)
+			}
+			if err := h.Connect(ctx, prov); err != nil {
+				log.Printf("Error connecting to provider %s: %v", prov.ID, err)
+				continue
+			}
+			Pf("Connected to provider %s", prov.ID)
+
+			// create a context that times out after 60 seconds
+			ctx60, cancel := context.WithTimeout(ctx, 60*time.Second)
+			_ = cancel
+
+			// try to fetch the file
+			tried++
+			dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
+				merkledag.NewDAGService(blockservice.New(
+					blockstore.NewBlockstore(datastore.NewNullDatastore()), bswap))))
+			nd, err := dserv.Get(ctx60, c)
+			if err != nil {
+				log.Printf("Error getting file from provider %s: %v", prov.ID, err)
+				continue
+			}
+			Pf("Got file from provider %s", prov.ID)
+
+			unixFSNode, err := unixfile.NewUnixfsFile(ctx, dserv, nd)
+			if err != nil {
+				return nil, err
+			}
+			Pl("Created UnixFS file from node")
+
+			var buf bytes.Buffer
+			if f, ok := unixFSNode.(files.File); ok {
+				if _, err := io.Copy(&buf, f); err != nil {
+					return nil, err
+				}
+			}
+			Pl("Copied file data to buffer")
+			return buf.Bytes(), nil
+
 		}
 	}
-
-	dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
-		merkledag.NewDAGService(blockservice.New(
-			blockstore.NewBlockstore(datastore.NewNullDatastore()), bswap))))
-	nd, err := dserv.Get(ctx, c)
-	if err != nil {
-		return nil, err
-	}
-
-	unixFSNode, err := unixfile.NewUnixfsFile(ctx, dserv, nd)
-	if err != nil {
-		return nil, err
-	}
-
-	var buf bytes.Buffer
-	if f, ok := unixFSNode.(files.File); ok {
-		if _, err := io.Copy(&buf, f); err != nil {
-			return nil, err
-		}
-	}
-
-	return buf.Bytes(), nil
+	return nil, nil
 }
 
 // pingWait pings the target peer using the libp2p ping protocol and

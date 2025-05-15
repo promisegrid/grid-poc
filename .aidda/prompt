@@ -1,5 +1,7 @@
 
 
+Rework runClient such that it calls 
+
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
   to the given code or documentation. For IPFS, IPLD, or libp2p,
