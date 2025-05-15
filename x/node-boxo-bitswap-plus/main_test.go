@@ -15,12 +15,12 @@ func TestBitswapFetch(t *testing.T) {
 	t.Run("direct", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		server, err := makeHost(0, 0)
+		server, err := makeHost(ctx, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer server.Close()
-		client, err := makeHost(0, 0)
+		client, err := makeHost(ctx, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -64,12 +64,12 @@ func TestBitswapFetch(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		// Setup server and client hosts.
-		server, err := makeHost(0, 0)
+		server, err := makeHost(ctx, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer server.Close()
-		client, err := makeHost(0, 0)
+		client, err := makeHost(ctx, 0, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

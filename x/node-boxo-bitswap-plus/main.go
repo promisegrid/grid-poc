@@ -20,13 +20,14 @@ import (
 	dsync "github.com/ipfs/go-datastore/sync"
 
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-core/host"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	// "github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	"github.com/libp2p/go-libp2p/p2p/host/autorelay"
 	"github.com/libp2p/go-libp2p/p2p/protocol/ping"
 
 	"github.com/ipfs/go-cid"
@@ -54,6 +55,9 @@ import (
 
 // list of public bootstrap peers as recommended for IPFS
 var defaultBootstrapPeers = dht.DefaultBootstrapPeers
+
+// libp2p host
+var p2pHost host.Host
 
 const exampleFn = "/tmp/boxo-example-peerid.txt"
 
@@ -83,7 +87,7 @@ func main() {
 	// libp2p host first.
 
 	// Make a host that listens on the given multiaddress
-	h, err := makeHost(0, *seedF)
+	h, err := makeHost(ctx, 0, *seedF)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -99,6 +103,9 @@ func main() {
 
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
+
+	// Start a goroutine to list connected peers every 10 seconds.
+	go listConnectedPeers(ctx, h)
 
 	// ping targetF or pingF
 	for _, target := range []string{*targetF, *pingF} {
@@ -140,6 +147,37 @@ func main() {
 	time.Sleep(1 * time.Second)
 	wg.Wait()
 	return
+}
+
+// listConnectedPeers periodically lists the connected peers of the host.
+// This helps in monitoring the connectivity of the node.
+func listConnectedPeers(ctx context.Context, h host.Host) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			peers := h.Network().Peers()
+			if len(peers) == 0 {
+				log.Println("No connected peers")
+			} else {
+				var ids []string
+				for _, p := range peers {
+					ids = append(ids, p.String())
+				}
+				log.Println("Connected peers:")
+				for _, p := range peers {
+					log.Printf("  %s:\n", p)
+					addrs := h.Peerstore().Addrs(p)
+					for _, addr := range addrs {
+						log.Printf("    %s\n", addr)
+					}
+				}
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // setupDHT initializes a Kademlia DHT instance for the host and connects to
@@ -383,7 +421,7 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string,
 
 // makeHost creates a libP2P host with a random peer ID listening on the given
 // multiaddress.
-func makeHost(listenPort int, randseed int64) (host.Host, error) {
+func makeHost(ctx context.Context, listenPort int, randseed int64) (host.Host, error) {
 	var r io.Reader
 	if randseed == 0 {
 		r = rand.Reader
@@ -398,6 +436,11 @@ func makeHost(listenPort int, randseed int64) (host.Host, error) {
 		return nil, err
 	}
 
+	peerSource, err := autoRelayPeerSource(ctx, p2pHost)
+	if err != nil {
+		return nil, err
+	}
+
 	// Some basic libp2p options, see the go-libp2p docs for more details
 	opts := []libp2p.Option{
 		libp2p.ListenAddrStrings(fmt.Sprintf("/ip4/127.0.0.1/tcp/%d",
@@ -405,10 +448,11 @@ func makeHost(listenPort int, randseed int64) (host.Host, error) {
 		libp2p.Identity(priv),
 		libp2p.EnableNATService(),
 		libp2p.EnableRelayService(),
-		libp2p.EnableAutoRelay(libp2p.WithPeerSource(autoRelayPeerSource)),
+		libp2p.EnableAutoRelayWithPeerSource(peerSource),
 	}
 
-	return libp2p.New(opts...)
+	host, err = libp2p.New(opts...)
+	return host, err
 }
 
 func getHostAddress(h host.Host) string {
@@ -422,13 +466,54 @@ func getHostAddress(h host.Host) string {
 	return addr.Encapsulate(hostAddr).String()
 }
 
-// autoRelayPeerSource provides a Peer Source function for AutoRelay.
-// It returns an empty channel, allowing auto relay service
-// to start without static relays.
-func autoRelayPeerSource(ctx context.Context, h host.Host) (<-chan peer.AddrInfo, error) {
-	ch := make(chan peer.AddrInfo)
-	close(ch)
-	return ch, nil
+// autoRelayPeerSource provides a dynamic Peer Source function for AutoRelay.
+// A Peer Source is a function that returns a channel of potential relay nodes,
+// which are peers that may help relay traffic when direct connections are not
+// possible. Here we use the host's connected peers as candidates. Note that this
+// implementation does not use static relays.
+//
+// Returns a function with this signature:
+// type PeerSource func(ctx context.Context, num int) <-chan peer.AddrInfo
+func autoRelayPeerSource(ctx context.Context, h host.Host) (fn autorelay.PeerSource, err error) {
+	fn = func(ctx context.Context, num int) <-chan peer.AddrInfo {
+		ch := make(chan peer.AddrInfo)
+		go func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				if h == nil {
+					log.Println("Host is nil, waiting for it to be set...")
+					time.Sleep(1 * time.Second)
+					continue
+				}
+				select {
+				case <-ticker.C:
+					// Iterate over connected peers and send them as candidate relays.
+					for _, pid := range h.Network().Peers() {
+						// Skip self.
+						if pid == h.ID() {
+							continue
+						}
+						addrs := h.Peerstore().Addrs(pid)
+						if len(addrs) == 0 {
+							continue
+						}
+						select {
+						case ch <- peer.AddrInfo{ID: pid, Addrs: addrs}:
+						case <-ctx.Done():
+							close(ch)
+							return
+						}
+					}
+				case <-ctx.Done():
+					close(ch)
+					return
+				}
+			}
+		}()
+		return ch
+	}
+	return
 }
 
 // createFile0to100k creates a file with the number 0 to 100k

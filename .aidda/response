@@ -102,6 +102,9 @@ func main() {
 	fullAddr := getHostAddress(h)
 	log.Printf("I am %s\n", fullAddr)
 
+	// Start a goroutine to list connected peers every 10 seconds.
+	go listConnectedPeers(ctx, h)
+
 	// ping targetF or pingF
 	for _, target := range []string{*targetF, *pingF} {
 		if target == "" {
@@ -142,6 +145,30 @@ func main() {
 	time.Sleep(1 * time.Second)
 	wg.Wait()
 	return
+}
+
+// listConnectedPeers periodically lists the connected peers of the host.
+// This helps in monitoring the connectivity of the node.
+func listConnectedPeers(ctx context.Context, h host.Host) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			peers := h.Network().Peers()
+			if len(peers) == 0 {
+				log.Println("No connected peers")
+			} else {
+				var ids []string
+				for _, p := range peers {
+					ids = append(ids, p.String())
+				}
+				log.Printf("Connected peers: %s", strings.Join(ids, ", "))
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
 // setupDHT initializes a Kademlia DHT instance for the host and connects to
@@ -424,12 +451,42 @@ func getHostAddress(h host.Host) string {
 	return addr.Encapsulate(hostAddr).String()
 }
 
-// autoRelayPeerSource provides a Peer Source function for AutoRelay.
-// It returns an empty channel, allowing auto relay service
-// to start without static relays.
+// autoRelayPeerSource provides a dynamic Peer Source function for AutoRelay.
+// A Peer Source is a function that returns a channel of potential relay nodes,
+// which are peers that may help relay traffic when direct connections are not
+// possible. Here we use the host's connected peers as candidates. Note that this
+// implementation does not use static relays.
 func autoRelayPeerSource(ctx context.Context, h host.Host) (<-chan peer.AddrInfo, error) {
 	ch := make(chan peer.AddrInfo)
-	close(ch)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				// Iterate over connected peers and send them as candidate relays.
+				for _, pid := range h.Network().Peers() {
+					// Skip self.
+					if pid == h.ID() {
+						continue
+					}
+					addrs := h.Peerstore().Addrs(pid)
+					if len(addrs) == 0 {
+						continue
+					}
+					select {
+					case ch <- peer.AddrInfo{ID: pid, Addrs: addrs}:
+					case <-ctx.Done():
+						close(ch)
+						return
+					}
+				}
+			case <-ctx.Done():
+				close(ch)
+				return
+			}
+		}
+	}()
 	return ch, nil
 }
 

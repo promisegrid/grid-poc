@@ -16,8 +16,11 @@ When trying to turn on auto relay, I get this error:
 
   panic: Can not create a new relayFinder. Need a Peer Source fn or a list of static relays. Refer to the documentation around `libp2p.EnableAutoRelay`
 
-Fix this.  Do not use static relays.
+Fix this.  Do not use static relays.  Describe what a "peer source" is
+in the context of auto relay.  
 
+Also, in a function, add a gouroutine function that lists connected
+peers every 10 seconds, and call it from the main function.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
