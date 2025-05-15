@@ -20,9 +20,9 @@ import (
 	dsync "github.com/ipfs/go-datastore/sync"
 
 	"github.com/libp2p/go-libp2p"
-	"github.com/libp2p/go-libp2p-core/host"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	// "github.com/libp2p/go-libp2p/core/peerstore"
@@ -91,6 +91,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	p2pHost = h // Set global after creation
 	defer h.Close()
 
 	// Set up the DHT to join the public IPFS network. Bootstrap peers are used
@@ -451,8 +452,12 @@ func makeHost(ctx context.Context, listenPort int, randseed int64) (host.Host, e
 		libp2p.EnableAutoRelayWithPeerSource(peerSource),
 	}
 
-	host, err = libp2p.New(opts...)
-	return host, err
+	libp2pHost, err := libp2p.New(opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	return libp2pHost, nil
 }
 
 func getHostAddress(h host.Host) string {
