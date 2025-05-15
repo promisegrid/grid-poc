@@ -1,6 +1,3 @@
-Advise how to fix this error:
-
-vet: ./main.go:454:2: use of package host not in selector
 
 
 Sysmsg: 

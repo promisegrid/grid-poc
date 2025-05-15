@@ -106,7 +106,7 @@ func main() {
 	log.Printf("I am %s\n", fullAddr)
 
 	// Start a goroutine to list connected peers every 10 seconds.
-	go listConnectedPeers(ctx, h)
+	go listConnectedPeers(ctx, h, false /* verbose */)
 
 	// ping targetF or pingF
 	for _, target := range []string{*targetF, *pingF} {
@@ -152,7 +152,7 @@ func main() {
 
 // listConnectedPeers periodically lists the connected peers of the host.
 // This helps in monitoring the connectivity of the node.
-func listConnectedPeers(ctx context.Context, h host.Host) {
+func listConnectedPeers(ctx context.Context, h host.Host, verbose bool) {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -166,14 +166,25 @@ func listConnectedPeers(ctx context.Context, h host.Host) {
 				for _, p := range peers {
 					ids = append(ids, p.String())
 				}
-				log.Println("Connected peers:")
+				if verbose {
+					log.Println("Connected peers:")
+				}
+				peerCount := 0
+				addrCount := 0
 				for _, p := range peers {
-					log.Printf("  %s:\n", p)
+					peerCount++
+					if verbose {
+						log.Printf("  %s:\n", p)
+					}
 					addrs := h.Peerstore().Addrs(p)
 					for _, addr := range addrs {
-						log.Printf("    %s\n", addr)
+						addrCount++
+						if verbose {
+							log.Printf("    %s\n", addr)
+						}
 					}
 				}
+				log.Printf("Connected to %d peers, %d addresses\n", peerCount, addrCount)
 			}
 		case <-ctx.Done():
 			return
@@ -669,15 +680,16 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 	} else {
 		log.Println("Searching for providers via DHT...")
 		want := 5
-		provChan := dht.FindProvidersAsync(ctx, c, want)
 		connected := 0
 		for connected < want {
 			// Wait for a provider to be found with a timeout.
 			var prov *peer.AddrInfo
+			provChan := dht.FindProvidersAsync(ctx, c, want)
 			select {
 			case p, ok := <-provChan:
 				if !ok {
 					log.Printf("Provider channel closed before receiving %d providers", want)
+					time.Sleep(1 * time.Second)
 					continue
 				}
 				// Skip self.
@@ -687,6 +699,10 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 				}
 				prov = &p
 				log.Printf("Found provider: %s", prov.ID)
+				if len(prov.Addrs) == 0 {
+					log.Printf("Provider %s has no addresses", prov.ID)
+					continue
+				}
 				for _, maddr := range prov.Addrs {
 					log.Printf("Provider address: %s", maddr)
 				}
