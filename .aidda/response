@@ -26,6 +26,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	// "github.com/libp2p/go-libp2p/core/peerstore"
@@ -84,6 +85,9 @@ func main() {
 	seedF := flag.Int64("seed", 0, "set random seed for id generation")
 	pingF := flag.String("ping", "", "target peer to ping")
 	flag.Parse()
+
+	// Recommend increasing system UDP buffer sizes for better QUIC performance.
+	configureUDPBuffers()
 
 	// For this example we are going to be transferring data using Bitswap
 	// over libp2p or demonstrating gossipsub. This means we need to create a
@@ -151,6 +155,13 @@ func main() {
 	time.Sleep(1 * time.Second)
 	wg.Wait()
 	return
+}
+
+// configureUDPBuffers logs recommended system commands to increase UDP buffer sizes.
+func configureUDPBuffers() {
+	log.Println("For better QUIC performance, consider running:")
+	log.Println("sudo sysctl -w net.core.rmem_max=2500000")
+	log.Println("sudo sysctl -w net.core.wmem_max=2500000")
 }
 
 // listConnectedPeers periodically lists the connected peers of the host.
@@ -305,7 +316,6 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool,
 					continue
 				}
 				if strings.HasPrefix(string(msg.Data), "hello back") {
-					// log.Printf("Received %s, exiting...", string(msg.Data))
 					log.Printf("Received %s", string(msg.Data))
 					parts := strings.Split(string(msg.Data), " ")
 					if len(parts) < 3 {
@@ -374,7 +384,6 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool,
 				}
 				log.Printf("Parsed number: %d", num)
 				// Send response
-				// ack := Spf("hello back %d", num)
 				if fileCid == "" {
 					log.Println("fileCid is empty, can't send response yet")
 					continue
@@ -409,7 +418,6 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string,
 		defer bs.Close()
 		log.Printf("hosting UnixFS file with CID: %s\n", c)
 		log.Println("listening for inbound connections and Bitswap requests")
-		// log.Printf("Now run on a different terminal:\ngo run main.go -d %s\n", getHostAddress(h))
 		log.Printf("Now run on a different terminal:\ngo run main.go -d $(cat %s)\n",
 			exampleFn)
 		<-ctx.Done()
@@ -425,7 +433,6 @@ func runBitswapDemo(ctx context.Context, h host.Host, target string,
 			return err
 		}
 		log.Println("found the data")
-		// log.Println(string(fileData))
 		// verify the data
 		err = verifyFile0to100k(fileData)
 		if err != nil {
@@ -618,22 +625,6 @@ func startDataServer(ctx context.Context, h host.Host, dht *dht.IpfsDHT) (cid.Ci
 	// hang onto the fileCid so we can respond with it in pubsub
 	fileCid = rootCid.String()
 
-	/*
-		// verify that the file we created has the expected CID
-		if rootCid.String() != fileCid {
-			return cid.Undef, nil, fmt.Errorf("CID mismatch: expected %s, got %s",
-				fileCid, rootCid.String())
-		}
-	*/
-
-	// verify that we can fetch the file we created
-	// XXX
-	/*
-		if string(ufsBytes) != string(fileBytes) {
-			return cid.Undef, nil, fmt.Errorf("file mismatch")
-		}
-	*/
-
 	// Advertise CID through DHT if available
 	log.Printf("DHT: %p\n", dht)
 	if dht != nil {
@@ -694,6 +685,7 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 		}
 	} else {
 		log.Println("Searching for providers via DHT...")
+		// try providers until file is fetched
 		tried := 0
 		var provChan <-chan peer.AddrInfo
 		open := false
@@ -705,6 +697,7 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 			}
 			if !open {
 				Pl("Starting DHT FindProvidersAsync")
+				// dht.FindProvidersAsync starts a goroutine to find providers
 				provChan = dht.FindProvidersAsync(ctx, c, 999)
 				open = true
 			}
@@ -731,15 +724,48 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 				for _, maddr := range prov.Addrs {
 					log.Printf("Provider address: %s", maddr)
 				}
-				if err := h.Connect(ctx, prov); err != nil {
-					log.Printf("Error connecting to provider %s: %v", prov.ID, err)
+				// Improved provider connection logic: prioritize direct addresses.
+				var filteredAddrs []multiaddr.Multiaddr
+				for _, addr := range prov.Addrs {
+					if !isRelayAddr(addr) {
+						filteredAddrs = append(filteredAddrs, addr)
+					}
+				}
+				if len(filteredAddrs) == 0 {
+					filteredAddrs = prov.Addrs
+				}
+				connected := false
+				for _, addr := range filteredAddrs {
+					provAddr := peer.AddrInfo{ID: prov.ID, Addrs: []multiaddr.Multiaddr{addr}}
+					log.Printf("Attempting connection to provider %s via %s", prov.ID, addr)
+					ctxConn, cancelConn := context.WithTimeout(ctx, 10*time.Second)
+					if err := h.Connect(ctxConn, provAddr); err != nil {
+						log.Printf("Connection via %s failed: %v", addr, err)
+					} else {
+						log.Printf("Connected to provider %s via %s", prov.ID, addr)
+						connected = true
+						cancelConn()
+						break
+					}
+					cancelConn()
+				}
+				if !connected {
+					log.Printf("Failed to connect to provider %s on all addresses", prov.ID)
 					continue
 				}
-				log.Printf("Connected to provider %s", prov.ID)
+				if h.Network().Connectedness(prov.ID) != network.Connected {
+					log.Printf("Not connected to provider %s after connection", prov.ID)
+					continue
+				}
 				tried++
+
+				// create a context that times out after 60 seconds for fetching the file
 				ctx60, cancel := context.WithTimeout(ctx, 60*time.Second)
-				dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx60,
-					merkledag.NewDAGService(blockservice.New(datastore.NewNullDatastore(), bswap))))
+
+				// try to fetch the file
+				dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
+					merkledag.NewDAGService(blockservice.New(
+						blockstore.NewBlockstore(datastore.NewNullDatastore()), bswap))))
 				nd, err := dserv.Get(ctx60, c)
 				cancel()
 				if err != nil {
@@ -747,18 +773,20 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 					continue
 				}
 				log.Printf("Got file from provider %s", prov.ID)
+
 				unixFSNode, err := unixfile.NewUnixfsFile(ctx, dserv, nd)
 				if err != nil {
 					return nil, err
 				}
-				Pl("Created UnixFS file from node")
+				log.Printf("Created UnixFS file from node")
+
 				var buf bytes.Buffer
 				if f, ok := unixFSNode.(files.File); ok {
 					if _, err := io.Copy(&buf, f); err != nil {
 						return nil, err
 					}
 				}
-				Pl("Copied file data to buffer")
+				log.Printf("Copied file data to buffer")
 				return buf.Bytes(), nil
 			}
 		}
@@ -792,6 +820,16 @@ func pingWait(ctx context.Context, h host.Host, target string) {
 		}
 		time.Sleep(1 * time.Second)
 	}
+}
+
+// isRelayAddr checks whether a multiaddress is a relay address via the "p2p-circuit" protocol.
+func isRelayAddr(maddr multiaddr.Multiaddr) bool {
+	for _, proto := range maddr.Protocols() {
+		if proto.Name == "p2p-circuit" {
+			return true
+		}
+	}
+	return false
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/node-boxo-bitswap-plus/main.go
