@@ -319,10 +319,13 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool,
 		}()
 
 		// Publish with retries
+		// create a context that times out after 60 seconds
+		ctx60, cancel := context.WithTimeout(ctx, 60*time.Second)
+		defer cancel()
 		const maxRetries = math.MaxInt
 		for i := 0; i < maxRetries; i++ {
 			msg := Spf("hello world %d", i+1)
-			if err := topic.Publish(ctx, []byte(msg)); err != nil {
+			if err := topic.Publish(ctx60, []byte(msg)); err != nil {
 				log.Printf("Publish attempt %d failed: %v", i+1, err)
 			} else {
 				log.Printf("Published message: hello world (attempt %d)", i+1)
@@ -337,8 +340,8 @@ func runGossipDemo(ctx context.Context, h host.Host, target string, useDHT bool,
 				}
 				log.Println("Received response, exiting...")
 				return nil
-			case <-ctx.Done():
-				return ctx.Err()
+			case <-ctx60.Done():
+				return ctx60.Err()
 			}
 		}
 		return fmt.Errorf("did not receive a valid 'hello back' response after %d attempts", maxRetries)
