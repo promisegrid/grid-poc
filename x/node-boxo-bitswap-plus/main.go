@@ -723,18 +723,13 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 					log.Printf("Provider %s has no addresses", prov.ID)
 					continue
 				}
-				for _, maddr := range prov.Addrs {
-					log.Printf("Provider address: %s", maddr)
-				}
 				// Improved provider connection logic: prioritize direct addresses.
 				var filteredAddrs []multiaddr.Multiaddr
-				/*
-					for _, addr := range prov.Addrs {
-						if !isRelayAddr(addr) {
-							filteredAddrs = append(filteredAddrs, addr)
-						}
+				for _, addr := range prov.Addrs {
+					if !isLoopbackAddr(addr) {
+						filteredAddrs = append(filteredAddrs, addr)
 					}
-				*/
+				}
 				if len(filteredAddrs) == 0 {
 					filteredAddrs = prov.Addrs
 				}
@@ -809,17 +804,31 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 // pingWait pings the target peer using the libp2p ping protocol and
 // returns a nil err when the ping is successful.
 func pingWait(ctx context.Context, h host.Host, target string) (err error) {
+	// Try to parse target as a multiaddr.
 	maddr, err := multiaddr.NewMultiaddr(target)
-	if err != nil {
-		return
+	var info *peer.AddrInfo
+	if err == nil {
+		info, err = peer.AddrInfoFromP2pAddr(maddr)
+		if err != nil {
+			return err
+		}
+	} else {
+		// If target is not a multiaddr, assume it is a peer ID.
+		pid, err := peer.Decode(target)
+		if err != nil {
+			return err
+		}
+		info = &peer.AddrInfo{ID: pid}
+		// Attempt to get addresses from the peerstore.
+		addrs := h.Peerstore().Addrs(pid)
+		if len(addrs) > 0 {
+			info.Addrs = addrs
+		}
 	}
-	info, err := peer.AddrInfoFromP2pAddr(maddr)
-	if err != nil {
-		return
+	// Add each address to the peerstore.
+	for _, a := range info.Addrs {
+		h.Peerstore().AddAddr(info.ID, a, time.Hour)
 	}
-	// Add the target address to the peerstore so that ping can
-	// dial the target.
-	h.Peerstore().AddAddr(info.ID, maddr, time.Hour)
 	log.Printf("Pinging peer %s...", info.ID)
 	for i := 0; i < 5; i++ {
 		pingCh := ping.Ping(ctx, h, info.ID)
@@ -839,6 +848,17 @@ func pingWait(ctx context.Context, h host.Host, target string) (err error) {
 func isRelayAddr(maddr multiaddr.Multiaddr) bool {
 	for _, proto := range maddr.Protocols() {
 		if proto.Name == "p2p-circuit" {
+			return true
+		}
+	}
+	return false
+}
+
+// isLoopbackAddr checks if the address is a local host address.
+func isLoopbackAddr(maddr multiaddr.Multiaddr) bool {
+	// Check if the address is a loopback address
+	for _, loopPat := range []string{"127.0.0.1", "::1"} {
+		if strings.Contains(maddr.String(), loopPat) {
 			return true
 		}
 	}

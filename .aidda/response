@@ -120,7 +120,10 @@ func main() {
 		if target == "" {
 			continue
 		}
-		pingWait(ctx, h, target)
+		err = pingWait(ctx, h, target)
+		if err != nil {
+			log.Fatalf("ping failed: %v: %v", err, target)
+		}
 	}
 
 	// write the host's peer ID to a file for use in the demos
@@ -159,9 +162,10 @@ func main() {
 
 // configureUDPBuffers logs recommended system commands to increase UDP buffer sizes.
 func configureUDPBuffers() {
+	// XXX read from sysctl first and only print if not set
 	log.Println("For better QUIC performance, consider running:")
-	log.Println("sudo sysctl -w net.core.rmem_max=2500000")
-	log.Println("sudo sysctl -w net.core.wmem_max=2500000")
+	log.Println("sudo sysctl -w net.core.rmem_max=7500000")
+	log.Println("sudo sysctl -w net.core.wmem_max=7500000")
 }
 
 // listConnectedPeers periodically lists the connected peers of the host.
@@ -721,9 +725,6 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 					log.Printf("Provider %s has no addresses", prov.ID)
 					continue
 				}
-				for _, maddr := range prov.Addrs {
-					log.Printf("Provider address: %s", maddr)
-				}
 				// Improved provider connection logic: prioritize direct addresses.
 				var filteredAddrs []multiaddr.Multiaddr
 				for _, addr := range prov.Addrs {
@@ -741,12 +742,20 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 					ctxConn, cancelConn := context.WithTimeout(ctx, 10*time.Second)
 					if err := h.Connect(ctxConn, provAddr); err != nil {
 						log.Printf("Connection via %s failed: %v", addr, err)
-					} else {
-						log.Printf("Connected to provider %s via %s", prov.ID, addr)
-						connected = true
 						cancelConn()
-						break
+						continue
 					}
+					log.Printf("Connected to provider %s via %s", prov.ID, addr)
+
+					// try pinging the provider
+					err := pingWait(ctx, h, prov.ID.String())
+					if err != nil {
+						log.Printf("Ping failed: %v", err)
+						cancelConn()
+						continue
+					}
+
+					connected = true
 					cancelConn()
 				}
 				if !connected {
@@ -795,31 +804,46 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 }
 
 // pingWait pings the target peer using the libp2p ping protocol and
-// returns when the ping is successful.
-func pingWait(ctx context.Context, h host.Host, target string) {
+// returns a nil err when the ping is successful.
+func pingWait(ctx context.Context, h host.Host, target string) (err error) {
+	// Try to parse target as a multiaddr.
 	maddr, err := multiaddr.NewMultiaddr(target)
-	if err != nil {
-		log.Fatal(err)
+	var info peer.AddrInfo
+	if err == nil {
+		info, err = peer.AddrInfoFromP2pAddr(maddr)
+		if err != nil {
+			return err
+		}
+	} else {
+		// If target is not a multiaddr, assume it is a peer ID.
+		pid, err := peer.Decode(target)
+		if err != nil {
+			return err
+		}
+		info = peer.AddrInfo{ID: pid}
+		// Attempt to get addresses from the peerstore.
+		addrs := h.Peerstore().Addrs(pid)
+		if len(addrs) > 0 {
+			info.Addrs = addrs
+		}
 	}
-	info, err := peer.AddrInfoFromP2pAddr(maddr)
-	if err != nil {
-		log.Fatal(err)
+	// Add each address to the peerstore.
+	for _, a := range info.Addrs {
+		h.Peerstore().AddAddr(info.ID, a, time.Hour)
 	}
-	// Add the target address to the peerstore so that ping can
-	// dial the target.
-	h.Peerstore().AddAddr(info.ID, maddr, time.Hour)
 	log.Printf("Pinging peer %s...", info.ID)
-	for {
+	for i := 0; i < 5; i++ {
 		pingCh := ping.Ping(ctx, h, info.ID)
 		result := <-pingCh
 		if result.Error != nil {
 			log.Printf("Ping error: %s", result.Error)
 		} else {
 			log.Printf("Ping RTT: %s", result.RTT)
-			break
+			return nil
 		}
 		time.Sleep(1 * time.Second)
 	}
+	return fmt.Errorf("ping timeout")
 }
 
 // isRelayAddr checks whether a multiaddress is a relay address via the "p2p-circuit" protocol.
