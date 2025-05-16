@@ -24,7 +24,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	// "github.com/libp2p/go-libp2p/core/peerstore"
@@ -719,56 +718,64 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 					log.Println("Skipping self as provider")
 					continue
 				}
-				if len(prov.Addrs) == 0 {
-					log.Printf("Provider %s has no addresses", prov.ID)
+				/*
+					if len(prov.Addrs) == 0 {
+						log.Printf("Provider %s has no addresses", prov.ID)
+						continue
+					}
+					// Improved provider connection logic: prioritize direct addresses.
+					var filteredAddrs []multiaddr.Multiaddr
+					for _, addr := range prov.Addrs {
+						if !isLoopbackAddr(addr) {
+							filteredAddrs = append(filteredAddrs, addr)
+						}
+					}
+					if len(filteredAddrs) == 0 {
+						filteredAddrs = prov.Addrs
+					}
+					connected := false
+					for _, addr := range filteredAddrs {
+						provAddr := peer.AddrInfo{ID: prov.ID, Addrs: []multiaddr.Multiaddr{addr}}
+						log.Printf("Attempting connection to provider %s via %s", prov.ID, addr)
+						ctxConn, cancelConn := context.WithTimeout(ctx, 10*time.Second)
+						if err := h.Connect(ctxConn, provAddr); err != nil {
+							log.Printf("Connection via %s failed: %v", addr, err)
+							cancelConn()
+							continue
+						}
+						log.Printf("Connected to provider %s via %s", prov.ID, addr)
+				*/
+
+				tried++
+
+				// try pinging the provider
+				err := pingWait(ctx, h, prov.ID.String())
+				if err != nil {
+					log.Printf("Ping failed: %v", err)
+					// cancelConn()
 					continue
 				}
-				// Improved provider connection logic: prioritize direct addresses.
-				var filteredAddrs []multiaddr.Multiaddr
-				for _, addr := range prov.Addrs {
-					if !isLoopbackAddr(addr) {
-						filteredAddrs = append(filteredAddrs, addr)
-					}
-				}
-				if len(filteredAddrs) == 0 {
-					filteredAddrs = prov.Addrs
-				}
-				connected := false
-				for _, addr := range filteredAddrs {
-					provAddr := peer.AddrInfo{ID: prov.ID, Addrs: []multiaddr.Multiaddr{addr}}
-					log.Printf("Attempting connection to provider %s via %s", prov.ID, addr)
-					ctxConn, cancelConn := context.WithTimeout(ctx, 10*time.Second)
-					if err := h.Connect(ctxConn, provAddr); err != nil {
-						log.Printf("Connection via %s failed: %v", addr, err)
-						cancelConn()
-						continue
-					}
-					log.Printf("Connected to provider %s via %s", prov.ID, addr)
 
-					// try pinging the provider
-					err := pingWait(ctx, h, prov.ID.String())
-					if err != nil {
-						log.Printf("Ping failed: %v", err)
-						cancelConn()
-						continue
-					}
-
+				/*
 					connected = true
 					cancelConn()
-				}
-				if !connected {
-					log.Printf("Failed to connect to provider %s on all addresses", prov.ID)
-					continue
-				}
-				if h.Network().Connectedness(prov.ID) != network.Connected {
-					log.Printf("Not connected to provider %s after connection", prov.ID)
-					continue
-				}
-				tried++
+
+						}
+
+						if !connected {
+							log.Printf("Failed to connect to provider %s on all addresses", prov.ID)
+							continue
+						}
+						if h.Network().Connectedness(prov.ID) != network.Connected {
+							log.Printf("Not connected to provider %s after connection", prov.ID)
+							continue
+						}
+				*/
 
 				// create a context that times out after 60 seconds for fetching the file
 				ctx60, cancel := context.WithTimeout(ctx, 60*time.Second)
 
+				log.Printf("Fetching file from provider %s...\n", prov.ID)
 				// try to fetch the file
 				dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
 					merkledag.NewDAGService(blockservice.New(
