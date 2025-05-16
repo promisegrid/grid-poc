@@ -762,10 +762,19 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 				ctx60, cancel := context.WithTimeout(ctx, 60*time.Second)
 				defer cancel()
 				log.Printf("Fetching file from provider %s...\n", prov.ID)
+
+				// Replace dserv creation with session-based approach
+				sess := bswap.NewSession(ctx)
+				// defer sess.Shutdown()
+
+				dserv := merkledag.NewReadOnlyDagService(
+					blockservice.New(
+						blockstore.NewBlockstore(datastore.NewNullDatastore()),
+						sess,
+					),
+				)
+
 				// try to fetch the file
-				dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
-					merkledag.NewDAGService(blockservice.New(
-						blockstore.NewBlockstore(datastore.NewNullDatastore()), bswap))))
 				nd, err := dserv.Get(ctx60, c)
 				cancel()
 				if err != nil {
