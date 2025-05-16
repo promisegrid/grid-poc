@@ -1,24 +1,8 @@
 fix file retrieval in DHT mode
 
-The code is finding the right provider via the DHT.  The ping.Ping
-calls works to ping the provider.  But when it tries to get the file,
-it times out.  Here's the output from the consumer:
+fix error:
 
-```
-2025/05/16 12:06:26 got candidate provider QmSDsUpvnA5hGiihLJXzeKsoAwuNsX4PGo6mVv3sMR8A2d
-2025/05/16 12:06:26 Pinging peer ID QmSDsUpvnA5hGiihLJXzeKsoAwuNsX4PGo6mVv3sMR8A2d...
-2025/05/16 12:06:26 Ping RTT: 2.043275ms
-2025/05/16 12:06:26 Attempting connection to provider QmSDsUpvnA5hGiihLJXzeKsoAwuNsX4PGo6mVv3sMR8A2d:
-2025/05/16 12:06:26 Connected to provider QmSDsUpvnA5hGiihLJXzeKsoAwuNsX4PGo6mVv3sMR8A2d
-2025/05/16 12:06:26 Fetching file from provider QmSDsUpvnA5hGiihLJXzeKsoAwuNsX4PGo6mVv3sMR8A2d...
-2025/05/16 12:06:33 Connected to 162 peers, 623 addresses
-2025/05/16 12:06:43 Connected to 163 peers, 688 addresses
-2025/05/16 12:06:53 Connected to 156 peers, 676 addresses
-2025/05/16 12:07:03 Connected to 155 peers, 673 addresses
-2025/05/16 12:07:13 Connected to 124 peers, 519 addresses
-2025/05/16 12:07:23 Connected to 114 peers, 495 addresses
-2025/05/16 12:07:26 Error getting file from provider QmSDsUpvnA5hGiihLJXzeKsoAwuNsX4PGo6mVv3sMR8A2d: context deadline exceeded
-```
+vet: ./main.go:773:7: cannot use sess (variable of interface type exchange.Fetcher) as exchange.Interface value in argument to blockservice.New: exchange.Fetcher does not implement exchange.Interface (missing method Close)
 
 
 Sysmsg: 
@@ -34,13 +18,15 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
+  x/node-boxo-bitswap-plus/main.go
+
+.stop
+
+  x/node-boxo-bitswap-plus/main_test.go
+
   /tmp/dht1
   /tmp/dht2
   /tmp/dht3
-  x/node-boxo-bitswap-plus/main.go
-  x/node-boxo-bitswap-plus/main_test.go
-
-.stop
 
 fix dht file retrieval
 

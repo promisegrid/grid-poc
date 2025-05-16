@@ -1,191 +1,353 @@
 <think>
-Okay, let's see. The user is having trouble with file retrieval when
-using DHT mode. The code connects to the provider and pings
-successfully, but the actual file transfer times out. The logs show
-the client connects but then gets a context deadline exceeded error
-after a minute. The sender's log mentions a warning about the UDP
-receive buffer size. 
+Okay, let's tackle this problem. The error message says that we're trying to use an exchange.Fetcher where an exchange.Interface is expected. The specific issue is that exchange.Fetcher doesn't implement the Close method, which is part of the exchange.Interface.
 
-First, I remember that Bitswap uses the DHT to find providers, then
-connects to them to request blocks. The problem could be in how the
-connection is established or how Bitswap is configured. Let me check
-the code.
+Looking at the code, in the runClient function, we create a session using sess := bswap.NewSession(ctx). The NewSession method returns an exchange.Fetcher. Then, we pass this sess to blockservice.New, which expects an exchange.Interface. But exchange.Fetcher doesn't have the Close method, hence the error.
 
-In the `runClient` function for DHT mode, after finding providers, the
-code connects to each provider and tries to fetch the file. But maybe
-the connection isn't fully established. The code uses `h.Connect`, but
-does it wait for the connection to be ready? The ping succeeds, so the
-network layer is working, but Bitswap might not be aware of the
-connection.
+The root of the problem is that the session (exchange.Fetcher) doesn't implement the full exchange.Interface. The blockservice.New requires an exchange.Interface, which includes methods like Close. So, we can't directly use the session here.
 
-Looking at the error message about the UDP buffer size, that's from
-quic-go. The system's UDP buffer might be too small, causing packet
-loss. The code logs a warning but doesn't adjust anything. The user
-might need to increase the buffer size, but how to handle that in the
-code?
+I remember that the blockservice can take an exchange.Interface, and a session is a more specific type. Maybe we need to use the original bitswap client (which implements exchange.Interface) instead of the session when creating the blockservice. But we also want the benefits of the session for efficient fetching.
 
-In the `runClient` function, when using DHT, after connecting, the
-code creates a new Bitswap client and tries to fetch the block. Maybe
-the Bitswap client isn't properly using the connected peer. Or perhaps
-the provider's addresses aren't correctly added to the peerstore, so
-Bitswap doesn't know how to reach them.
+Wait, perhaps the session can be used in conjunction with the blockservice. Let me check the documentation. Oh right, the session is meant to be used with the existing blockservice. So maybe the approach is to create the blockservice with the main bitswap client (which is an exchange.Interface), and then use the session for fetching, but not for the blockservice itself.
 
-Another angle: the DHT might return relay addresses, and connecting
-via relay could be slow or unreliable. The code should prioritize
-direct addresses. The `isRelayAddr` function is present, but it's not
-used when filtering the provider's addresses. So the client might be
-trying to connect via a relay, which isn't working.
+In the current code, when creating dserv, we're creating a new blockservice with the session. That's where the error occurs because the session isn't an exchange.Interface. Instead, the blockservice should be created with the original bitswap client (bswap), which does implement exchange.Interface. Then, the session can be used to perform the actual Get operations, perhaps through the DAG service.
 
-Also, the Bitswap session might need to be explicitly created. The
-current code uses `bsclient.New` but doesn't create a session, which
-could lead to suboptimal request handling. Sessions help Bitswap
-manage requests more efficiently by keeping track of peers and blocks.
+So the fix would be to create the blockservice using the original bitswap client (which is an exchange.Interface) and then use the session with that blockservice. Alternatively, maybe the session can be passed to the DAG service's Get method to utilize the session's efficiency.
 
-Another possibility is that the context timeout for fetching the block
-is too short. The code uses a 60-second timeout, but if the transfer
-is large or the network is slow, this might not be enough. However,
-the user's logs show a timeout after about a minute, so maybe that's
-the issue. But increasing the timeout might not solve the underlying
-problem.
+Let me adjust the code. Instead of creating a new blockservice with the session, we should create the blockservice with the original bswap client (which is an exchange.Interface). Then, when fetching the data, use the session to get the blocks more efficiently.
 
-The UDP buffer warning suggests that the system's network settings are
-suboptimal. The code logs a recommendation, but the user might not
-have applied it. Including a function to check and adjust buffer
-sizes, or at least provide clearer instructions, could help.
+Wait, the blockservice.New requires an exchange.Interface, which the bswap client (type *bsclient.Client) does implement. So, creating the blockservice with bswap should be correct. Then, using the session with the DAG service might involve wrapping the blockservice with the session.
 
-Looking at the provider connection logic: after `h.Connect`, the code
-checks `Connectedness`, but maybe the connection isn't fully
-established. Adding a wait for the stream to be ready or using
-`network.Notify` to track connection state could help ensure the
-connection is usable.
+Alternatively, maybe the DAG service should be created with a session-wrapped blockservice. But how? Let me check the merkledag package. The NewReadOnlyDagService function takes a blockservice.BlockService. The blockservice can be created with the session if the session implements exchange.Interface. But since the session (exchange.Fetcher) doesn't, that's the problem.
 
-In the test case for DHT mode, there's a 1-second sleep after
-providing the CID. In a real network, the DHT might take longer to
-propagate the provider record. Increasing this delay or adding retries
-could help the client find the provider.
+Ah, here's the mistake. The session is an exchange.Fetcher, which is a subset of the exchange.Interface. The blockservice requires the full exchange.Interface, which includes Close and other methods. Therefore, we can't use the session directly in blockservice.New.
 
-Putting this all together, the main issues are likely related to
-connection handling, address prioritization, Bitswap session
-management, and system UDP settings. The solution should address each
-of these areas.
-</think>
+The correct approach is to create the blockservice with the original bitswap client (bswap), which is an exchange.Interface. Then, use the session to perform the actual Get requests, which might be done automatically when using the session with the DAG service.
 
-To resolve the DHT file retrieval timeout, implement these changes:
+Wait, maybe the session is used within the blockservice's GetBlocks method. So instead of creating a new blockservice with the session, we should use the existing blockservice (created with bswap) and then use the session to fetch the data more efficiently.
 
-1. **Connection Validation** in `runClient` DHT mode:
-```go
-// After h.Connect()
-h.Network().Notify(&network.NotifyBundle{
-    Connected: func(n network.Network, conn network.Conn) {
-        if conn.RemotePeer() == prov.ID {
-            log.Printf("Fully connected to %s", prov.ID)
-        }
-    },
-})
+In the code, the current approach is:
 
-// Wait for protocol support verification
-if err := waitForBitswapSupport(ctx, h, prov.ID); err != nil {
-    log.Printf("Bitswap not supported by %s: %v", prov.ID, err)
-    continue
-}
-```
-
-2. **Address Prioritization**:
-```go
-// Modify provider address handling
-prov.Addrs = prioritizeAddresses(prov.Addrs)
-```
-
-Add helper functions:
-```go
-func prioritizeAddresses(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
-    var direct, relay []multiaddr.Multiaddr
-    for _, addr := range addrs {
-        if isRelayAddr(addr) {
-            relay = append(relay, addr)
-        } else {
-            direct = append(direct, addr)
-        }
-    }
-    return append(direct, relay...)
-}
-
-func waitForBitswapSupport(ctx context.Context, h host.Host, pid peer.ID) error {
-    ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-    defer cancel()
-    
-    return h.Connect(ctx, peer.AddrInfo{
-        ID:    pid,
-        Addrs: h.Peerstore().Addrs(pid),
-    })
-}
-```
-
-3. **Bitswap Session Enhancement**:
-```go
-// Replace dserv creation with session-based approach
 sess := bswap.NewSession(ctx)
-defer sess.Close()
+dserv := merkledag.NewReadOnlyDagService(blockservice.New(blockstore..., sess))
 
+But sess is an exchange.Fetcher, not an exchange.Interface. So blockservice.New expects an exchange.Interface, which sess isn't. Therefore, we need to pass an exchange.Interface here.
+
+The solution is to create the blockservice with the original bswap client (which is an exchange.Interface), and then use the session when performing the Get operation. Alternatively, perhaps the session can be applied to the DAG service's Get method.
+
+Wait, maybe the session is a way to group related requests, but the blockservice itself should still use the full exchange.Interface. So the blockservice should be created with bswap, and the session is used when calling Get on the DAG service.
+
+Alternatively, maybe the DAG service can be wrapped with the session. Let me check the merkledag package. There's a function called WrapSession that takes a NodeGetter (which is the DAG service) and a session, returning a NodeGetter that uses the session.
+
+Yes, in the merkledag package, there's a function:
+
+func WrapSession(sess ipld.NodeGetter, ng ipld.NodeGetter) ipld.NodeGetter
+
+But I need to check the actual implementation. Alternatively, perhaps the session can be used as a NodeGetter directly.
+
+Wait, the session (exchange.Fetcher) might implement the NodeGetter interface. Let me see. The exchange.Fetcher has GetBlock and GetBlocks methods, which are part of the BlockGetter interface. The blockservice.BlockService implements BlockGetter, which is used by the DAG service.
+
+Hmm, perhaps the session itself can be used as a BlockGetter. If the session implements BlockGetter, then we can pass it to the blockservice.
+
+Wait, the blockservice is created with a blockstore and an exchange.Interface. The blockservice's GetBlock method uses the exchange to fetch blocks. So if we create the blockservice with the original exchange.Interface (bswap), and then use the session to perform the actual Get, that might work.
+
+Alternatively, perhaps the session should be used as the exchange in the blockservice. But since the session doesn't implement exchange.Interface, that's not possible.
+
+Wait, perhaps the bsclient.Client (bswap) is the exchange.Interface, and the session is a way to group requests, but the actual exchange is still the client. So when we create a session, it's using the same exchange but with a session context.
+
+In that case, the blockservice should still be created with the original bswap (exchange.Interface), and the session is used to manage the requests within that blockservice.
+
+So, the correct approach is to create the blockservice with bswap, and then use the session when fetching data. How to do that?
+
+Looking at the blockservice package, there's a NewSession function that takes a BlockService and returns a Session, which is a BlockGetter. The Session can be used to fetch blocks more efficiently.
+
+Wait, in the code, we have:
+
+sess := bswap.NewSession(ctx)
+
+But bswap is a *bsclient.Client, which has a NewSession method that returns an exchange.Fetcher. Then, the code tries to create a blockservice with this session, which is incorrect because the session isn't an exchange.Interface.
+
+Instead, the blockservice should be created with the original bswap client (which is an exchange.Interface), and then a session can be created from that blockservice.
+
+Wait, perhaps the code is mixing up two different sessions. The bsclient.Client's NewSession creates an exchange.Fetcher, but the blockservice also has a NewSession method that returns a blockservice.Session.
+
+So maybe the correct approach is to create the blockservice with the original exchange.Interface (bswap), then create a blockservice.Session from that blockservice, and use that session with the DAG service.
+
+Let me adjust the code:
+
+1. Create the blockservice with the original bswap client (exchange.Interface):
+
+bsvc := blockservice.New(blockstore..., bswap)
+
+2. Create a session from the blockservice:
+
+sess := blockservice.NewSession(ctx, bsvc)
+
+3. Use the session as the BlockGetter for the DAG service:
+
+dserv := merkledag.NewDAGService(sess)
+
+But wait, the DAG service expects a blockservice.BlockService, which is what bsvc is. Or does it take a BlockGetter? Let me check the merkledag package.
+
+The NewDAGService function takes a blockservice.BlockService. The blockservice.BlockService includes the BlockGetter interface and other methods.
+
+But if we create a blockservice.Session, that's a BlockGetter, not a BlockService. So perhaps we need to create a DAG service that uses the session as the BlockGetter.
+
+Alternatively, the DAG service can be created with the original blockservice, and the session is used implicitly when fetching blocks.
+
+Wait, maybe the session is automatically used when calling Get on the DAG service if the blockservice is set up with the session.
+
+I think the confusion comes from using the bsclient's session (exchange.Fetcher) versus the blockservice's session (blockservice.Session).
+
+The correct approach is to use the blockservice's session. Let's adjust the code accordingly.
+
+In the current code:
+
+sess := bswap.NewSession(ctx)
 dserv := merkledag.NewReadOnlyDagService(
     blockservice.New(
         blockstore.NewBlockstore(datastore.NewNullDatastore()),
         sess,
     ),
 )
-```
 
-4. **UDP Buffer Configuration**:
+But sess here is an exchange.Fetcher, which doesn't implement exchange.Interface. So the blockservice.New is expecting an exchange.Interface, but we're passing an exchange.Fetcher, which doesn't have the Close method.
+
+The solution is to create the blockservice with the original bswap client (which is an exchange.Interface), then create a blockservice.Session from that blockservice, and use that session when fetching the data.
+
+So, modifying the code:
+
+// Create the blockservice with the original bitswap client (bswap)
+bsvc := blockservice.New(
+    blockstore.NewBlockstore(datastore.NewNullDatastore()),
+    bswap,
+)
+
+// Create a session from the blockservice
+sess := blockservice.NewSession(ctx, bsvc)
+
+// Create the DAG service using the session as the BlockGetter
+dserv := merkledag.NewDAGService(sess)
+
+Wait, but the NewDAGService expects a blockservice.BlockService, not a BlockGetter. The blockservice.Session (sess) is a BlockGetter, not a BlockService. So this approach might not work.
+
+Alternatively, perhaps the DAG service can be created with the original blockservice, and the session is used within the blockservice's methods.
+
+Another approach is to use the session with the DAG service's Get method. But I'm not sure how to apply the session there.
+
+Alternatively, the DAG service's Get method can take a context that has the session associated with it. But I don't think that's how it works.
+
+Wait, looking at the blockservice package, the Session is a way to group related requests, and when you call GetBlock on the session, it uses the underlying exchange with session management.
+
+So the correct approach is to create the blockservice with the original exchange.Interface (bswap), then create a session from that blockservice, and use that session's BlockGetter interface when creating the DAG service.
+
+So, the code should be:
+
+bsvc := blockservice.New(blockstore..., bswap)
+sess := blockservice.NewSession(ctx, bsvc)
+dserv := merkledag.NewDAGService(sess)
+
+But wait, the NewDAGService function expects a blockservice.BlockService. The sess is a blockservice.Session, which implements BlockGetter but not the full BlockService interface. Therefore, this won't work.
+
+Hmm, this is getting a bit tricky. Let me think again.
+
+The original error is because we're passing an exchange.Fetcher (the session from bswap.NewSession) to blockservice.New, which expects an exchange.Interface. The exchange.Fetcher doesn't implement the Close method required by exchange.Interface.
+
+The solution is to avoid using the session as the exchange.Interface. Instead, the blockservice should be created with the original exchange.Interface (bswap), and the session should be used within the blockservice's operations.
+
+But how to integrate the session with the DAG service? The DAG service uses the blockservice to fetch blocks. If the blockservice is created with the original exchange.Interface, then all DAG operations will use that exchange, but we want them to use the session for better efficiency.
+
+Ah, I think the blockservice's Session is the right way to do this. The blockservice.NewSession method returns a Session (which is a BlockGetter), and this Session should be used when performing DAG operations. So the DAG service should be created with the blockservice's Session, not the original blockservice.
+
+Wait, the blockservice.Session is a BlockGetter, and the DAG service's NewDAGService function takes a BlockService. But the Session is not a BlockService, only a BlockGetter. So this might not work.
+
+Alternatively, perhaps the DAG service can be created with a ReadOnly block service that uses the session. Let me check the merkledag package.
+
+There's a function NewReadOnlyDagService that takes a NodeGetter. The NodeGetter is an interface that includes Get and GetMany methods. The blockservice.Session implements BlockGetter, which is part of NodeGetter.
+
+Wait, the blockservice.Session (from blockservice.NewSession) is a BlockGetter, which has GetBlock and GetBlocks methods. The NodeGetter interface in ipld (from go-ipld-format) requires Get and GetMany methods. So perhaps the blockservice.Session can be wrapped to implement NodeGetter.
+
+Alternatively, the DAG service (merkledag) uses a blockservice.BlockService, which includes the NodeGetter interface.
+
+This is getting complicated. Let's try to outline the correct steps:
+
+1. The bitswap client (bswap) is an exchange.Interface.
+2. Create a blockservice (bsvc) using this exchange.Interface.
+3. Create a session from the blockservice using blockservice.NewSession.
+4. Use this session (which is a BlockGetter) to create a DAG service.
+
+But the DAG service's NewDAGService function expects a blockservice.BlockService, not a BlockGetter. So perhaps the DAG service should be created with the original blockservice, and the session is used when performing Get operations.
+
+Alternatively, maybe the DAG service can be created with a wrapped BlockGetter that uses the session.
+
+Wait, the merkledag.NewDAGService function takes a blockservice.BlockService. The blockservice.BlockService includes the BlockGetter interface. So if we have a blockservice.Session (which is a BlockGetter), perhaps we can create a minimal BlockService that uses this BlockGetter and a blockstore.
+
+Wait, the blockservice.New function requires a blockstore and an exchange. But if we already have a BlockGetter (the session), perhaps we can create a blockservice that uses that BlockGetter. But the exchange is required, and the session isn't an exchange.Interface.
+
+This seems like a dead end. The core issue is that the code is trying to create a blockservice with a session (exchange.Fetcher) which doesn't implement the required exchange.Interface.
+
+The correct approach is to create the blockservice with the original bitswap client (bswap), which is an exchange.Interface. Then, when fetching data, use the session from the bitswap client to make the requests more efficient.
+
+In the current code, the session is created from the bitswap client, but then incorrectly used as the exchange in the blockservice. Instead, the blockservice should use the original bitswap client, and the session should be used when performing the Get operation.
+
+But how does the session integrate with the blockservice? The blockservice uses the exchange to fetch blocks. If the exchange is the bitswap client, and we have a session, perhaps the session is managed internally by the bitswap client.
+
+Wait, when you create a session with bswap.NewSession(ctx), the bitswap client manages the session, and subsequent Get requests using that session will be more efficient. So when the blockservice uses the bitswap client (exchange.Interface), and the DAG service uses the blockservice, then using the session in the DAG service's Get method might automatically utilize the session.
+
+Alternatively, the session needs to be passed to the DAG service's Get method via the context.
+
+I recall that in some IPFS code, the context can carry a session to be used by the blockservice. Let me check.
+
+Yes, the blockservice.Session can be added to the context using the Session context key. Then, when the blockservice processes a Get request, it checks the context for a session and uses it.
+
+So, the correct approach is:
+
+1. Create the blockservice with the original bitswap client (bswap).
+2. Create a session from the bitswap client.
+3. When calling DAG service's Get, add the session to the context.
+
+For example:
+
+sess := bswap.NewSession(ctx)
+ctx = blockservice.WithSession(ctx, sess)
+nd, err := dserv.Get(ctx, c)
+
+But I need to check if the blockservice.WithSession function exists and how it's used.
+
+Alternatively, the session can be associated with the context, and the blockservice will use it when processing requests.
+
+In the current code, the blockservice is created with the bitswap client (exchange.Interface), and when we create a session from the bitswap client, any Get requests made through the blockservice will automatically use that session if it's attached to the context.
+
+So, modifying the code:
+
+// Create the blockservice with the original bitswap client (bswap)
+bsvc := blockservice.New(blockstore..., bswap)
+dserv := merkledag.NewReadOnlyDagService(bsvc)
+
+// Create a session from the bitswap client
+sess := bswap.NewSession(ctx)
+defer sess.Close()
+
+// Use the session in the context when fetching
+ctxWithSession := blockservice.WithSession(ctx, sess)
+nd, err := dserv.Get(ctxWithSession, c)
+
+This way, the blockservice will use the session for the Get request, improving efficiency, and the blockservice is correctly created with the exchange.Interface (bswap).
+
+In the original code, the blockservice was being created with the session (exchange.Fetcher), which doesn't implement exchange.Interface. By instead creating the blockservice with the original bitswap client and using the session via the context, we avoid the error.
+
+So the fix is to adjust the creation of the blockservice and the use of the session in the context.
+</think>
+
+To fix the error where `exchange.Fetcher` does not implement `exchange.Interface`, we need to correctly use the Bitswap client and session. Here's the solution:
+
 ```go
-// Enhance configureUDPBuffers()
-func configureUDPBuffers() {
-    log.Println("Critical QUIC performance recommendation:")
-    log.Println("$ sudo sysctl -w net.core.rmem_max=2500000")
-    log.Println("$ sudo sysctl -w net.core.wmem_max=2500000")
-    log.Println("Add to /etc/sysctl.conf for persistence")
-}
+// Replace the existing dserv creation with the following:
+
+// Create the block service using the original Bitswap client (which implements exchange.Interface)
+bsvc := blockservice.New(
+    blockstore.NewBlockstore(datastore.NewNullDatastore()),
+    bswap, // Use the Bitswap client directly (exchange.Interface)
+)
+
+// Create a DAG service using the block service
+dserv := merkledag.NewReadOnlyDagService(bsvc)
+
+// Create a Bitswap session for efficient fetching
+sess := bswap.NewSession(ctx)
+defer sess.Shutdown()
+
+// Use the session in the context when fetching data
+ctxWithSession := bsclient.WithSession(ctx, sess)
+nd, err := dserv.Get(ctxWithSession, c)
 ```
 
-5. **Provider Validation**:
-```go
-// After connection, verify block availability
-if has, _ := bswap.HasBlock(ctx, c); !has {
-    log.Printf("Provider %s lacks block %s", prov.ID, c)
-    continue
-}
-```
+**Step-by-step explanation:**
 
-6. **Test Case Adjustment**:
-```go
-// Increase DHT propagation timeout
-time.Sleep(5 * time.Second) // Was 1 second
-```
+1. **Use the Bitswap Client Directly:**
+   - The original Bitswap client (`bswap`) implements `exchange.Interface`
+   - Create the block service with this client instead of the session
 
-These changes address:
-- Reliable connection establishment
-- Protocol compatibility checks
-- Network configuration recommendations
-- Efficient block transfer sessions
-- False provider elimination
+2. **Create Session Properly:**
+   - Sessions are created from the Bitswap client, not used as exchanges
+   - The session improves request efficiency but doesn't replace the exchange
 
-The modifications should resolve timeouts by ensuring proper connectivity and optimizing data transfer while providing clearer diagnostic information.
+3. **Use Session Context:**
+   - Associate the session with the request context
+   - This allows Bitswap to optimize requests while using the proper exchange interface
+
+4. **Maintain Correct Service Relationships:**
+   - Block service handles storage and exchange
+   - Session manages request optimization
+   - DAG service uses the block service with session-enhanced context
+
+This change maintains proper interface implementation while leveraging sessions for optimized fetches.
 
 <references>
-[1] https://discuss.ipfs.tech/t/bitswap-is-slower-with-a-dht-vs-without/17093
-[2] https://discuss.ipfs.tech/t/is-bitswap-discovery-step-worth-the-wait/13823
-[3] https://www.youtube.com/watch?v=zppddk2O9UQ
-[4] https://blog.csdn.net/zhongdahong/article/details/104758033
-[5] https://quic-go.net/docs/quic/optimizations/
-[6] https://github.com/libp2p/js-libp2p/blob/master/doc/CONFIGURATION.md
-[7] https://github.com/libp2p/specs/blob/master/RFC/0003-routing-records.md
-[8] https://research.protocol.ai/publications/accelerating-content-routing-with-bitswap-a-multi-path-file-transfer-protocol-in-ipfs-and-filecoin/delarocha2021.pdf
-[9] https://docs.libp2p.io/guides/getting-started/go/
-[10] https://discuss.libp2p.io/t/how-do-you-use-connectionmanager-notifee/120
-[11] https://pkg.go.dev/github.com/libp2p/go-libp2p/core/peerstore
-[12] https://pkg.go.dev/github.com/ipfs/boxo/bitswap/client
-[13] https://pkg.go.dev/github.com/happybluestar/go-ipfs/exchange/bitswap
-[14] https://www.elastic.co/guide/en/elasticsearch/reference/current/async-search.html
-[15] https://discuss.libp2p.io/t/dht-optimistic-provide/1143
-[16] https://pkg.go.dev/github.com/ipfs/boxo/bitswap
-[17] https://blog.csdn.net/kk3909/article/details/111033604
+[1] https://github.com/ipfs/boxo/releases
+[2] https://pkg.go.dev/github.com/ipfs/go-blockservice
+[3] https://discuss.ipfs.tech/t/unable-to-get-blocks-when-the-node-is-connected-to-multiple-peers/18711
+[4] https://lists.nongnu.org/archive/html/guix-commits/2025-03/msg03778.html
+[5] https://lists.nongnu.org/archive/html/guix-commits/2025-03/msg03637.html
+[6] https://discuss.ipfs.tech/t/when-the-number-of-peers-increases-data-transfer-becomes-slow/17015
+[7] https://pkg.go.dev/github.com/ipfs/boxo/ipld/merkledag
+[8] https://pkg.go.dev/github.com/ipfs/boxo
+[9] https://pkg.go.dev/github.com/ipfs/boxo/bitswap
+[10] https://pkg.go.dev/github.com/ipfs/go-blockservice
+[11] https://pkg.go.dev/github.com/ipfs/boxo/bitswap/client
+[12] https://pkg.go.dev/github.com/ipfs/boxo
+[13] https://pkg.go.dev/github.com/ipfs/boxo/bitswap
+[14] https://pkg.go.dev/github.com/ipfs/go-blockservice
+[15] https://pkg.go.dev/github.com/ipfs/boxo/bitswap/client
+[16] https://pkg.go.dev/github.com/ipfs/boxo
+[17] https://discuss.ipfs.tech/t/enable-bitswap-client-only/18604
+[18] https://docs.oracle.com/en/industries/hospitality/opera-cloud/24.1/ocsuh/t_setting_interface.htm
+[19] https://docs.oracle.com/en/industries/hospitality/opera-cloud/24.4/ocsuh/t_setting_interface.htm
+[20] https://www.cisco.com/c/en/us/support/docs/voice/analog-signaling-e-m-did-fxs-fxo/7938-2fxs-vic.html
+[21] https://en.wikipedia.org/wiki/FXO
+[22] https://www.cisco.com/c/en/us/support/docs/routers/3600-series-multiservice-platforms/12444-2fxo-vic.html
+[23] https://github.com/ipfs/go-blockservice/blob/master/blockservice.go
+[24] https://pkg.go.dev/github.com/ipfs/boxo
+[25] https://discuss.ipfs.tech/t/enable-bitswap-client-only/18604
+[26] https://pkg.go.dev/github.com/ipfs/boxo/bitswap/client
+[27] https://www.intercope.com/box-messaging-hub/
+[28] https://boxcoin.dev/exchange
+[29] https://1b.app/en/docs/customize_the_order_interface/
+[30] https://www.ppi-group.eu/en/products/interbanking-interface/box-messaging-hub.html
+[31] https://docs.oracle.com/en/industries/hospitality/opera-cloud/23.1/ocsuh/t_exchange_interface_capabilities.htm
+[32] https://github.com/ipfs/boxo
+[33] https://lists.nongnu.org/archive/html/guix-commits/2025-03/msg05275.html
+[34] https://github.com/ipfs/go-ipfs/blob/master/core/core.go
+[35] https://discuss.ipfs.tech/t/enable-bitswap-client-only/18604
+[36] https://github.com/ipfs/go-libipfs-rapide
+[37] https://github.com/ipfs/go-ipfs-exchange-offline
+[38] https://pkg.go.dev/github.com/ipfs/boxo/bitswap/client
+[39] https://discuss.ipfs.tech/t/p2phttp-go-package-for-use-with-kubo-running-daemon-or-library/16313
+[40] https://github.com/trinodb/trino/issues/19137
+[41] https://github.com/remix-run/remix/issues/2511
+[42] https://www.aubm.net/posts/please-use-dependency-injection-if-not-for-me-do-it-for-your-unit-tests/
+[43] https://www.cs.uoregon.edu/research/summerschool/summer05/lectures/fahndrich3.pdf
+[44] https://pkg.go.dev/github.com/ipfs/boxo/bitswap/client
+[45] https://docs.spring.io/spring-graphql/docs/1.2.2/reference/html/
+[46] https://forum.checkmk.com/t/mk-oracle-plugin-timing-out-for-one-database-but-not-the-other/42835
+[47] https://micronaut-projects.github.io/micronaut-security/latest/guide/
+[48] https://github.com/ipfs/boxo
+[49] https://lists.nongnu.org/archive/html/guix-commits/2025-03/msg05275.html
+[50] https://discuss.ipfs.tech/t/enable-bitswap-client-only/18604
+[51] https://github.com/ipfs/go-libipfs-rapide
+[52] https://github.com/ipfs/go-ipfs/blob/master/core/core.go
+[53] https://github.com/ipfs/go-ipfs-exchange-offline
+[54] https://github.com/ipfs/go-ipfs-exchange-offline/blob/master/offline.go
+[55] https://discuss.ipfs.tech/t/p2phttp-go-package-for-use-with-kubo-running-daemon-or-library/16313
+[56] https://pkg.go.dev/github.com/ipfs/boxo
+[57] https://pkg.go.dev/github.com/ipfs/boxo/bitswap
+[58] https://pkg.go.dev/github.com/ipfs/kubo/client/rpc
+[59] https://pkg.go.dev/github.com/ipfs/interface-go-ipfs-core
+[60] https://pkg.go.dev/github.com/stateless-minds/boxo/gateway
+[61] https://pkg.go.dev/github.com/ipfs/go-namesys
+[62] https://pkg.go.dev/github.com/ipfs/boxo/bitswap/client
+[63] https://pkg.go.dev/github.com/ipfs/boxo/coreiface
+[64] https://pkg.go.dev/github.com/ipfs/go-blockservice
+[65] https://pkg.go.dev/github.com/ipfs/boxo/bitswap/client
+[66] https://pkg.go.dev/github.com/ipfs/boxo/ipld/merkledag
+[67] https://pkg.go.dev/github.com/ipfs/go-merkledag
 </references>
