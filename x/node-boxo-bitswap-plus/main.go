@@ -692,6 +692,7 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 		}
 	} else {
 		log.Println("Searching for providers via DHT...")
+		// try providers until file is fetched
 		tried := 0
 		var provChan <-chan peer.AddrInfo
 		open := false
@@ -703,6 +704,7 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 			}
 			if !open {
 				Pl("Starting DHT FindProvidersAsync")
+				// dht.FindProvidersAsync starts a goroutine to find providers
 				provChan = dht.FindProvidersAsync(ctx, c, 999)
 				open = true
 			}
@@ -735,9 +737,14 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 				}
 				log.Printf("Connected to provider %s", prov.ID)
 				tried++
+
+				// create a context that times out after 60 seconds
 				ctx60, cancel := context.WithTimeout(ctx, 60*time.Second)
-				dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx60,
-					merkledag.NewDAGService(blockservice.New(datastore.NewNullDatastore(), bswap))))
+
+				// try to fetch the file
+				dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
+					merkledag.NewDAGService(blockservice.New(
+						blockstore.NewBlockstore(datastore.NewNullDatastore()), bswap))))
 				nd, err := dserv.Get(ctx60, c)
 				cancel()
 				if err != nil {
@@ -745,18 +752,20 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 					continue
 				}
 				log.Printf("Got file from provider %s", prov.ID)
+
 				unixFSNode, err := unixfile.NewUnixfsFile(ctx, dserv, nd)
 				if err != nil {
 					return nil, err
 				}
-				Pl("Created UnixFS file from node")
+				log.Printf("Created UnixFS file from node")
+
 				var buf bytes.Buffer
 				if f, ok := unixFSNode.(files.File); ok {
 					if _, err := io.Copy(&buf, f); err != nil {
 						return nil, err
 					}
 				}
-				Pl("Copied file data to buffer")
+				log.Printf("Copied file data to buffer")
 				return buf.Bytes(), nil
 			}
 		}
