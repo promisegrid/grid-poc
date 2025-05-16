@@ -1,6 +1,7 @@
+fix dht file retrieval
 
-
-Rework runClient such that it calls 
+There are several issues with file retrieval in DHT mode.  See
+/tmp/dht1 for details, and fix the code.
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -18,6 +19,76 @@ In:
   x/node-boxo-bitswap-plus/main.go
   x/node-boxo-bitswap-plus/main_test.go
 Out:
+  x/node-boxo-bitswap-plus/main.go
+  x/node-boxo-bitswap-plus/main_test.go
+
+.stop
+
+
+troubleshoot file retrieval in DHT mode
+
+Something's wrong with the way the code is trying to retrieve a file
+from a remote peer when in DHT mode.  Here's what the receiver's
+stdout looks like when in DHT mode:
+
+```
+Starting DHT FindProvidersAsync
+tried 0 providers, waiting for next...
+got candidate provider QmeCBsw2ZEGcPNFhHp5fnR8D9MUNuD2jtbWCirz1gkhE8G
+2025/05/16 07:39:18 Found provider: QmeCBsw2ZEGcPNFhHp5fnR8D9MUNuD2jtbWCirz1gkhE8G
+2025/05/16 07:39:18 Provider address: /ip4/127.0.0.1/tcp/41295
+2025/05/16 07:39:18 Provider address: /dnsaddr/p2p.zora.co/p2p/12D3KooWKAyrm3AJLX7777777LrXGDb43ckSGjrxCEjRWdZVM5Cp/p2p-circuit
+2025/05/16 07:39:18 Provider address: /ip4/144.76.86.253/udp/4001/webrtc-direct/certhash/uEiC1142oVDehfOXyeWzlclKDCF94IrRI_OOVqKBywS-4GQ/p2p/12D3KooWHWtcQA6uMiVy4TnX15NdDf6AWNW7zwZogj9bCxTEZM5g/p2p-circuit
+2025/05/16 07:39:18 Provider address: /ip4/144.76.86.253/udp/4001/quic-v1/p2p/12D3KooWHWtcQA6uMiVy4TnX15NdDf6AWNW7zwZogj9bCxTEZM5g/p2p-circuit
+2025/05/16 07:39:18 Provider address: /ip4/144.76.86.253/udp/4001/quic-v1/webtransport/certhash/uEiC1axCiHnzaQqoD9QK4ouBe0GQiPo5YaD8IHdyh1ZLdKg/certhash/uEiCwbcawq9_t99hEbVs-iSYQf7VBur1gWkaWFLLZfovE8Q/p2p/12D3KooWHWtcQA6uMiVy4TnX15NdDf6AWNW7zwZogj9bCxTEZM5g/p2p-circuit
+2025/05/16 07:39:18 Provider address: /ip6/2a01:4f8:192:13c6::2/udp/4001/quic-v1/webtransport/certhash/uEiC1axCiHnzaQqoD9QK4ouBe0GQiPo5YaD8IHdyh1ZLdKg/certhash/uEiCwbcawq9_t99hEbVs-iSYQf7VBur1gWkaWFLLZfovE8Q/p2p/12D3KooWHWtcQA6uMiVy4TnX15NdDf6AWNW7zwZogj9bCxTEZM5g/p2p-circuit
+2025/05/16 07:39:18 Provider address: /ip4/144.76.86.253/tcp/4001/p2p/12D3KooWHWtcQA6uMiVy4TnX15NdDf6AWNW7zwZogj9bCxTEZM5g/p2p-circuit
+2025/05/16 07:39:18 Provider address: /ip6/2a01:4f8:192:13c6::2/tcp/4001/p2p/12D3KooWHWtcQA6uMiVy4TnX15NdDf6AWNW7zwZogj9bCxTEZM5g/p2p-circuit
+2025/05/16 07:39:18 Provider address: /ip6/2a01:4f8:192:13c6::2/udp/4001/webrtc-direct/certhash/uEiC1142oVDehfOXyeWzlclKDCF94IrRI_OOVqKBywS-4GQ/p2p/12D3KooWHWtcQA6uMiVy4TnX15NdDf6AWNW7zwZogj9bCxTEZM5g/p2p-circuit
+2025/05/16 07:39:18 Provider address: /ip6/2a01:4f8:192:13c6::2/udp/4001/quic-v1/p2p/12D3KooWHWtcQA6uMiVy4TnX15NdDf6AWNW7zwZogj9bCxTEZM5g/p2p-circuit
+Connected to provider QmeCBsw2ZEGcPNFhHp5fnR8D9MUNuD2jtbWCirz1gkhE8
+```
+
+That's as far as it gets.  The sender's stdout looks like this:
+
+```
+2025/05/16 07:38:41 failed to sufficiently increase receive buffer size (was: 208 kiB, wanted: 7168 kiB, got: 416 kiB). See https://github.com/quic-go/quic-go/wiki/UDP-Buffer-Sizes for details.
+2025/05/16 07:38:41 Connected to bootstrap peer: /dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN
+2025/05/16 07:38:42 Connected to bootstrap peer: /dnsaddr/bootstrap.libp2p.io/p2p/QmQCU2EcMqAqQPR2i9bChDtGNJchTbq5TbXJJ16u19uLTa
+2025/05/16 07:38:42 Connected to bootstrap peer: /dnsaddr/bootstrap.libp2p.io/p2p/QmbLHAnMoJPWSCR5Zhtx6BHJX9KiKNN6tpvbUcqanj75Nb
+2025/05/16 07:38:43 Connected to bootstrap peer: /dnsaddr/bootstrap.libp2p.io/p2p/QmcZf59bWwK5XFi76CZX8cbJ4BhTzzA3gU1ZjYZcYW3dwt
+2025/05/16 07:38:43 Connected to bootstrap peer: /ip4/104.131.131.82/tcp/4001/p2p/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ
+2025/05/16 07:38:43 DHT bootstrapped successfully: 5/5 peers connected
+2025/05/16 07:38:43 I am /ip4/127.0.0.1/tcp/41295/p2p/QmeCBsw2ZEGcPNFhHp5fnR8D9MUNuD2jtbWCirz1gkhE8G
+2025/05/16 07:38:43 Peer ID written to /tmp/boxo-example-peerid.txt
+2025/05/16 07:38:43 Waiting for message on gossipsub (topic: gossip-demo)...
+DHT: 0xc0002c0a88
+2025/05/16 07:38:53 Connected to 148 peers, 600 addresses
+2025/05/16 07:39:03 Connected to 223 peers, 901 addresses
+2025/05/16 07:39:13 Connected to 210 peers, 840 addresses
+2025/05/16 07:39:13 hosting UnixFS file with CID: bafybeie2gts6zlw7ahvjmyubbdlrjienbr7s5h6vpfyk56kpb23wadjy3q
+2025/05/16 07:39:13 listening for inbound connections and Bitswap requests
+2025/05/16 07:39:13 Now run on a different terminal:
+go run main.go -d $(cat /tmp/boxo-example-peerid.txt)
+2025/05/16 07:39:17 Received hello world 18, sending response...
+2025/05/16 07:39:17 Parsed number: 18
+2025/05/16 07:39:17 Response published: hello back 18 bafybeie2gts6zlw7ahvjmyubbdlrjienbr7s5h6vpfyk56kpb23wadjy3q
+```
+
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p,
+  prefer recent examples to avoid deprecated APIs.  Please verify that
+  the code compiles and runs without errors -- do not hallucinate
+  library methods, structs, or functions that do not exist. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file.  Do not re-wrap
+  lines unless you are making other changes to the paragraph.  Lines
+  must be wrapped at 70 characters.  
+In: 
   x/node-boxo-bitswap-plus/main.go
   x/node-boxo-bitswap-plus/main_test.go
 

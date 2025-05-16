@@ -633,7 +633,7 @@ func startDataServer(ctx context.Context, h host.Host, dht *dht.IpfsDHT) (cid.Ci
 	*/
 
 	// Advertise CID through DHT if available
-	Pf("DHT: %p\n", dht)
+	log.Printf("DHT: %p\n", dht)
 	if dht != nil {
 		if err := dht.Provide(ctx, rootCid, true); err != nil {
 			return cid.Undef, nil, fmt.Errorf("failed to announce CID via DHT: %v", err)
@@ -692,76 +692,73 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 		}
 	} else {
 		log.Println("Searching for providers via DHT...")
-		// try providers until file is fetched
 		tried := 0
-		provChan := make(<-chan peer.AddrInfo)
+		var provChan <-chan peer.AddrInfo
 		open := false
 		for {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			default:
+			}
 			if !open {
 				Pl("Starting DHT FindProvidersAsync")
-				// dht.FindProvidersAsync starts a goroutine to find providers
 				provChan = dht.FindProvidersAsync(ctx, c, 999)
 				open = true
 			}
-			// get next provider
-			Pf("tried %d providers, waiting for next...\n", tried)
-			prov, ok := <-provChan
-			if !ok {
-				log.Println("Provider channel closed")
-				open = false
-				continue
-			}
-			Pf("got candidate provider %s\n", prov.ID)
-			// Skip self.
-			if prov.ID == h.ID() {
-				log.Println("Skipping self as provider")
-				continue
-			}
-			log.Printf("Found provider: %s", prov.ID)
-			if len(prov.Addrs) == 0 {
-				log.Printf("Provider %s has no addresses", prov.ID)
-				continue
-			}
-			for _, maddr := range prov.Addrs {
-				log.Printf("Provider address: %s", maddr)
-			}
-			if err := h.Connect(ctx, prov); err != nil {
-				log.Printf("Error connecting to provider %s: %v", prov.ID, err)
-				continue
-			}
-			Pf("Connected to provider %s", prov.ID)
-
-			// create a context that times out after 60 seconds
-			ctx60, cancel := context.WithTimeout(ctx, 60*time.Second)
-			_ = cancel
-
-			// try to fetch the file
-			tried++
-			dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
-				merkledag.NewDAGService(blockservice.New(
-					blockstore.NewBlockstore(datastore.NewNullDatastore()), bswap))))
-			nd, err := dserv.Get(ctx60, c)
-			if err != nil {
-				log.Printf("Error getting file from provider %s: %v", prov.ID, err)
-				continue
-			}
-			Pf("Got file from provider %s", prov.ID)
-
-			unixFSNode, err := unixfile.NewUnixfsFile(ctx, dserv, nd)
-			if err != nil {
-				return nil, err
-			}
-			Pl("Created UnixFS file from node")
-
-			var buf bytes.Buffer
-			if f, ok := unixFSNode.(files.File); ok {
-				if _, err := io.Copy(&buf, f); err != nil {
+			log.Printf("tried %d providers, waiting for next...\n", tried)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case prov, ok := <-provChan:
+				if !ok {
+					log.Println("Provider channel closed")
+					open = false
+					continue
+				}
+				log.Printf("got candidate provider %s\n", prov.ID)
+				// Skip self.
+				if prov.ID == h.ID() {
+					log.Println("Skipping self as provider")
+					continue
+				}
+				if len(prov.Addrs) == 0 {
+					log.Printf("Provider %s has no addresses", prov.ID)
+					continue
+				}
+				for _, maddr := range prov.Addrs {
+					log.Printf("Provider address: %s", maddr)
+				}
+				if err := h.Connect(ctx, prov); err != nil {
+					log.Printf("Error connecting to provider %s: %v", prov.ID, err)
+					continue
+				}
+				log.Printf("Connected to provider %s", prov.ID)
+				tried++
+				ctx60, cancel := context.WithTimeout(ctx, 60*time.Second)
+				dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx60,
+					merkledag.NewDAGService(blockservice.New(datastore.NewNullDatastore(), bswap))))
+				nd, err := dserv.Get(ctx60, c)
+				cancel()
+				if err != nil {
+					log.Printf("Error getting file from provider %s: %v", prov.ID, err)
+					continue
+				}
+				log.Printf("Got file from provider %s", prov.ID)
+				unixFSNode, err := unixfile.NewUnixfsFile(ctx, dserv, nd)
+				if err != nil {
 					return nil, err
 				}
+				Pl("Created UnixFS file from node")
+				var buf bytes.Buffer
+				if f, ok := unixFSNode.(files.File); ok {
+					if _, err := io.Copy(&buf, f); err != nil {
+						return nil, err
+					}
+				}
+				Pl("Copied file data to buffer")
+				return buf.Bytes(), nil
 			}
-			Pl("Copied file data to buffer")
-			return buf.Bytes(), nil
-
 		}
 	}
 	return nil, nil
