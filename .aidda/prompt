@@ -1,18 +1,13 @@
-advise
+fix file retrieval in DHT mode
 
-Educate me.  I'm finding the right provider via the DHT.  The
-ping.Ping calls works to ping the provider.  But when I try to get the
-file, it times out.  Why?
+The code is finding the right provider via the DHT.  The
+ping.Ping calls works to ping the provider.  But when it tries to get the
+file, it times out.  
 
-Do I need to also set up some sort of connection to the provider?  I
-thought the DHT would take care of that for me.  
-
-Is there any way of find out the path that the successful ping took,
-and maybe using that to get the file?  
-
-Where am I confused?  What do I need to do to get the file?  Is there
-any tutorial or example that shows how to do this?  
-
+In /tmp/dht3, explain how providers, relays, connections, and sessions
+work together to retrieve a file from a remote peer, particularly when
+using the DHT and in those cases where both peers are behind NATs.
+Explain how the code should be modified to retrieve the file.  
 
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
@@ -27,8 +22,12 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
+  /tmp/dht1
+  /tmp/dht2
   x/node-boxo-bitswap-plus/main.go
   x/node-boxo-bitswap-plus/main_test.go
+Out:
+  /tmp/dht3
 
 .stop
 

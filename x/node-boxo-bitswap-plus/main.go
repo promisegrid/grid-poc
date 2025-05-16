@@ -24,6 +24,7 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	// "github.com/libp2p/go-libp2p/core/peerstore"
@@ -117,7 +118,12 @@ func main() {
 		if target == "" {
 			continue
 		}
-		err = pingWait(ctx, h, target)
+		// convert target string to an AddInfo struct
+		info, err := peer.AddrInfoFromString(target)
+		if err != nil {
+			log.Fatalf("Invalid target peer info: %v", err)
+		}
+		err = pingWait(ctx, h, *info)
 		if err != nil {
 			log.Fatalf("ping failed: %v: %v", err, target)
 		}
@@ -691,6 +697,7 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 		var provChan <-chan peer.AddrInfo
 		open := false
 		for {
+			time.Sleep(1 * time.Second)
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -718,63 +725,42 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 					log.Println("Skipping self as provider")
 					continue
 				}
-				/*
-					if len(prov.Addrs) == 0 {
-						log.Printf("Provider %s has no addresses", prov.ID)
-						continue
-					}
-					// Improved provider connection logic: prioritize direct addresses.
-					var filteredAddrs []multiaddr.Multiaddr
-					for _, addr := range prov.Addrs {
-						if !isLoopbackAddr(addr) {
-							filteredAddrs = append(filteredAddrs, addr)
-						}
-					}
-					if len(filteredAddrs) == 0 {
-						filteredAddrs = prov.Addrs
-					}
-					connected := false
-					for _, addr := range filteredAddrs {
-						provAddr := peer.AddrInfo{ID: prov.ID, Addrs: []multiaddr.Multiaddr{addr}}
-						log.Printf("Attempting connection to provider %s via %s", prov.ID, addr)
-						ctxConn, cancelConn := context.WithTimeout(ctx, 10*time.Second)
-						if err := h.Connect(ctxConn, provAddr); err != nil {
-							log.Printf("Connection via %s failed: %v", addr, err)
-							cancelConn()
-							continue
-						}
-						log.Printf("Connected to provider %s via %s", prov.ID, addr)
-				*/
 
 				tried++
 
-				// try pinging the provider
-				err := pingWait(ctx, h, prov.ID.String())
+				// Ping the provider to verify availability.  This
+				// also adds the provider to the peerstore.
+				err := pingWait(ctx, h, prov)
 				if err != nil {
-					log.Printf("Ping failed: %v", err)
-					// cancelConn()
+					log.Printf("Ping failed on provider %s: %v", prov.ID, err)
 					continue
 				}
 
-				/*
-					connected = true
+				log.Printf("Attempting connection to provider %s:", prov.ID)
+				for _, addr := range prov.Addrs {
+					log.Printf("  %s\n", addr)
+				}
+
+				ctxConn, cancelConn := context.WithTimeout(ctx, 10*time.Second)
+				defer cancelConn()
+				err = h.Connect(ctxConn, prov)
+				if err != nil {
+					log.Printf("Connection to provider %s failed: %v", prov.ID, err)
 					cancelConn()
+					continue
+				}
 
-						}
+				log.Printf("Connected to provider %s", prov.ID)
 
-						if !connected {
-							log.Printf("Failed to connect to provider %s on all addresses", prov.ID)
-							continue
-						}
-						if h.Network().Connectedness(prov.ID) != network.Connected {
-							log.Printf("Not connected to provider %s after connection", prov.ID)
-							continue
-						}
-				*/
+				if h.Network().Connectedness(prov.ID) != network.Connected {
+					log.Printf("Not fully connected to provider %s", prov.ID)
+					cancelConn()
+					continue
+				}
 
 				// create a context that times out after 60 seconds for fetching the file
 				ctx60, cancel := context.WithTimeout(ctx, 60*time.Second)
-
+				defer cancel()
 				log.Printf("Fetching file from provider %s...\n", prov.ID)
 				// try to fetch the file
 				dserv := merkledag.NewReadOnlyDagService(merkledag.NewSession(ctx,
@@ -784,6 +770,8 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 				cancel()
 				if err != nil {
 					log.Printf("Error getting file from provider %s: %v", prov.ID, err)
+					cancelConn()
+					cancel()
 					continue
 				}
 				log.Printf("Got file from provider %s", prov.ID)
@@ -810,35 +798,15 @@ func runClient(ctx context.Context, h host.Host, c cid.Cid,
 
 // pingWait pings the target peer using the libp2p ping protocol and
 // returns a nil err when the ping is successful.
-func pingWait(ctx context.Context, h host.Host, target string) (err error) {
+func pingWait(ctx context.Context, h host.Host, target peer.AddrInfo) error {
 	// Try to parse target as a multiaddr.
-	maddr, err := multiaddr.NewMultiaddr(target)
-	var info *peer.AddrInfo
-	if err == nil {
-		info, err = peer.AddrInfoFromP2pAddr(maddr)
-		if err != nil {
-			return err
-		}
-	} else {
-		// If target is not a multiaddr, assume it is a peer ID.
-		pid, err := peer.Decode(target)
-		if err != nil {
-			return err
-		}
-		info = &peer.AddrInfo{ID: pid}
-		// Attempt to get addresses from the peerstore.
-		addrs := h.Peerstore().Addrs(pid)
-		if len(addrs) > 0 {
-			info.Addrs = addrs
-		}
-	}
+	log.Printf("Pinging peer ID %s...", target.ID)
 	// Add each address to the peerstore.
-	for _, a := range info.Addrs {
-		h.Peerstore().AddAddr(info.ID, a, time.Hour)
+	for _, a := range target.Addrs {
+		h.Peerstore().AddAddr(target.ID, a, time.Hour)
 	}
-	log.Printf("Pinging peer %s...", info.ID)
-	for i := 0; i < 5; i++ {
-		pingCh := ping.Ping(ctx, h, info.ID)
+	for i := 0; i < 3; i++ {
+		pingCh := ping.Ping(ctx, h, target.ID)
 		result := <-pingCh
 		if result.Error != nil {
 			log.Printf("Ping error: %s", result.Error)
