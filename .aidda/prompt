@@ -1,3 +1,36 @@
+write bitswap demo that uses DHT
+
+Write an IPFS bitswap demo, using boxo, that does this:
+
+- create a new IPFS node with a local in-memory store
+- create a small file of containing a random printable integer and add it to the in-memory store
+- print the file's contents to stdout
+- fork, passing the file's CID to the child
+- in the parent: 
+  - provide the file to the DHT
+- in the child: 
+  - forget everything except the CID
+  - create a new IPFS node with a local in-memory store
+  - use the DHT to find the provider of the CID
+  - retrieve the file from the provider
+  - print the file's contents to stdout
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p,
+  prefer recent examples to avoid deprecated APIs.  Please verify that
+  the code compiles and runs without errors -- do not hallucinate
+  library methods, structs, or functions that do not exist. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file.  Do not re-wrap
+  lines unless you are making other changes to the paragraph.  Lines
+  must be wrapped at 70 characters.  
+Out:
+  x/node-boxo-bitswap-dht/main.go
+
+.stop
 fix file retrieval in DHT mode
 
 fix error:
@@ -18,6 +51,8 @@ Sysmsg:
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
 In: 
+  x/node-boxo-bitswap-plus/main.go
+Out:
   x/node-boxo-bitswap-plus/main.go
 
 .stop

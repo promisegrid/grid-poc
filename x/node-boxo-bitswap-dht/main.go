@@ -1,33 +1,3 @@
-<think>
-Okay, I need to write a Go program that demonstrates using Bitswap and the DHT from Boxo. The user wants a parent process that creates a file with a random integer, adds it to IPFS, provides it via the DHT, then forks a child process. The child should retrieve the file using the DHT and Bitswap.
-
-First, I'll structure the code into two main parts: the parent and the child. The parent will generate a random number, create a file, add it to IPFS, and then start providing it on the DHT. The child will take the CID, use the DHT to find providers, and then fetch the block using Bitswap.
-
-I need to use the Boxo libraries for Bitswap and DHT. For the DHT, I'll use the go-libp2p-kad-dht package. Both parent and child need to set up their own libp2p hosts, DHT instances, and Bitswap exchanges.
-
-In the parent, after adding the block to the blockstore, I should call dht.Provide to advertise the CID. Then, the parent needs to wait long enough for the DHT to propagate the provider record. Maybe a delay is needed before the child starts looking.
-
-In the child, after connecting to the parent (as a bootstrap peer), it should use dht.FindProviders to locate the providers of the CID. Once it finds the parent's peer ID, it can connect and use Bitswap to fetch the block.
-
-I need to ensure both nodes are using the same DHT configuration and can discover each other. Using the same bootstrap peers (probably the parent's address) in the child's DHT setup would help. Also, the child needs to connect to the parent's peer ID explicitly since they're in separate processes.
-
-Handling the forking in Go might be tricky. Instead of forking, maybe the parent can run the child as a separate command, passing the CID as an argument. That's easier in Go's execution model.
-
-Testing the code, I need to make sure that the DHT provider records are properly shared and that Bitswap can transfer the block between the two nodes. I might need to add some delays or wait loops to ensure the DHT has time to update.
-
-Also, using in-memory datastores for both nodes is important. The Boxo blockstore and datastore packages can be used with in-memory implementations.
-
-Potential issues: the DHT not finding providers immediately, so the child might need to retry. Also, ensuring the libp2p hosts can communicate, possibly dealing with NAT or loopback addresses.
-
-Including necessary imports: boxo bitswap, blockstore, libp2p host setup, DHT setup, and multiaddress handling. Also, generating a random number for the file content.
-
-The code should be self-contained, with functions for setupNode, addFile, provideCID, and retrieveCID. The main function will check if it's the parent or child based on command-line arguments.
-
-Finally, compile and test the code to ensure it works as expected. Make sure both processes can communicate over libp2p, the DHT finds the provider, and Bitswap retrieves the block correctly.
-</think>
-
-File: /home/stevegt/lab/grid-poc/x/node-boxo-bitswap-dht/main.go
-```go
 package main
 
 import (
@@ -218,27 +188,3 @@ func retrieveBlock(ctx context.Context, bs blockstore.Blockstore, c cid.Cid) blo
 	}
 	return blk
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/node-boxo-bitswap-dht/main.go
-
-<references>
-[1] https://github.com/ipfs/boxo
-[2] https://pkg.go.dev/github.com/ipfs/boxo/bitswap
-[3] https://lists.nongnu.org/archive/html/guix-commits/2025-03/msg03778.html
-[4] https://github.com/ipfs/kubo/blob/master/docs/changelogs/v0.20.md
-[5] https://www.npmjs.com/package/@libp2p/kad-dht
-[6] https://github.com/libp2p/go-libp2p-kad-dht/blob/master/routing.go
-[7] https://docs.ipfs.eth.link/how-to/configure-node/
-[8] https://discuss.ipfs.tech/t/enable-bitswap-client-only/18604
-[9] https://github.com/libp2p/go-libp2p-kad-dht
-[10] https://pkg.go.dev/github.com/libp2p/go-libp2p-kad-dht
-[11] https://ethberlinzwei.github.io/KnowledgeBase/resources/libp2p.html
-[12] https://ldej.nl/post/building-an-echo-application-with-libp2p/
-[13] https://discuss.libp2p.io/t/create-own-dht-bootstrap-node/1076
-[14] https://discuss.libp2p.io/t/kad-dht-protobuf-messages-peer-routing-and-content-providers/1283
-[15] https://docs.libp2p.io/guides/getting-started/go/
-[16] https://github.com/libp2p/go-libp2p-kad-dht/blob/master/dht_test.go
-[17] https://pt.w3d.community/aiengineer13/libp2p-pubsub-descoberta-de-pares-com-kademlia-dht-5hej
-[18] https://discuss.ipfs.tech/t/unable-to-get-blocks-when-the-node-is-connected-to-multiple-peers/18711
-[19] https://github.com/ipfs/go-datastore
-</references>
