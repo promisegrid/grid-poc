@@ -1,3 +1,37 @@
+advise
+
+Educate me.  I'm finding the right provider via the DHT.  The
+ping.Ping calls works to ping the provider.  But when I try to get the
+file, it times out.  Why?
+
+Do I need to also set up some sort of connection to the provider?  I
+thought the DHT would take care of that for me.  
+
+Is there any way of find out the path that the successful ping took,
+and maybe using that to get the file?  
+
+Where am I confused?  What do I need to do to get the file?  Is there
+any tutorial or example that shows how to do this?  
+
+
+Sysmsg: 
+  You are an expert Go programmer. Please make the requested changes
+  to the given code or documentation. For IPFS, IPLD, or libp2p,
+  prefer recent examples to avoid deprecated APIs.  Please verify that
+  the code compiles and runs without errors -- do not hallucinate
+  library methods, structs, or functions that do not exist. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file.  Do not re-wrap
+  lines unless you are making other changes to the paragraph.  Lines
+  must be wrapped at 70 characters.  
+In: 
+  x/node-boxo-bitswap-plus/main.go
+  x/node-boxo-bitswap-plus/main_test.go
+
+.stop
+
 fix dht file retrieval
 
 There are several issues with file retrieval in DHT mode.  See
