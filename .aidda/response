@@ -1,31 +1,3 @@
-<think>
-Okay, I need to write a Go program that demonstrates using Bitswap and the DHT from Boxo. The user wants a parent process that creates a file with a random integer, adds it to IPFS, provides it via the DHT, then forks a child process. The child should retrieve the file using the DHT and Bitswap.
-
-First, I'll structure the code into two main parts: the parent and the child. The parent will generate a random number, create a file, add it to IPFS, and then start providing it on the DHT. The child will take the CID, use the DHT to find providers, and then fetch the block using Bitswap.
-
-I need to use the Boxo libraries for Bitswap and DHT. For the DHT, I'll use the go-libp2p-kad-dht package. Both parent and child need to set up their own libp2p hosts, DHT instances, and Bitswap exchanges.
-
-In the parent, after adding the block to the blockstore, I should call dht.Provide to advertise the CID. Then, the parent needs to wait long enough for the DHT to propagate the provider record. Maybe a delay is needed before the child starts looking.
-
-In the child, after connecting to the parent (as a bootstrap peer), it should use dht.FindProviders to locate the providers of the CID. Once it finds the parent's peer ID, it can connect and use Bitswap to fetch the block.
-
-I need to ensure both nodes are using the same DHT configuration and can discover each other. Using the same bootstrap peers (probably the parent's address) in the child's DHT setup would help. Also, the child needs to connect to the parent's peer ID explicitly since they're in separate processes.
-
-Handling the forking in Go might be tricky. Instead of forking, maybe the parent can run the child as a separate command, passing the CID as an argument. That's easier in Go's execution model.
-
-Testing the code, I need to make sure that the DHT provider records are properly shared and that Bitswap can transfer the block between the two nodes. I might need to add some delays or wait loops to ensure the DHT has time to update.
-
-Also, using in-memory datastores for both nodes is important. The Boxo blockstore and datastore packages can be used with in-memory implementations.
-
-Potential issues: the DHT not finding providers immediately, so the child might need to retry. Also, ensuring the libp2p hosts can communicate, possibly dealing with NAT or loopback addresses.
-
-Including necessary imports: boxo bitswap, blockstore, libp2p host setup, DHT setup, and multiaddress handling. Also, generating a random number for the file content.
-
-The code should be self-contained, with functions for setupNode, addFile, provideCID, and retrieveCID. The main function will check if it's the parent or child based on command-line arguments.
-
-Finally, compile and test the code to ensure it works as expected. Make sure both processes can communicate over libp2p, the DHT finds the provider, and Bitswap retrieves the block correctly.
-</think>
-
 File: /home/stevegt/lab/grid-poc/x/node-boxo-bitswap-dht/main.go
 ```go
 package main
@@ -49,9 +21,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	routing "github.com/libp2p/go-libp2p/core/routing"
 	bsnet "github.com/ipfs/boxo/bitswap/network"
 	"github.com/ipfs/boxo/bitswap"
+	"github.com/libp2p/go-libp2p/core/routing"
+	"github.com/multiformats/go-multiaddr"
 )
 
 func main() {
@@ -71,13 +44,13 @@ func runParent() {
 	defer parentDHT.Close()
 
 	// Generate and add test file
-	cid := addFile(ctx, parentBS)
-	fmt.Printf("Parent generated CID: %s\n", cid.String())
-	fmt.Printf("File contents: %s\n", getFileContents(ctx, parentBS, cid))
+	c := addFile(ctx, parentBS)
+	fmt.Printf("Parent generated CID: %s\n", c.String())
+	fmt.Printf("File contents: %s\n", getFileContents(ctx, parentBS, c))
 
 	// Advertise CID in DHT
 	fmt.Println("Parent providing CID to DHT...")
-	if err := parentDHT.Provide(ctx, cid, true); err != nil {
+	if err := parentDHT.Provide(ctx, c, true); err != nil {
 		log.Fatal("Provide failed:", err)
 	}
 
@@ -85,7 +58,7 @@ func runParent() {
 	time.Sleep(5 * time.Second)
 
 	// Fork child process
-	cmd := exec.Command(os.Args[0], cid.String())
+	cmd := exec.Command(os.Args[0], c.String())
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -98,9 +71,9 @@ func runParent() {
 
 func runChild(cidStr string) {
 	ctx := context.Background()
-	
+
 	// Parse CID
-	cid, err := cid.Parse(cidStr)
+	c, err := cid.Parse(cidStr)
 	if err != nil {
 		log.Fatal("Invalid CID:", err)
 	}
@@ -115,14 +88,14 @@ func runChild(cidStr string) {
 
 	// Find providers through DHT
 	fmt.Println("Child searching for providers...")
-	providers := findProviders(ctx, childDHT, cid)
+	providers := findProviders(ctx, childDHT, c)
 	if len(providers) == 0 {
 		log.Fatal("No providers found")
 	}
 
 	// Retrieve file through Bitswap
 	fmt.Printf("Child retrieving from %s...\n", providers[0].ID)
-	blk := retrieveBlock(ctx, childBS, cid)
+	blk := retrieveBlock(ctx, childBS, c)
 	fmt.Printf("Child retrieved contents: %s\n", blk.RawData())
 }
 
@@ -147,11 +120,18 @@ func setupNode(ctx context.Context) (host.Host, *dht.IpfsDHT, blockstore.Blockst
 	// Create blockstore and bitswap
 	ds := dssync.MutexWrap(datastore.NewMapDatastore())
 	bs := blockstore.NewBlockstore(ds)
-	bsNet := bsnet.NewFromIpfsHost(h, dhtInst)
+	// Use NewFromLibp2pHost instead of the deprecated
+	// NewFromIpfsHost, passing only the libp2p host.
+	bsNet, err := bsnet.NewFromLibp2pHost(h)
+	if err != nil {
+		log.Fatal(err)
+	}
 	bsExch := bitswap.New(ctx, bsNet, bs)
 
 	// Start bitswap network
-	bsNet.Start(bsExch)
+	if err := bsNet.Start(bsExch); err != nil {
+		log.Fatal(err)
+	}
 
 	return h, dhtInst, bs
 }
@@ -163,18 +143,21 @@ func addFile(ctx context.Context, bs blockstore.Blockstore) cid.Cid {
 
 	// Create CIDv1 raw block
 	pref := cid.NewPrefixV1(cid.Raw, 0x00)
-	cid, err := pref.Sum(data)
+	c, err := pref.Sum(data)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Create and store block
-	blk, _ := blocks.NewBlockWithCid(data, cid)
+	blk, err := blocks.NewBlockWithCid(data, c)
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := bs.Put(ctx, blk); err != nil {
 		log.Fatal(err)
 	}
 
-	return cid
+	return c
 }
 
 func getFileContents(ctx context.Context, bs blockstore.Blockstore, c cid.Cid) []byte {
@@ -189,30 +172,41 @@ func connectToParent(ctx context.Context, child host.Host) {
 	// In real use we would parse multiaddr from command line
 	// For demo, connect to default libp2p relay
 	relayAddr := "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
-	ma, _ := multiaddr.NewMultiaddr(relayAddr)
-	ai, _ := peer.AddrInfoFromP2pAddr(ma)
-	
+	ma, err := multiaddr.NewMultiaddr(relayAddr)
+	if err != nil {
+		log.Fatal("Failed to create multiaddr:", err)
+	}
+	ai, err := peer.AddrInfoFromP2pAddr(ma)
+	if err != nil {
+		log.Fatal("Failed to get addr info:", err)
+	}
+
 	if err := child.Connect(ctx, *ai); err != nil {
 		log.Fatal("Parent connection failed:", err)
 	}
 }
 
-func findProviders(ctx context.Context, dht *dht.IpfsDHT, c cid.Cid) []peer.AddrInfo {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+func findProviders(ctx context.Context, dhtInst *dht.IpfsDHT, c cid.Cid) []peer.AddrInfo {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	providers, err := dht.FindProviders(ctx, c)
+	ch, err := dhtInst.FindProviders(cctx, c)
 	if err != nil {
 		log.Fatal("FindProviders failed:", err)
+	}
+
+	var providers []peer.AddrInfo
+	for p := range ch {
+		providers = append(providers, p)
 	}
 	return providers
 }
 
 func retrieveBlock(ctx context.Context, bs blockstore.Blockstore, c cid.Cid) blocks.Block {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	blk, err := bs.Get(ctx, c)
+	blk, err := bs.Get(cctx, c)
 	if err != nil {
 		log.Fatal("Block retrieval failed:", err)
 	}
@@ -220,25 +214,3 @@ func retrieveBlock(ctx context.Context, bs blockstore.Blockstore, c cid.Cid) blo
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/node-boxo-bitswap-dht/main.go
-
-<references>
-[1] https://github.com/ipfs/boxo
-[2] https://pkg.go.dev/github.com/ipfs/boxo/bitswap
-[3] https://lists.nongnu.org/archive/html/guix-commits/2025-03/msg03778.html
-[4] https://github.com/ipfs/kubo/blob/master/docs/changelogs/v0.20.md
-[5] https://www.npmjs.com/package/@libp2p/kad-dht
-[6] https://github.com/libp2p/go-libp2p-kad-dht/blob/master/routing.go
-[7] https://docs.ipfs.eth.link/how-to/configure-node/
-[8] https://discuss.ipfs.tech/t/enable-bitswap-client-only/18604
-[9] https://github.com/libp2p/go-libp2p-kad-dht
-[10] https://pkg.go.dev/github.com/libp2p/go-libp2p-kad-dht
-[11] https://ethberlinzwei.github.io/KnowledgeBase/resources/libp2p.html
-[12] https://ldej.nl/post/building-an-echo-application-with-libp2p/
-[13] https://discuss.libp2p.io/t/create-own-dht-bootstrap-node/1076
-[14] https://discuss.libp2p.io/t/kad-dht-protobuf-messages-peer-routing-and-content-providers/1283
-[15] https://docs.libp2p.io/guides/getting-started/go/
-[16] https://github.com/libp2p/go-libp2p-kad-dht/blob/master/dht_test.go
-[17] https://pt.w3d.community/aiengineer13/libp2p-pubsub-descoberta-de-pares-com-kademlia-dht-5hej
-[18] https://discuss.ipfs.tech/t/unable-to-get-blocks-when-the-node-is-connected-to-multiple-peers/18711
-[19] https://github.com/ipfs/go-datastore
-</references>

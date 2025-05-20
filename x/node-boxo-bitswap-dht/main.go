@@ -19,9 +19,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
-	routing "github.com/libp2p/go-libp2p/core/routing"
 	bsnet "github.com/ipfs/boxo/bitswap/network"
 	"github.com/ipfs/boxo/bitswap"
+	"github.com/libp2p/go-libp2p/core/routing"
+	"github.com/multiformats/go-multiaddr"
 )
 
 func main() {
@@ -41,13 +42,13 @@ func runParent() {
 	defer parentDHT.Close()
 
 	// Generate and add test file
-	cid := addFile(ctx, parentBS)
-	fmt.Printf("Parent generated CID: %s\n", cid.String())
-	fmt.Printf("File contents: %s\n", getFileContents(ctx, parentBS, cid))
+	c := addFile(ctx, parentBS)
+	fmt.Printf("Parent generated CID: %s\n", c.String())
+	fmt.Printf("File contents: %s\n", getFileContents(ctx, parentBS, c))
 
 	// Advertise CID in DHT
 	fmt.Println("Parent providing CID to DHT...")
-	if err := parentDHT.Provide(ctx, cid, true); err != nil {
+	if err := parentDHT.Provide(ctx, c, true); err != nil {
 		log.Fatal("Provide failed:", err)
 	}
 
@@ -55,7 +56,7 @@ func runParent() {
 	time.Sleep(5 * time.Second)
 
 	// Fork child process
-	cmd := exec.Command(os.Args[0], cid.String())
+	cmd := exec.Command(os.Args[0], c.String())
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
@@ -68,9 +69,9 @@ func runParent() {
 
 func runChild(cidStr string) {
 	ctx := context.Background()
-	
+
 	// Parse CID
-	cid, err := cid.Parse(cidStr)
+	c, err := cid.Parse(cidStr)
 	if err != nil {
 		log.Fatal("Invalid CID:", err)
 	}
@@ -85,14 +86,14 @@ func runChild(cidStr string) {
 
 	// Find providers through DHT
 	fmt.Println("Child searching for providers...")
-	providers := findProviders(ctx, childDHT, cid)
+	providers := findProviders(ctx, childDHT, c)
 	if len(providers) == 0 {
 		log.Fatal("No providers found")
 	}
 
 	// Retrieve file through Bitswap
 	fmt.Printf("Child retrieving from %s...\n", providers[0].ID)
-	blk := retrieveBlock(ctx, childBS, cid)
+	blk := retrieveBlock(ctx, childBS, c)
 	fmt.Printf("Child retrieved contents: %s\n", blk.RawData())
 }
 
@@ -117,11 +118,18 @@ func setupNode(ctx context.Context) (host.Host, *dht.IpfsDHT, blockstore.Blockst
 	// Create blockstore and bitswap
 	ds := dssync.MutexWrap(datastore.NewMapDatastore())
 	bs := blockstore.NewBlockstore(ds)
-	bsNet := bsnet.NewFromIpfsHost(h, dhtInst)
+	// Use NewFromLibp2pHost instead of the deprecated
+	// NewFromIpfsHost, passing only the libp2p host.
+	bsNet, err := bsnet.NewFromLibp2pHost(h)
+	if err != nil {
+		log.Fatal(err)
+	}
 	bsExch := bitswap.New(ctx, bsNet, bs)
 
 	// Start bitswap network
-	bsNet.Start(bsExch)
+	if err := bsNet.Start(bsExch); err != nil {
+		log.Fatal(err)
+	}
 
 	return h, dhtInst, bs
 }
@@ -133,18 +141,21 @@ func addFile(ctx context.Context, bs blockstore.Blockstore) cid.Cid {
 
 	// Create CIDv1 raw block
 	pref := cid.NewPrefixV1(cid.Raw, 0x00)
-	cid, err := pref.Sum(data)
+	c, err := pref.Sum(data)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	// Create and store block
-	blk, _ := blocks.NewBlockWithCid(data, cid)
+	blk, err := blocks.NewBlockWithCid(data, c)
+	if err != nil {
+		log.Fatal(err)
+	}
 	if err := bs.Put(ctx, blk); err != nil {
 		log.Fatal(err)
 	}
 
-	return cid
+	return c
 }
 
 func getFileContents(ctx context.Context, bs blockstore.Blockstore, c cid.Cid) []byte {
@@ -159,30 +170,41 @@ func connectToParent(ctx context.Context, child host.Host) {
 	// In real use we would parse multiaddr from command line
 	// For demo, connect to default libp2p relay
 	relayAddr := "/dnsaddr/bootstrap.libp2p.io/p2p/QmNnooDu7bfjPFoTZYxMNLWUQJyrVwtbZg5gBMjTezGAJN"
-	ma, _ := multiaddr.NewMultiaddr(relayAddr)
-	ai, _ := peer.AddrInfoFromP2pAddr(ma)
-	
+	ma, err := multiaddr.NewMultiaddr(relayAddr)
+	if err != nil {
+		log.Fatal("Failed to create multiaddr:", err)
+	}
+	ai, err := peer.AddrInfoFromP2pAddr(ma)
+	if err != nil {
+		log.Fatal("Failed to get addr info:", err)
+	}
+
 	if err := child.Connect(ctx, *ai); err != nil {
 		log.Fatal("Parent connection failed:", err)
 	}
 }
 
-func findProviders(ctx context.Context, dht *dht.IpfsDHT, c cid.Cid) []peer.AddrInfo {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+func findProviders(ctx context.Context, dhtInst *dht.IpfsDHT, c cid.Cid) []peer.AddrInfo {
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	providers, err := dht.FindProviders(ctx, c)
+	ch, err := dhtInst.FindProviders(cctx, c)
 	if err != nil {
 		log.Fatal("FindProviders failed:", err)
+	}
+
+	var providers []peer.AddrInfo
+	for p := range ch {
+		providers = append(providers, p)
 	}
 	return providers
 }
 
 func retrieveBlock(ctx context.Context, bs blockstore.Blockstore, c cid.Cid) blocks.Block {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	cctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	blk, err := bs.Get(ctx, c)
+	blk, err := bs.Get(cctx, c)
 	if err != nil {
 		log.Fatal("Block retrieval failed:", err)
 	}

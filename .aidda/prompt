@@ -15,6 +15,10 @@ Write an IPFS bitswap demo, using boxo, that does this:
   - retrieve the file from the provider
   - print the file's contents to stdout
 
+Fix error:
+
+vet: ./main.go:120:17: undefined: bsnet.NewFromIpfsHost
+
 Sysmsg: 
   You are an expert Go programmer. Please make the requested changes
   to the given code or documentation. For IPFS, IPLD, or libp2p,
@@ -27,6 +31,8 @@ Sysmsg:
   -- do not summarize or elide parts of the file.  Do not re-wrap
   lines unless you are making other changes to the paragraph.  Lines
   must be wrapped at 70 characters.  
+In:
+  x/node-boxo-bitswap-dht/main.go
 Out:
   x/node-boxo-bitswap-dht/main.go
 
