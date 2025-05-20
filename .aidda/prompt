@@ -1,31 +1,27 @@
-write compiled lisp proposal
-
-Write a proposal that uses a LISP-like language in a CBOR byte array
-(instead of the CID or CID list) that the PromiseGrid kernel routers
-execute to route the message.  The proposal should include a
-description of the language, including syntax, semantics, and
-examples.  
-
-In:
-  /home/stevegt/lab/promisegrid/promisegrid/README.md
-  x/routing/.notes.md
-  x/wire/slides/slides.md
-Out:
-  x/routing/lisp-byte-array.md
-
-.stop
 write fitness criteria
 
-Derive fitness criteria from .notes.md, writing the fitness items as
+Derive fitness criteria from
+/home/stevegt/lab/promisegrid/promisegrid/README.md and write them as
 bullet points in .criteria.md.  Include a fitness weight in the range
 1-100 with each bullet point.
 
+Each bullet point should be in the following format:
+
+- {weight} {description}
+
+Sysmsg:
+  You are a protocol designer. Please make the requested changes to the
+  given documentation.  Wrap lines at 70 characters.  
 In:
-  x/routing/.notes.md
+  /home/stevegt/lab/promisegrid/promisegrid/README.md
 Out:
   x/routing/.criteria.md
 
 .stop
+
+  x/routing/.notes.md
+
+
 write bitswap demo that uses DHT
 
 Write an IPFS bitswap demo, using boxo, that does this:

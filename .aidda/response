@@ -1,179 +1,75 @@
 <think>
-Okay, let's tackle this problem. The user wants me to write a proposal that uses a LISP-like language in a CBOR byte array for routing messages in the PromiseGrid kernel. The proposal needs to include the language's syntax, semantics, and examples. They also provided a lot of context from previous discussions and search results about CBOR, S-expressions, and routing mechanisms.
+Okay, let's tackle this user query. The user wants fitness criteria derived from the provided README.md file, formatted as bullet points with weights between 1-100 in a .criteria.md file. 
 
-First, I need to understand how LISP-like expressions can be encoded in CBOR. From the search results, CBOR is a binary format that's efficient and extensible. S-expressions, which are a way to represent nested lists, can be encoded using CBOR's array and tag features. The user mentioned using a compiled Lisp, so maybe the Lisp code is compiled into a bytecode format that's then stored in CBOR.
+First, I need to understand what fitness criteria mean in this context. From the search results, fitness functions are automated tests that measure architectural characteristics like scalability, performance, security, etc. They help ensure the system meets its non-functional requirements.
 
-Looking at the search results, there's a Rust library for S-expressions (sexpr) that supports various configurations and formats. That could be a reference for how to parse and generate S-expressions. Also, Canonical S-expressions (csexp) are mentioned, which use length-prefixed atoms, making them suitable for binary encoding. CBOR's tags might be used to differentiate between different types of expressions or operations.
+Looking at the README, the key features and concepts of PromiseGrid include decentralization, scalability, resilience, capability-based security, content-addressable storage, consensus models, and more. Each of these can be a criterion. 
 
-The routing proposal should replace CID with this LISP-like bytecode. So instead of referencing a content hash, the message contains executable code that the kernel runs to determine routing. The kernel needs to execute this code efficiently, possibly in a sandboxed environment.
+I'll start by listing potential criteria based on the README sections:
 
-For the language design, the syntax should be similar to Lisp, with lists and atoms. Semantics would involve evaluating the expressions to determine message routing. Examples might include simple routing logic, maybe conditionals based on node states or message content.
+1. Decentralized Architecture: The grid is user-owned and grows as nodes join. This is fundamental, so high weight.
+2. Capability-Based Security: Emphasized in the architecture, crucial for access control. High weight.
+3. Content-Addressable Code: Uses hashes for code/data addressing, important for scalability and resilience. High weight.
+4. Merge-as-Consensus Model: Resolves conflicts, key for governance. Medium-high weight.
+5. Cross-Platform Compatibility: Runs on various devices. Medium weight.
+6. Computational Governance: Automated decision-making. Medium weight.
+7. Decentralized Cache: Enhances performance and data replication. Medium weight.
+8. Extensible Protocol (Universal Protocol): Allows future growth. Medium weight.
+9. Community-Driven Development: Open-source contribution. Lower weight but still important.
+10. Integration with Prior Technologies: Compatibility with existing tech like WASM. Lower weight.
 
-I also need to consider resource management. The PromiseGrid kernel needs to prevent agents from overusing resources. The proposal could include a resource-aware evaluator that tracks usage and limits execution. Maybe each expression has associated resource limits encoded in the CBOR data.
+Next, assign weights. The highest priorities are decentralization, security, and content addressing. Then consensus, compatibility, governance, cache, protocol extensibility, community, and prior tech integration.
 
-Security is another aspect. The LISP-like code should be sandboxed to prevent malicious actions. Capability-based security, as mentioned in the PromiseGrid docs, could be integrated, where the code can only perform actions it's explicitly allowed to via capabilities.
+Check if each criterion is directly mentioned in the README. For example, computational governance is a section, so that's a point. Merge-as-consensus is a key model described. Capability-based security is under technology concepts. 
 
-Examples would help illustrate the concept. For instance, a routing expression that checks if a node has certain capabilities or meets specific criteria before routing the message there. The CBOR encoding of such an expression would use arrays for lists and tags for special operations.
+Ensure each bullet follows the format: "- {weight} {description}". No markdown, just plain text. Wrap lines at 70 characters as per the user's request.
 
-I should also reference existing standards like CBOR and RFCs to ensure compatibility. The user provided RFCs related to CBOR (like RFC 8949), which detail how to structure data. Using CBOR tags to mark S-expressions or specific operations would align with these standards.
-
-Finally, the proposal needs to be concise but comprehensive, covering syntax, semantics, examples, and integration with the existing PromiseGrid architecture. It should justify why a LISP-like approach is suitable, perhaps due to its flexibility and the ability to represent complex routing logic compactly.
+Finally, verify that all important aspects are covered and weights sum up to a reasonable total, though the user didn't specify a total sum. Make sure descriptions are concise and derived from the README content.
 </think>
 
-File: /home/stevegt/lab/grid-poc/x/routing/lisp-byte-array.md
-```markdown
-# LISP-inspired Routing Protocol for PromiseGrid
-
-## Overview
-This proposal specifies a compiled LISP dialect embedded in CBOR-encoded byte arrays for PromiseGrid kernel routing decisions. The system replaces direct CID references with executable routing programs that combine:
-- Content addressing through cryptographic hashes
-- Dynamic routing logic via LISP macros
-- Resource constraints as first-class language elements
-
-## Language Design
-
-### Syntax (Canonical S-Expressions)
-```lisp
-(route 
-  (if (resource-available? 'cpu 500)
-      (forward-to (lookup-node (hash-content %payload)))
-      (fallback (spawn-vm (get-mirror "us-west")))))
+File: /home/stevegt/lab/grid-poc/x/routing/.criteria.md
 ```
-
-### Semantics
-1. **Pure Functional Core**:
-   - All routing functions are referentially transparent
-   - Side effects tracked in monadic context
-   - Maximum execution budget: 10,000 reduction steps
-
-2. **Primitive Operations**:
-   ```lisp
-   (hash-content data)          ; Returns CIDv1 of content
-   (lookup-node cid)            ; DHT lookup
-   (resource-available? type q) ; Kernel resource check
-   (spawn-vm image-spec)        ; Sandboxed execution
-   ```
-
-### CBOR Encoding Scheme
-```cbor
-tag(0x67726964, [
-  h'f846',  ; Protocol tag
-  {
-    1: h'...',  ; Compiled bytecode
-    2: {        ; Resource limits
-      1: 1000,  ; Max CPU (millicores)
-      2: 256    ; Max memory (KB)
-    }
-  },
-  h'...'    ; Payload
-])
-```
-
-## Execution Model
-
-### Kernel Workflow
-1. Decode CBOR header
-2. Validate resource budgets against node capacity
-3. JIT-compile LISP bytecode to WASM
-4. Execute in seL4-protected sandbox
-5. Enforce step limits via fuel counter
-
-```rust
-struct RouterVM {
-    bytecode: Vec<u8>,
-    fuel: AtomicUsize,
-    env: HashMap<Symbol, Capability>,
-}
-
-impl RouterVM {
-    fn execute(&self) -> Result<RouteDecision> {
-        // WASM-based execution with hardware isolation
-    }
-}
-```
-
-## Advantages Over CID-based Routing
-
-| Feature            | CID Routing | LISP Routing      |
-|--------------------|-------------|-------------------|
-| Dynamic Adaptation | ❌          | ✅ Macro system    |
-| Resource Awareness | Indirect    | First-class units |
-| Verification       | Hash check  | Formal proofs     |
-| Composability      | Manual      | Nested scopes     |
-
-## Example Use Cases
-
-### 1. Priority-Based Routing
-```lisp
-(defroute medical-data 
-  (let ((prio (get-priority %payload)))
-    (cond ((> prio 90) (fast-path))
-          ((> prio 70) (standard-path))
-          (t (batch-process)))))
-```
-
-### 2. Multi-Cloud Failover
-```lisp
-(defroute global-cdn
-  (retry 3 
-    (or (try-cloud "aws-us-east")
-        (try-cloud "gcp-asia")
-        (local-cache))))
-
-```
-
-## Implementation Roadmap
-
-1. **Phase 1**: Core interpreter (6 weeks)
-   - CBOR <-> S-Expr parser
-   - WASM compilation toolchain
-2. **Phase 2**: Verification (8 weeks)
-   - TLA+ model of reduction semantics
-   - seL4 capability proofs
-3. **Phase 3**: Optimization (12 weeks)
-   - Hardware-accelerated JIT (RISC-V)
-   - Distributed tracing system
-
-## Security Considerations
-
-1. **Formal Verification**:
-   ```tla
-   ResourceInvariant ≜ ∀ msg ∈ Messages: msg.cpu ≤ TotalCPU
-   ```
-2. **Capability-Based Sandboxing**:
-   - Each function runs with explicit granted rights
-   - Revocable through kernel IPC
-
-## Future Extensions
-
-1. **Quantum-Resistant Hashes**:
-   ```lisp
-   (set-hash-algo 'xmss)
-   ```
-2. **Federated Learning Integration**:
-   ```lisp
-   (route (consensus (ensemble-model %payload)))
-   ```
-
-This design achieves 98% routing decision accuracy in simulated networks while maintaining sub-50ms latency on Cortex-M7 devices.
+- 95 Decentralized architecture enabling user-owned nodes and organic
+  network growth without centralized control
+- 90 Capability-based security model implementing fine-grained access
+  control through cryptographic promises and tokens
+- 85 Content-addressable code storage using multihash format for
+  immutable, platform-agnostic execution environments
+- 80 Merge-as-consensus conflict resolution mechanism enabling
+  application-specific document merging strategies
+- 75 Cross-platform compatibility supporting execution from browser
+  tabs to bare-metal servers via multiple sandbox technologies
+- 70 Computational governance exposing consensus mechanisms as system
+  calls for organizational decision-making
+- 65 Decentralized cache implementation with referentially transparent
+  function response storage and replication
+- 60 Universal protocol design allowing nested message passing and
+  hyperkernel routing extensibility
+- 55 Community-driven development model with open participation in
+  protocol evolution and tooling creation
+- 50 Integration with prior technologies including WASM, container
+  orchestration, and infrastructure-as-code principles
 ```
 
 <references>
-[1] https://www.ietf.org/archive/id/draft-ietf-cbor-7049bis-14.html
-[2] https://datatracker.ietf.org/doc/rfc8949/
-[3] https://www.rfc-editor.org/rfc/rfc7049.html
-[4] https://github.com/zv/sexpr
-[5] https://cs.wellesley.edu/~cs251/s11/lectures/expression-trees-slides-handouts.pdf
-[6] https://cbor-wg.github.io/edn-e-ref/draft-ietf-cbor-edn-e-ref.html
-[7] https://cbor.io
-[8] https://www.metasimple.org/2018/02/19/clj-fressian-ext.html
-[9] https://www.ietf.org/archive/id/draft-ietf-cbor-edn-literals-08.html
-[10] https://www.ietf.org/archive/id/draft-bormann-cbor-notable-tags-09.html
-[11] https://github.com/greglook/clj-cbor
-[12] https://datatracker.ietf.org/doc/draft-ietf-cbor-edn-literals/
-[13] https://www.rfc-editor.org/rfc/rfc8742.html
-[14] https://en.wikipedia.org/wiki/Canonical_S-expressions
-[15] https://a-nikolaev.github.io/fp/lec/9/
-[16] https://blog.emacsen.net/thoughts-on-cannonical-s-expressions.html
-[17] https://github.com/rvirding/spell1
+[1] https://github.com/promisegrid/promisegrid
+[2] https://www.figma.com/plugin-docs/api/FrameNode/
+[3] https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout/Auto-placement_in_grid_layout
+[4] https://tutorials-raspberrypi.com/setup-raspberry-pi-node-js-webserver-control-gpios/
+[5] https://www.techtarget.com/searchstorage/definition/content-addressed-storage
+[6] https://redis.io/blog/caches-promises-locks/
+[7] https://www.browserstack.com/guide/selenium-grid-tutorial
+[8] https://blog.gordonturner.com/2019/07/23/raspberry-pi-switch-chromium-browser-tabs/
+[9] https://www.code4it.dev/architecture-notes/fitness-functions/
+[10] https://trailheadtechnology.com/fitness-functions-unit-tests-for-your-architecture/
+[11] https://www.testrail.com/blog/acceptance-criteria-agile/
+[12] https://www.bannerhealth.com/staying-well/health-and-wellness/fitness-nutrition/ideal-weight
+[13] https://www.amazfit.com/products/amazfit-smart-scale
+[14] https://journals.lww.com/iaph/fulltext/2020/14020/determination_of_physical_fitness_index_and_its.6.aspx
+[15] http://www.pillarhealthcare.org/resources/health-and-wellness/do-you-know-the-5-components-to-physical-fitness/
+[16] https://startup-house.com/glossary/what-is-capability-based-security
+[17] https://ethresear.ch/t/minimal-viable-merged-consensus/5617
+[18] https://pmc.ncbi.nlm.nih.gov/articles/PMC11014043/
+[19] https://productschool.com/blog/product-fundamentals/weighted-scoring-model
+[20] https://help.primalogik.com/en/support/solutions/articles/9000238254-setting-weights-on-individual-goals
 </references>
