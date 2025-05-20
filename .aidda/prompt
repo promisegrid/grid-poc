@@ -1,8 +1,9 @@
 write fitness criteria
 
 Derive fitness criteria from
-/home/stevegt/lab/promisegrid/promisegrid/README.md and write them as
-bullet points in .criteria.md.  Include a fitness weight in the range
+/home/stevegt/lab/promisegrid/promisegrid/README.md and the included
+proposals, and write them in the form of a list of bullet points in
+x/routing/.criteria.md.  Include a fitness weight in the range
 1-100 with each bullet point.
 
 Each bullet point should be in the following format:
@@ -13,7 +14,24 @@ Sysmsg:
   You are a protocol designer. Please make the requested changes to the
   given documentation.  Wrap lines at 70 characters.  
 In:
+  x/routing/.criteria.md
   /home/stevegt/lab/promisegrid/promisegrid/README.md
+  x/routing/agent-trust-reputation-system.md
+  x/routing/cid-content-addressing-protocol.md
+  x/routing/cid-list.md
+  x/routing/decentralized-hyperkernel-architecture.md
+  x/routing/formal-verification-routing-algorithms.md
+  x/routing/graph-fragment.md
+  x/routing/hybrid-kademlia-hypergraph-routing.md
+  x/routing/hypergraph-routing-implementation.md
+  x/routing/lightweight-cbor-iot-messaging.md
+  x/routing/lisp-byte-array.md
+  x/routing/promise-state-transition-model.md
+  x/routing/resource-aware-prioritization.md
+  x/routing/scenario-tree-dynamic-routing.md
+  x/routing/single-cid.md
+  x/routing/tags-boolean.md
+  x/routing/tags.md
 Out:
   x/routing/.criteria.md
 

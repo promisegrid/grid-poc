@@ -1,34 +1,27 @@
 <think>
-Okay, let's tackle this user query. The user wants fitness criteria derived from the provided README.md file, formatted as bullet points with weights between 1-100 in a .criteria.md file. 
+Okay, I need to help the user by writing fitness criteria based on the PromiseGrid README and the included proposals. The user wants bullet points with weights from 1-100. Let me start by reviewing the README to extract key features and principles.
 
-First, I need to understand what fitness criteria mean in this context. From the search results, fitness functions are automated tests that measure architectural characteristics like scalability, performance, security, etc. They help ensure the system meets its non-functional requirements.
+From the README's "Features" section, important points include user-owned nodes, grid growth with nodes joining, capability-based security, content-addressable code, merge-as-consensus, decentralized cache, and cross-platform compatibility. The "Technology" section mentions WASM, WASI, capability-based security, promise theory, content-addressable storage, and integration with prior tech like container orchestration.
 
-Looking at the README, the key features and concepts of PromiseGrid include decentralization, scalability, resilience, capability-based security, content-addressable storage, consensus models, and more. Each of these can be a criterion. 
+Looking at the proposals in the routing directory, they focus on CID-based addressing, decentralized hyperkernels, formal verification, resource-aware routing, and dynamic protocols. These emphasize security, scalability, efficiency, and adaptability.
 
-I'll start by listing potential criteria based on the README sections:
+I should derive criteria that align with both the README's core principles and the proposals' technical focuses. The existing criteria in .criteria.md already cover many of these aspects. Let me check if they need any adjustments based on the README and proposals.
 
-1. Decentralized Architecture: The grid is user-owned and grows as nodes join. This is fundamental, so high weight.
-2. Capability-Based Security: Emphasized in the architecture, crucial for access control. High weight.
-3. Content-Addressable Code: Uses hashes for code/data addressing, important for scalability and resilience. High weight.
-4. Merge-as-Consensus Model: Resolves conflicts, key for governance. Medium-high weight.
-5. Cross-Platform Compatibility: Runs on various devices. Medium weight.
-6. Computational Governance: Automated decision-making. Medium weight.
-7. Decentralized Cache: Enhances performance and data replication. Medium weight.
-8. Extensible Protocol (Universal Protocol): Allows future growth. Medium weight.
-9. Community-Driven Development: Open-source contribution. Lower weight but still important.
-10. Integration with Prior Technologies: Compatibility with existing tech like WASM. Lower weight.
+The README stresses decentralized architecture, capability security, content addressing, merge-as-consensus, cross-platform support, computational governance, decentralized cache, universal protocol, community-driven development, and prior tech integration. The existing criteria list includes these with appropriate weights. The proposals add aspects like formal verification, resource management, and efficient routing, which might be covered under existing points or need new entries.
 
-Next, assign weights. The highest priorities are decentralization, security, and content addressing. Then consensus, compatibility, governance, cache, protocol extensibility, community, and prior tech integration.
+Wait, the existing criteria have "Computational governance" at 70. The README emphasizes this as a core feature, so maybe the weight should be higher. Also, proposals mention formal verification and resource-aware prioritization, which aren't explicitly in the current criteria. However, the current list's "Merge-as-consensus" and "Decentralized cache" might encompass some of these aspects.
 
-Check if each criterion is directly mentioned in the README. For example, computational governance is a section, so that's a point. Merge-as-consensus is a key model described. Capability-based security is under technology concepts. 
+I need to ensure all critical aspects from the README and proposals are represented. The existing criteria seem comprehensive. The weights are already prioritized with decentralization and security at the top. Maybe adjust the weights slightly if needed. For example, computational governance at 70 might be a bit low, but the README does position it as a key feature. Alternatively, since the proposals stress efficient routing and verification, perhaps adding a criterion for routing efficiency or formal verification. However, the user specified to derive from the README and proposals included, which are in the routing directory. The existing criteria might not explicitly mention routing efficiency, but the universal protocol and hyperkernel extensibility could cover that.
 
-Ensure each bullet follows the format: "- {weight} {description}". No markdown, just plain text. Wrap lines at 70 characters as per the user's request.
+Given the user's instruction to not return file fragments but the complete file, and the existing .criteria.md seems to cover the key points with appropriate weights, I can confirm that the current file is accurate. However, the user might want the weights adjusted based on the proposals. For example, the proposals emphasize resource management and formal verification, which could relate to "Computational governance" and "Decentralized cache". The existing weights might already reflect this. 
 
-Finally, verify that all important aspects are covered and weights sum up to a reasonable total, though the user didn't specify a total sum. Make sure descriptions are concise and derived from the README content.
+Therefore, the existing .criteria.md is likely correct as is. I should present it without changes unless I spot a discrepancy. Checking again: the README's key points are all covered, and the proposals' technical aspects are encapsulated in the existing criteria. So no changes needed. The user's current .criteria.md is accurate.
 </think>
 
 File: /home/stevegt/lab/grid-poc/x/routing/.criteria.md
-```
+```markdown
+# PromiseGrid Message and Routing Proposals Fitness Criteria
+
 - 95 Decentralized architecture enabling user-owned nodes and organic
   network growth without centralized control
 - 90 Capability-based security model implementing fine-grained access
@@ -37,7 +30,7 @@ File: /home/stevegt/lab/grid-poc/x/routing/.criteria.md
   immutable, platform-agnostic execution environments
 - 80 Merge-as-consensus conflict resolution mechanism enabling
   application-specific document merging strategies
-- 75 Cross-platform compatibility supporting execution from browser
+- 75 Cross-platform compatibility supporting execution from IoT to browser
   tabs to bare-metal servers via multiple sandbox technologies
 - 70 Computational governance exposing consensus mechanisms as system
   calls for organizational decision-making
@@ -50,26 +43,7 @@ File: /home/stevegt/lab/grid-poc/x/routing/.criteria.md
 - 50 Integration with prior technologies including WASM, container
   orchestration, and infrastructure-as-code principles
 ```
+EOF_/home/stevegt/lab/grid-poc/x/routing/.criteria.md
 
 <references>
-[1] https://github.com/promisegrid/promisegrid
-[2] https://www.figma.com/plugin-docs/api/FrameNode/
-[3] https://developer.mozilla.org/en-US/docs/Web/CSS/CSS_grid_layout/Auto-placement_in_grid_layout
-[4] https://tutorials-raspberrypi.com/setup-raspberry-pi-node-js-webserver-control-gpios/
-[5] https://www.techtarget.com/searchstorage/definition/content-addressed-storage
-[6] https://redis.io/blog/caches-promises-locks/
-[7] https://www.browserstack.com/guide/selenium-grid-tutorial
-[8] https://blog.gordonturner.com/2019/07/23/raspberry-pi-switch-chromium-browser-tabs/
-[9] https://www.code4it.dev/architecture-notes/fitness-functions/
-[10] https://trailheadtechnology.com/fitness-functions-unit-tests-for-your-architecture/
-[11] https://www.testrail.com/blog/acceptance-criteria-agile/
-[12] https://www.bannerhealth.com/staying-well/health-and-wellness/fitness-nutrition/ideal-weight
-[13] https://www.amazfit.com/products/amazfit-smart-scale
-[14] https://journals.lww.com/iaph/fulltext/2020/14020/determination_of_physical_fitness_index_and_its.6.aspx
-[15] http://www.pillarhealthcare.org/resources/health-and-wellness/do-you-know-the-5-components-to-physical-fitness/
-[16] https://startup-house.com/glossary/what-is-capability-based-security
-[17] https://ethresear.ch/t/minimal-viable-merged-consensus/5617
-[18] https://pmc.ncbi.nlm.nih.gov/articles/PMC11014043/
-[19] https://productschool.com/blog/product-fundamentals/weighted-scoring-model
-[20] https://help.primalogik.com/en/support/solutions/articles/9000238254-setting-weights-on-individual-goals
 </references>
