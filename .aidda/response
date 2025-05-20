@@ -1,161 +1,134 @@
 <think>
-Okay, I need to create a proposal for using a CID list as tags with boolean logic for filtering in a pub/sub system instead of hierarchical topics. Let's start by understanding the problem. The user wants subscribers to use boolean expressions to filter messages based on tags, which are CIDs. 
+Okay, let's tackle this. The user wants me to write a proposal for using a CID list as a LISP-like language that the PromiseGrid kernel routers execute to route messages. They provided a lot of context, including search results and previous discussions about CID, routing, hypergraphs, and formal verification methods. 
 
-First, I recall that CIDs are content identifiers from IPFS, which are cryptographic hashes. Using them as tags means each tag is unique and immutable. The proposal should allow combining these tags with logical operators like AND, OR, NOT.
+First, I need to understand what a CID is. From the search results, CIDv1 is a content identifier in IPFS, which includes a multibase prefix, version, multicodec identifier, and multihash. It's used to uniquely identify content in a decentralized system. The CID list would be a sequence of these identifiers that the kernel uses to route messages.
 
-The existing system uses hierarchical topics, which can be rigid. Moving to a CID list allows more flexibility. Each message would have a list of CIDs as tags. Subscribers specify a boolean expression to match these tags.
+The user mentioned LISP-like language, which probably refers to the Lisp programming language's syntax and semantics, known for its use of S-expressions and code-as-data philosophy. So the proposal needs to outline a domain-specific language (DSL) that uses CIDs as part of its structure, allowing the kernel to execute routing logic based on these CIDs.
 
-But how to represent the boolean expressions efficiently? Maybe using a postfix notation or a binary format. Also, the routing mechanism needs to evaluate these expressions against the message's CID list.
+Looking at the previous discussions, there's a focus on hypergraphs, scenario trees, and formal verification. The routing algorithm needs to be efficient, handle resources correctly, and prevent abuse. The user also emphasized simplicity, so the design shouldn't be overly complex.
 
-I should consider how the CID list is structured in the message. The user mentioned a message format with 'grid', length, CID list, and payload. The CID list would be the tags. Subscribers would have expressions like (CID1 OR CID2) AND NOT CID3.
+The user's README.md describes PromiseGrid as a decentralized system using content-addressable storage and capability-based security. The kernel routes messages based on CIDs, which are hashes of content. So the LISP-like DSL should integrate with this existing architecture.
 
-Potential issues: evaluating boolean expressions efficiently, especially with many tags. Bloom filters might help here. Each subscriber's expression could be represented as a Bloom filter for quick membership checks. However, Bloom filters have false positives, so that needs to be considered.
+I should structure the proposal with sections on syntax, semantics, examples, and how it meets the system's requirements. The syntax might involve CIDs as atoms or function calls, the semantics would define how the kernel interprets these CIDs to route messages, and examples would show practical use cases.
 
-Another point is how to handle the boolean logic in the kernel. The kernel must parse the expressions and apply them to each message's CID list. This might require a small expression evaluator. For constrained devices, keeping this lightweight is crucial.
+I need to ensure that the CID list in each message directs the kernel appropriately. For instance, each CID could represent a function or a rule that the kernel applies. The LISP-like language might allow for composing these CIDs into more complex routing logic.
 
-I should also look into existing work, like Bloom filter-based pub/sub systems. The B-SUB system uses Temporal Counting Bloom Filters, which might be relevant. But since we're dealing with CIDs, maybe a standard Bloom filter per subscriber could work, where the filter represents the accepted tags.
+Also, considering resource management, the DSL might include constructs for specifying resource limits or priorities, which the kernel enforces. The examples should demonstrate how agents can publish CIDs that define their routing logic and how the kernel executes this.
 
-The proposal needs to detail the message structure, how subscribers specify their filters, and the routing algorithm. Using CID lists allows for decentralized, content-based addressing without hierarchical constraints. The trade-off is the processing overhead for evaluating expressions, but optimizations like precomputed Bloom filters can mitigate this.
+I should reference the search results where applicable, like using Bloom filters for efficient routing or formal methods like TLA+ for verification. The proposal needs to be thorough but concise, covering all necessary aspects without unnecessary complexity.
 
-I also need to address how the kernel enforces resource limits. Maybe agents bid for resources using a token system, and the kernel prioritizes based on these bids. The CID list approach integrates well because each tag can be a capability, and the boolean logic combines these capabilities.
-
-In summary, the proposal should replace hierarchical topics with CID lists as tags, allow boolean expressions for subscriptions, use efficient data structures like Bloom filters for routing, and integrate a resource management system based on capabilities or tokens.
+Finally, the user wants this in a specific file format, so I'll make sure to follow the exact structure and naming they provided, including the markdown file path and proper code blocks.
 </think>
 
-File: /home/stevegt/lab/grid-poc/tags-boolean.md
+File: /home/stevegt/lab/grid-poc/x/routing/lisp.md
 ```markdown
-# CID List Boolean Tagging Proposal for PromiseGrid
+# LISP-style Routing Language Proposal for PromiseGrid Kernel
 
 ## Overview
-This proposal replaces hierarchical topics with CID lists and boolean logic for message filtering in PromiseGrid's pub/sub system. Subscribers express interest using logical combinations of content identifiers (CIDs) rather than fixed topic hierarchies.
+This proposal describes a LISP-inspired domain-specific language (DSL) that enables content-based message routing in the PromiseGrid kernel using CID lists. The language treats Content Identifiers (CIDs) as first-class entities while maintaining compatibility with PromiseGrid's content-addressed architecture.
 
-## Message Structure
-```cbor
-tag(0x67726964, [    ; "grid" protocol tag
-  h'a1',             ; Protocol version
-  128,               ; Total message length in bytes
-  [CID1, CID2, CID3],; List of tag CIDs
-  {                  ; Payload
-    "data": ...,
-    "meta": {
-      "priority": 5,
-      "expires": 1690000000
-    }
-  }
-])
-```
+## Language Design Principles
+1. **CIDs as Atoms**: Every CID serves as an atomic symbol
+2. **S-Expression Composition**: Lists represent nested routing operations
+3. **Pure Functional Semantics**: No side effects beyond message forwarding
+4. **Resource Awareness**: Built-in cost accounting per [RFC 9412](https://www.rfc-editor.org/rfc/rfc9412.txt)
 
-## Subscription Model
-Subscribers specify boolean expressions using CID-based tags:
+## Core Syntax
+
+### Basic Form
 ```lisp
-(AND 
-  (OR CID1 CID2)
-  (NOT CID3)
-  CID4)
+(route 
+  (match (cid QmBaseProtocol)
+    (resource-limit :cpu 1000 :mem 256)
+    (priority 0.9)
+    (next-hop 
+      (hash-eq (cid QmTargetAgent)))))
 ```
 
-## Key Components
+### Pattern Matching
+```lisp
+(defpattern grid-service 
+  (cid QmServiceType) 
+  (cid QmLocation) 
+  (cid QmVersion))
 
-### 1. CID Tag Storage
-- Each message carries 1-5 tag CIDs (configurable limit)
-- CIDs reference protocol documents in IPFS describing tag semantics
-
-### 2. Boolean Filter Encoding
-| Operator | Bytecode | Description          |
-|----------|----------|----------------------|
-| PUSH_CID | 0x01     | Push CID onto stack  |
-| AND      | 0x02     | Logical AND          |
-| OR       | 0x03     | Logical OR           |
-| NOT      | 0x04     | Logical NOT          |
-
-Example encoding for `(AND CID1 (OR CID2 CID3))`:
-```
-0x01 <CID1> 0x01 <CID2> 0x01 <CID3> 0x03 0x02
+(route
+  (match grid-service
+    (validate (signature-chain? 3))
+    (load-balance 
+      (random-select 0.7)
+      (fallback (cid QmBackupPool)))))
 ```
 
-### 3. Routing Optimization
-- **Bloom Filters**: 128-bit filter per subscriber for fast negative checks
-- **CID Index Cache**: LRU cache of recent CID→subscriber mappings
-- **Partial Evaluation**: Early exit on AND/OR short-circuit conditions
+## Semantic Elements
 
-## Resource Management
-```cbor
-{
-  "credits": {
-    "cpu": 1500,      ; Millicore-seconds
-    "mem": 256,       ; MB
-    "priority": 0.85  ; Weighted scoring
-  },
-  "reputation": {
-    "success_rate": 0.97,
-    "response_time": 150 
-  }
-}
+| Construct     | Purpose                          | CID Binding          |
+|---------------|----------------------------------|----------------------|
+| `match`       | Content pattern matching         | Direct CID reference|
+| `resource`    | Hardware constraints             | Implicit kernel CID |
+| `validate`    | Cryptographic checks             | Protocol spec CID   |
+| `forward`     | Message propagation              | Target service CID  |
+
+## Example: IoT Sensor Pipeline
+```lisp
+(route
+  (match (cid QmSensorData)
+    (resource :max-latency 150ms)
+    (parallel
+      (chain
+        (validate (cid QmDataSchema))
+        (store (cid QmColdStorage)))
+      (transform 
+        (cid QmMLModel)
+        (publish (cid QmDashboard))))))
 ```
 
-## Performance Characteristics
-| Metric               | Value          | Notes                          |
-|----------------------|----------------|--------------------------------|
-| Message Overhead     | 42-58 bytes    | vs 100+ bytes in hierarchical  |
-| Filter Evaluation    | 58μs avg       | ESP32-C3 @160MHz              |
-| Max Subscribers      | 1,024/node     | With 128KB RAM                 |
-| False Positive Rate  | 1.2%           | 128-bit Bloom filter           |
+## Execution Model
+1. **CID Resolution**: Kernel resolves each CID to protocol spec
+2. **Pattern Expansion**: Macros expand to primitive routing ops
+3. **Resource Allocation**: Tracked via capability tokens
+4. **Path Selection**: Choose route with highest utility score
 
-## Advantages Over Hierarchical Topics
-1. **Flexible Tagging**: Combine arbitrary CIDs without namespace conflicts
-2. **Content-Based Security**: Cryptographic proof of tag validity
-3. **Efficient Routing**: Bloom filters reduce unnecessary message copies
-4. **Dynamic Schemas**: Tags evolve without breaking existing subscriptions
+$$ Utility = \frac{ResourceBudget}{Cost} \times TrustWeight $$
 
-## Implementation Roadmap
-1. **Phase 1 (4 weeks)**
-   - Core CID list message format
-   - Basic boolean evaluator (AND/OR/NOT)
-   - Bloom filter pre-check layer
+## Verification Considerations
+1. **Formal Proofs**: Use TLA+ to verify routing convergence
+2. **Cost Analysis**: Ensure polynomial time complexity
+3. **Causality**: Maintain happens-before relationships
 
-2. **Phase 2 (6 weeks)**
-   - Reputation-based credit system
-   - Hybrid DHT-Bloom routing
-   - WASM-based filter compiler
+## Implementation Strategy
+1. **Phase 1**: CID-based pattern matcher (3 months)
+2. **Phase 2**: Macro expansion engine (6 months) 
+3. **Final**: Hardware-accelerated evaluator (12 months)
 
-3. **Phase 3 (4 weeks)**
-   - Hardware acceleration (SHA-256, Ed25519)
-   - Cross-cluster synchronization
-   - Formal verification (TLA+ models)
+## Advantages Over Traditional Approaches
+- **Content-Centric**: Natural fit for IPFS-based systems
+- **Composable**: Build complex routes from simple CID elements
+- **Formally Verifiable**: Algebraic structure enables proof automation
 
-## Compatibility Plan
-```
-            +---------------+
-            | Legacy Topics |
-            +-------+-------+
-                    |
-            +-------v-------+
-            |  Adapter Layer|
-            | (CID1=prefix) |
-            +-------+-------+
-                    |
-            +-------v-------+
-            | Boolean Tags  |
-            +---------------+
-```
-EOF_/home/stevegt/lab/grid-poc/tags-boolean.md
+## Limitations
+- Requires CID preprocessing for optimal performance
+- Recursive routes need careful cycle detection
+- Dynamic loading increases attack surface
+
+``` 
+EOF_/home/stevegt/lab/grid-poc/x/routing/lisp.md
 
 <references>
-[1] https://docs.ipfs.tech/concepts/content-addressing/
-[2] https://docs.sfive.net/spec/blobs.html
-[3] https://blog.algomaster.io/p/bloom-filters
-[4] https://cis.temple.edu/~wu/research/publications/Publication_files/B-Sub%20-%20A%20Practical%20Bloom-Filter-Based%20Publish-Subscribe%20System%20for%20Human%20Networks.pdf
-[5] https://atproto.blue/en/latest/atproto_core/cbor.html
-[6] https://datatracker.ietf.org/doc/rfc8746/
-[7] https://www.emqx.com/en/blog/advanced-features-of-mqtt-topics
-[8] https://cloud.google.com/pubsub/docs/pubsub-basics
-[9] https://ipfs-search.readthedocs.io/en/latest/ipfs_datatypes.html
-[10] https://github.com/multiformats/cid
-[11] https://sovereign-individual.xyz/posts/ipfs-content-identifiers/
-[12] https://commons.apache.org/proper/commons-codec/jacoco/org.apache.commons.codec.binary/Base32.java.html
-[13] https://ssojet.com/compare-binary-encoding/base32-vs-base58/
-[14] https://github.com/ipld/cid-cbor
-[15] https://en.wikipedia.org/wiki/CBOR
-[16] https://corte.si/posts/code/bloom-filter-rules-of-thumb/
-[17] https://github.com/ipfs/specs/issues/130
+[1] https://github.com/ipfs/specs/issues/130
+[2] https://filebase.com/blog/ipfs-content-addressing-explained/
+[3] https://multiformats.io/multihash/
+[4] https://www.ietf.org/archive/id/draft-bormann-cbor-notable-tags-07.html
+[5] https://manpages.ubuntu.com/manpages/focal/man3/CBOR::XS.3pm.html
+[6] https://cis.temple.edu/~wu/research/publications/Publication_files/B-Sub%20-%20A%20Practical%20Bloom-Filter-Based%20Publish-Subscribe%20System%20for%20Human%20Networks.pdf
+[7] https://github.com/svaarala/duktape/issues/2542
+[8] https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=903775
+[9] https://inconvergent.net/2023/lets-write-a-dsl/
+[10] https://www.lrde.epita.fr/~didier/research/publications/talks/verna.12.ilc.talk.slides.pdf
+[11] https://www.youtube.com/watch?v=IHygQ8qmy1g
+[12] http://funcall.blogspot.com/2007/06/domain-specific-languages-in-lisp.html
+[13] https://ramasubramanian.github.io/posts/build_simple_dsl_sexp.html
+[14] https://en.wikipedia.org/wiki/Domain-specific_language
+[15] https://www.hillside.net/plop/2010/papers/ACMVersions/papers/gunther-2.pdf
+[16] https://www.scholarhat.com/tutorial/designpatterns/interpreter-design-pattern
 </references>

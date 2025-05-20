@@ -1,16 +1,16 @@
-write tags proposal
+write lisp proposal
 
-Write a proposal that uses a CID list as tags instead of hierarchical
-topics.  Subscribers can use boolean logic to filter the tags they want to
-receive.  
+Write a proposal that uses a the CID list as a LISP-like language that
+the PromiseGrid kernel routers executes to route messages.  The
+proposal should include a description of the language, including
+syntax, semantics, and examples.  
 
 In:
   /home/stevegt/lab/promisegrid/promisegrid/README.md
   x/routing/.notes.md
   x/wire/slides/slides.md
 Out:
-  tags-boolean.md
-  
+  x/routing/lisp.md
 
 .stop
 write fitness criteria
