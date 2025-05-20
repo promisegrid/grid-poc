@@ -1,3 +1,42 @@
+write tags proposal
+
+Write a proposal that uses a CID list as tags instead of hierarchical
+topics.
+
+In:
+  /home/stevegt/lab/promisegrid/promisegrid/README.md
+  x/routing/.notes.md
+  x/wire/slides/slides.md
+  single-cid.md
+  cid-list.md
+  graph-fragment.md
+  hypergraph-routing-implementation.md  
+  scenario-tree-dynamic-routing.md  
+  resource-aware-prioritization.md  
+  agent-trust-reputation-system.md  
+  cid-content-addressing-protocol.md  
+  hybrid-kademlia-hypergraph-routing.md  
+  promise-state-transition-model.md  
+  formal-verification-routing-algorithms.md  
+  lightweight-cbor-iot-messaging.md  
+  decentralized-hyperkernel-architecture.md
+Out:
+  tags.md
+  
+
+.stop
+write fitness criteria
+
+Derive fitness criteria from .notes.md, writing the fitness items as
+bullet points in .criteria.md.  Include a fitness weight in the range
+1-100 with each bullet point.
+
+In:
+  x/routing/.notes.md
+Out:
+  x/routing/.criteria.md
+
+.stop
 write bitswap demo that uses DHT
 
 Write an IPFS bitswap demo, using boxo, that does this:
