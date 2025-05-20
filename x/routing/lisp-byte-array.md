@@ -1,27 +1,3 @@
-<think>
-Okay, let's tackle this problem. The user wants me to write a proposal that uses a LISP-like language in a CBOR byte array for routing messages in the PromiseGrid kernel. The proposal needs to include the language's syntax, semantics, and examples. They also provided a lot of context from previous discussions and search results about CBOR, S-expressions, and routing mechanisms.
-
-First, I need to understand how LISP-like expressions can be encoded in CBOR. From the search results, CBOR is a binary format that's efficient and extensible. S-expressions, which are a way to represent nested lists, can be encoded using CBOR's array and tag features. The user mentioned using a compiled Lisp, so maybe the Lisp code is compiled into a bytecode format that's then stored in CBOR.
-
-Looking at the search results, there's a Rust library for S-expressions (sexpr) that supports various configurations and formats. That could be a reference for how to parse and generate S-expressions. Also, Canonical S-expressions (csexp) are mentioned, which use length-prefixed atoms, making them suitable for binary encoding. CBOR's tags might be used to differentiate between different types of expressions or operations.
-
-The routing proposal should replace CID with this LISP-like bytecode. So instead of referencing a content hash, the message contains executable code that the kernel runs to determine routing. The kernel needs to execute this code efficiently, possibly in a sandboxed environment.
-
-For the language design, the syntax should be similar to Lisp, with lists and atoms. Semantics would involve evaluating the expressions to determine message routing. Examples might include simple routing logic, maybe conditionals based on node states or message content.
-
-I also need to consider resource management. The PromiseGrid kernel needs to prevent agents from overusing resources. The proposal could include a resource-aware evaluator that tracks usage and limits execution. Maybe each expression has associated resource limits encoded in the CBOR data.
-
-Security is another aspect. The LISP-like code should be sandboxed to prevent malicious actions. Capability-based security, as mentioned in the PromiseGrid docs, could be integrated, where the code can only perform actions it's explicitly allowed to via capabilities.
-
-Examples would help illustrate the concept. For instance, a routing expression that checks if a node has certain capabilities or meets specific criteria before routing the message there. The CBOR encoding of such an expression would use arrays for lists and tags for special operations.
-
-I should also reference existing standards like CBOR and RFCs to ensure compatibility. The user provided RFCs related to CBOR (like RFC 8949), which detail how to structure data. Using CBOR tags to mark S-expressions or specific operations would align with these standards.
-
-Finally, the proposal needs to be concise but comprehensive, covering syntax, semantics, examples, and integration with the existing PromiseGrid architecture. It should justify why a LISP-like approach is suitable, perhaps due to its flexibility and the ability to represent complex routing logic compactly.
-</think>
-
-File: /home/stevegt/lab/grid-poc/x/routing/lisp-byte-array.md
-```markdown
 # LISP-inspired Routing Protocol for PromiseGrid
 
 ## Overview

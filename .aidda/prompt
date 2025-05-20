@@ -1,16 +1,17 @@
-write lisp proposal
+write compiled lisp proposal
 
-Write a proposal that uses a the CID list as a LISP-like language that
-the PromiseGrid kernel routers executes to route messages.  The
-proposal should include a description of the language, including
-syntax, semantics, and examples.  
+Write a proposal that uses a LISP-like language in a CBOR byte array
+(instead of the CID or CID list) that the PromiseGrid kernel routers
+execute to route the message.  The proposal should include a
+description of the language, including syntax, semantics, and
+examples.  
 
 In:
   /home/stevegt/lab/promisegrid/promisegrid/README.md
   x/routing/.notes.md
   x/wire/slides/slides.md
 Out:
-  x/routing/lisp.md
+  x/routing/lisp-byte-array.md
 
 .stop
 write fitness criteria
