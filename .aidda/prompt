@@ -1,3 +1,91 @@
+write sim1 PromiseGrid simulation
+
+Based roughly on the message format in x/wire/wire.go, write a
+simulation of two promisegrid agents exchanging messages over the
+network.  Each agent should be started by the user in a separate
+process; a command line flag determines what the IP address and port
+number of the other agent are.
+
+Each agent should be a separate Go program that is started with the
+command line flag(s).  The agent imports x/sim1/wire and
+x/sim1/kernel.  
+
+The x/sim1/wire package defines the Message struct and the wire
+protocol for the agents to use.  
+
+The x/sim1/kernel package defines the kernel that the agents use to
+communicate with each other, and handles all network communications
+and message routing. The kernel provides these main functions to the
+agents:
+
+- Subscribe(protocol CID, onMessage func(msg Message))
+- Publish(protocol CID, msg Message)
+- Unsubscribe(protocol CID)
+
+For demonstration purposes, agent1 should send a "hello world"
+message to agent2, which should print the message to stdout.  Agent2
+should then send a "hello back" message to agent1, which should also
+print the message to stdout.  
+
+Don't forget to write x/wire/wire.go.
+
+Sysmsg: 
+  You are protocol designer and an expert Go programmer. Please make
+  the requested changes to the given code or documentation. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file. Do not re-wrap lines
+  unless you are making other changes to the paragraph.  Lines must be
+  wrapped at 70 characters.  
+In:
+  x/wire/wire.go
+  x/sim1/kernel/kernel.go
+  x/sim1/agent1/agent1.go
+  x/sim1/agent2/agent2.go
+Out:
+  x/sim1/wire/wire.go
+
+.stop
+
+
+replace protocol CID with routing info array
+
+We want the Message struct to look something like this:
+
+type Message struct {
+  Tag    struct {
+    Number uint64 // = 0x67726964 = 'grid' as 4-byte big-endian integer
+    Content struct {
+      // CIDs, DIDs, topics, or Mach-like port(s) used by the kernel to
+      // quickly route the message to the correct agent(s)
+      Routing [][]byte  
+      // Message payload -- payload layer contains any signatures,
+      // bid/ask semantics, resource allocation semantics, etc. 
+      Payload  []byte  
+    }
+}
+
+The Message is to be CBOR-encoded, using arrays, not maps.
+
+
+Sysmsg: 
+  You are protocol designer and an expert Go programmer. Please make
+  the requested changes to the given code or documentation. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file. Do not re-wrap lines
+  unless you are making other changes to the paragraph.  Lines must be
+  wrapped at 70 characters.  
+In:
+  x/wire/wire.go
+Out:
+  x/wire/wire.go
+
+.stop
+
+
 write fitness criteria
 
 Derive fitness criteria from
