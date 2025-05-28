@@ -27,7 +27,12 @@ message to agent2, which should print the message to stdout.  Agent2
 should then send a "hello back" message to agent1, which should also
 print the message to stdout.  
 
-Don't forget to write x/wire/wire.go.
+Fix errors:
+
+# sim1/kernel
+kernel/kernel.go:94:25: not enough arguments in call to cbor.NewEncoder
+	have (net.Conn)
+	want (io.Writer, "github.com/fxamacker/cbor".EncOptions)
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make
@@ -40,11 +45,15 @@ Sysmsg:
   wrapped at 70 characters.  
 In:
   x/wire/wire.go
+  x/sim1/wire/wire.go
   x/sim1/kernel/kernel.go
   x/sim1/agent1/agent1.go
   x/sim1/agent2/agent2.go
 Out:
   x/sim1/wire/wire.go
+  x/sim1/kernel/kernel.go
+  x/sim1/agent1/agent1.go
+  x/sim1/agent2/agent2.go
 
 .stop
 

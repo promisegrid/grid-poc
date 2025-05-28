@@ -9,7 +9,6 @@ import (
 
 	"sim1/wire"
 
-	"github.com/fxamacker/cbor"
 	"github.com/ipfs/go-cid"
 )
 
@@ -61,7 +60,7 @@ func (k *Kernel) handleConnection(conn net.Conn) {
 
 	for {
 		var msg wire.Message
-		dec := cbor.NewDecoder(conn)
+		dec := wire.Dm.NewDecoder(conn)
 		err := dec.Decode(&msg)
 		if err != nil {
 			log.Printf("decode error: %v", err)
@@ -91,7 +90,7 @@ func (k *Kernel) Publish(protocol cid.Cid, msg wire.Message) error {
 	}
 	defer conn.Close()
 
-	enc := cbor.NewEncoder(conn)
+	enc := wire.Em.NewEncoder(conn)
 	return enc.Encode(msg)
 }
 
@@ -113,5 +112,7 @@ func (k *Kernel) SetPeer(addr string) {
 
 func (k *Kernel) Stop() {
 	k.cancel()
-	k.listener.Close()
+	if k.listener != nil {
+		k.listener.Close()
+	}
 }

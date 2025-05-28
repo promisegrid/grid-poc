@@ -17,8 +17,8 @@ var (
 	gridTagNum uint64 = 0x67726964 // 'grid' as 4-byte big-endian integer
 	encOpts    cbor.EncOptions
 	decOpts    cbor.DecOptions
-	em         cbor.EncMode
-	dm         cbor.DecMode
+	Em         cbor.EncMode
+	Dm         cbor.DecMode
 )
 
 func init() {
@@ -27,12 +27,12 @@ func init() {
 	encOpts = cbor.CoreDetEncOptions()
 	decOpts = cbor.DecOptions{}
 
-	em, err = encOpts.EncMode()
+	Em, err = encOpts.EncMode()
 	if err != nil {
 		panic(fmt.Sprintf("failed to create CBOR enc mode: %v", err))
 	}
 
-	dm, err = decOpts.DecMode()
+	Dm, err = decOpts.DecMode()
 	if err != nil {
 		panic(fmt.Sprintf("failed to create CBOR dec mode: %v", err))
 	}
@@ -44,7 +44,7 @@ func NewMessage(cidV1 cid.Cid, payload []byte) ([]byte, error) {
 		Protocol: cidV1.Bytes(),
 		Payload:  payload,
 	}
-	return em.Marshal(msg)
+	return Em.Marshal(msg)
 }
 
 func (m Message) MarshalCBOR() ([]byte, error) {
@@ -52,12 +52,12 @@ func (m Message) MarshalCBOR() ([]byte, error) {
 		Number:  gridTagNum,
 		Content: []interface{}{m.Protocol, m.Payload},
 	}
-	return em.Marshal(tag)
+	return Em.Marshal(tag)
 }
 
 func (m *Message) UnmarshalCBOR(data []byte) error {
 	var tag cbor.Tag
-	if err := dm.Unmarshal(data, &tag); err != nil {
+	if err := Dm.Unmarshal(data, &tag); err != nil {
 		return err
 	}
 

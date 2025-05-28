@@ -1,137 +1,239 @@
 <think>
-Okay, let's break down what the user is asking for. They want a simulation of two PromiseGrid agents communicating over a network using Go. Each agent runs as a separate process, using command-line flags to specify the peer's address. The wire package handles message serialization, and the kernel manages network communication.
+Okay, I need to fix the error in the kernel code where cbor.NewEncoder is called with only a net.Conn, but the cbor package expects an io.Writer and EncOptions. Let me check the cbor documentation.
 
-First, I need to look at the existing wire.go file they provided. The Message struct has Protocol and Payload fields, using CBOR for serialization. The CID package is used for protocol identifiers. The init function sets up CBOR encoding options with Core Deterministic Encoding, which ensures consistent serialization, important for deterministic hashing and network consistency.
+From the search results, I see that fxamacker/cbor's EncMode is used to create encoders. The EncMode's Encoder method takes an io.Writer. So in the kernel's Publish function, instead of using cbor.NewEncoder directly, I should use the EncMode from the wire package. Wait, the wire package initializes em as an EncMode. So maybe the kernel should import the wire package and use wire.em to create the encoder.
 
-The kernel package uses net.Listen and net.Dial for TCP communication. The Kernel struct manages subscriptions with a sync.RWMutex for concurrency. The handleConnection method decodes incoming CBOR messages and routes them to the appropriate handlers based on the protocol CID.
+Looking at the kernel.go code, in handleConnection, they're using cbor.NewDecoder(conn). But the wire package has a dm DecMode. So maybe instead of using the default decoder, they should use wire.dm.NewDecoder(conn).
 
-The agents (agent1 and agent2) use flag to parse command-line arguments for peer address and port. They set up the kernel, subscribe to their respective protocols, and publish messages. Agent1 sends "hello world", and upon receipt, Agent2 responds with "hello back".
+Similarly, in Publish, instead of cbor.NewEncoder(conn), they should use wire.em.NewEncoder(conn). That way, the encoder uses the correct EncOptions from the wire package.
 
-I should check if the wire.go file follows best practices. The use of CoreDetEncOptions from fxamacker/cbor ensures deterministic encoding, which is correct. The CID handling with go-cid is appropriate for content addressing. The CBOR tags are correctly applied to the Message struct, ensuring proper serialization.
+So the error is because the kernel is using the cbor package directly without the EncMode. The fix is to replace cbor.NewEncoder and cbor.NewDecoder with the ones created from the EncMode and DecMode in the wire package.
 
-The kernel's use of separate goroutines for handling connections and the RWMutex for subscriptions is thread-safe. The agents correctly start the kernel with the specified ports and set the peer address. The Subscribe method in the kernel maps protocol CIDs to handler functions, which are triggered when messages arrive.
+Let me modify the handleConnection function in kernel.go to use wire.dm.NewDecoder(conn).Decode(&msg). And in Publish, use wire.em.NewEncoder(conn).Encode(msg).
 
-Testing the setup would involve running each agent with the correct flags. For example, agent1 might listen on port 8080 and connect to agent2 on 8081, and vice versa. The messages should be sent over TCP, serialized with CBOR, and printed upon receipt.
+That should resolve the argument mismatch because the EncMode's NewEncoder only requires an io.Writer, not the options, since the options are already part of the EncMode.
 
-Potential improvements could include handling more complex protocols, adding error recovery, or supporting multiple peers. But for the current requirements, the implementation satisfies the demo scenario.
+Also, check if the kernel is importing the correct cbor package. The import is "github.com/fxamacker/cbor", but maybe it should be "github.com/fxamacker/cbor/v2" to match the wire package. Wait, the wire package uses v2, so the kernel should too. So change the import in kernel.go from "github.com/fxamacker/cbor" to "github.com/fxamacker/cbor/v2".
+
+Wait, the error message in the user's problem shows that the kernel is using cbor.NewEncoder with net.Conn, but the function expects an io.Writer and EncOptions. The correct approach is to use the EncMode from the wire package, which already has the options configured. So in kernel.go, when creating the encoder, use wire.em.NewEncoder(conn) instead of cbor.NewEncoder(conn).
+
+Same for the decoder: in handleConnection, instead of cbor.NewDecoder(conn), use wire.dm.NewDecoder(conn).
+
+That should fix the argument issues. Let me update the kernel.go code accordingly.
+
+Another thing: in the kernel's Publish function, they're creating a new connection each time. That might not be efficient, but for the simulation, it's acceptable. Also, ensure that the encoder is using the correct EncMode from wire.
+
+So the main fixes are:
+
+1. In kernel.go, change cbor imports to v2.
+2. Replace cbor.NewEncoder with wire.em.NewEncoder.
+3. Replace cbor.NewDecoder with wire.dm.NewDecoder.
+
+Also, check if the kernel is correctly importing the wire package. The import path in kernel.go is "sim1/wire", which seems correct.
+
+So applying these changes should resolve the compilation errors.
 </think>
 
-File: /home/stevegt/lab/grid-poc/x/sim1/wire/wire.go
+File: /home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
 ```go
-package wire
+package kernel
 
 import (
+	"context"
 	"fmt"
+	"log"
+	"net"
+	"sync"
+
+	"sim1/wire"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/ipfs/go-cid"
 )
 
-// Message represents a protocol message with protocol CID and payload.
-type Message struct {
-	Protocol []byte
-	Payload  []byte
+type Kernel struct {
+	mu            sync.RWMutex
+	subscriptions map[string]func(wire.Message)
+	listener      net.Listener
+	peerAddr      string
+	ctx           context.Context
+	cancel        context.CancelFunc
 }
 
-var (
-	gridTagNum uint64 = 0x67726964 // 'grid' as 4-byte big-endian integer
-	encOpts    cbor.EncOptions
-	decOpts    cbor.DecOptions
-	em         cbor.EncMode
-	dm         cbor.DecMode
-)
+func NewKernel() *Kernel {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Kernel{
+		subscriptions: make(map[string]func(wire.Message)),
+		ctx:           ctx,
+		cancel:        cancel,
+	}
+}
 
-func init() {
+func (k *Kernel) Start(port int) error {
 	var err error
-	// Use Core Deterministic Encoding for consistent serialization
-	encOpts = cbor.CoreDetEncOptions()
-	decOpts = cbor.DecOptions{}
-
-	em, err = encOpts.EncMode()
+	k.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		panic(fmt.Sprintf("failed to create CBOR enc mode: %v", err))
+		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	dm, err = decOpts.DecMode()
-	if err != nil {
-		panic(fmt.Sprintf("failed to create CBOR dec mode: %v", err))
-	}
-}
-
-// NewMessage creates a new CBOR-encoded message with protocol CID and payload
-func NewMessage(cidV1 cid.Cid, payload []byte) ([]byte, error) {
-	msg := Message{
-		Protocol: cidV1.Bytes(),
-		Payload:  payload,
-	}
-	return em.Marshal(msg)
-}
-
-func (m Message) MarshalCBOR() ([]byte, error) {
-	tag := cbor.Tag{
-		Number:  gridTagNum,
-		Content: []interface{}{m.Protocol, m.Payload},
-	}
-	return em.Marshal(tag)
-}
-
-func (m *Message) UnmarshalCBOR(data []byte) error {
-	var tag cbor.Tag
-	if err := dm.Unmarshal(data, &tag); err != nil {
-		return err
-	}
-
-	if tag.Number != gridTagNum {
-		return fmt.Errorf("invalid grid tag number: %d", tag.Number)
-	}
-
-	parts, ok := tag.Content.([]interface{})
-	if !ok || len(parts) != 2 {
-		return fmt.Errorf("invalid content format, expected 2-element array")
-	}
-
-	// Decode protocol CID
-	switch v := parts[0].(type) {
-	case []byte:
-		m.Protocol = v
-	case nil:
-		m.Protocol = nil
-	default:
-		return fmt.Errorf("protocol field has unexpected type: %T", parts[0])
-	}
-
-	// Decode payload
-	switch v := parts[1].(type) {
-	case []byte:
-		m.Payload = v
-	case nil:
-		m.Payload = nil
-	default:
-		return fmt.Errorf("payload field has unexpected type: %T", parts[1])
-	}
-
+	go func() {
+		for {
+			conn, err := k.listener.Accept()
+			if err != nil {
+				select {
+				case <-k.ctx.Done():
+					return
+				default:
+					log.Printf("accept error: %v", err)
+				}
+				continue
+			}
+			go k.handleConnection(conn)
+		}
+	}()
 	return nil
 }
+
+func (k *Kernel) handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	for {
+		var msg wire.Message
+		dec := wire.dm.NewDecoder(conn)
+		err := dec.Decode(&msg)
+		if err != nil {
+			log.Printf("decode error: %v", err)
+			return
+		}
+
+		protocolCid, err := cid.Cast(msg.Protocol)
+		if err != nil {
+			log.Printf("invalid protocol CID: %v", err)
+			continue
+		}
+
+		k.mu.RLock()
+		handler, exists := k.subscriptions[protocolCid.String()]
+		k.mu.RUnlock()
+
+		if exists {
+			handler(msg)
+		}
+	}
+}
+
+func (k *Kernel) Publish(protocol cid.Cid, msg wire.Message) error {
+	conn, err := net.Dial("tcp", k.peerAddr)
+	if err != nil {
+		return fmt.Errorf("dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	enc := wire.em.NewEncoder(conn)
+	return enc.Encode(msg)
+}
+
+func (k *Kernel) Subscribe(protocol cid.Cid, handler func(wire.Message)) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.subscriptions[protocol.String()] = handler
+}
+
+func (k *Kernel) Unsubscribe(protocol cid.Cid) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.subscriptions, protocol.String())
+}
+
+func (k *Kernel) SetPeer(addr string) {
+	k.peerAddr = addr
+}
+
+func (k *Kernel) Stop() {
+	k.cancel()
+	if k.listener != nil {
+		k.listener.Close()
+	}
+}
 ```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/wire/wire.go
+EOF_/home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
 
 <references>
-[1] https://pkg.go.dev/flag
-[2] https://www.digitalocean.com/community/tutorials/how-to-use-the-flag-package-in-go
-[3] https://www.educative.io/answers/what-is-the-netaccept-function-in-golang
-[4] https://www.educative.io/answers/what-is-the-netdial-function-in-golang
-[5] https://github.com/fxamacker/cbor
-[6] https://github.com/ipfs/go-cid
+[1] https://pkg.go.dev/github.com/fxamacker/cbor/v2
+[2] https://github.com/fxamacker/cbor
+[3] https://github.com/fxamacker/cbor/blob/master/encode.go
+[4] https://github.com/ipfs/go-cid/blob/master/cid.go
+[5] https://www.youtube.com/watch?v=bSMvOkQeOLY
+[6] https://www.educative.io/answers/what-is-the-netdial-function-in-golang
 [7] http://oops.uni-oldenburg.de/1768/1/schsim13.pdf
-[8] https://www.educative.io/answers/what-is-the-netlisten-function-in-go
-[9] https://pkg.go.dev/fmt
-[10] https://dev.to/yokwejuste/how-to-scan-in-golang-5gk0
-[11] https://www.includehelp.com/golang/fmt-scanln-function-with-examples.aspx
-[12] https://dev.meetgor.com/techstructive-blog/golang-input/
-[13] https://golangbot.com/context-timeout-cancellation/
-[14] https://www.santekno.com/en/how-to-create-rw-mutex-and-its-use-in-golang/
-[15] https://developer20.com/go-mod-replace/
-[16] https://pkg.go.dev/github.com/fxamacker/cbor/v2
-[17] https://github.com/fxamacker/cbor/blob/master/encode.go
-[18] https://github.com/DamnWidget/cbor-1
+[8] https://github.com/ipfs/go-cid
+[9] https://pkg.go.dev/github.com/fxamacker/cbor/v2
+[10] https://pkg.go.dev/github.com/fxamacker/cbor
+[11] https://go.libhunt.com/cbor-alternatives
+[12] https://mdpi-res.com/bookfiles/book/5727/Advances_in_Automated_Driving_Systems.pdf?v=1738548281
+[13] https://forum.golangbridge.org/t/cbor-library-in-go-small-fast-reliable-no-crashes-on-malicious-data-api-is-encoding-json-toarray-and-keyasint-struct-tags-fxamacker-cbor-v1-3/15558
+[14] https://www.science.gov/topicpages/s/sims+simulation+sinkhole
+[15] http://oops.uni-oldenburg.de/1768/1/schsim13.pdf
+[16] http://opensimulator.org/git/irc/irc.freenode.net/%23opensim-dev/out
+[17] https://github.com/fxamacker/cbor
+[18] https://pkg.go.dev/github.com/fxamacker/cbor/v2
+[19] https://github.com/DamnWidget/cbor-1
+[20] https://mdpi-res.com/bookfiles/book/5727/Advances_in_Automated_Driving_Systems.pdf?v=1738548281
+[21] https://www.science.gov/topicpages/s/sims+simulation+sinkhole
+[22] http://oops.uni-oldenburg.de/1768/1/schsim13.pdf
+[23] http://opensimulator.org/git/irc/irc.freenode.net/%23opensim-dev/out
+[24] https://github.com/DamnWidget/cbor-1
+[25] https://pkg.go.dev/github.com/fxamacker/cbor/v2
+[26] https://forum.golangbridge.org/t/cbor-library-in-go-small-fast-reliable-no-crashes-on-malicious-data-api-is-encoding-json-toarray-and-keyasint-struct-tags-fxamacker-cbor-v1-3/15558
+[27] https://github.com/fxamacker/cbor
+[28] https://mdpi-res.com/bookfiles/book/5727/Advances_in_Automated_Driving_Systems.pdf?v=1738548281
+[29] https://github.com/fxamacker/cbor/blob/master/encode.go
+[30] https://www.science.gov/topicpages/s/sims+simulation+sinkhole
+[31] http://oops.uni-oldenburg.de/1768/1/schsim13.pdf
+[32] https://withcodeexample.com/go-mod-init-dependency-management-go/
+[33] https://www.youtube.com/watch?v=7jeD7cS7ETg
+[34] https://mdpi-res.com/bookfiles/book/5727/Advances_in_Automated_Driving_Systems.pdf?v=1738548281
+[35] https://www.youtube.com/watch?v=7feel2EWYZI
+[36] https://github.com/golang/go/issues/56018
+[37] https://www.science.gov/topicpages/s/sims+simulation+sinkhole
+[38] https://coffeebytes.dev/en/go-package-import-and-module-management/
+[39] https://wails.io/docs/guides/troubleshooting/
+[40] https://github.com/golang/go/issues/56018
+[41] https://forum.golangbridge.org/t/go-test-results-in-testing-warning-no-tests-to-run/13446
+[42] https://atlasgo.io/blog/2024/09/09/how-go-tests-go-test
+[43] https://go.libhunt.com/cbor-alternatives
+[44] https://mdpi-res.com/bookfiles/book/5727/Advances_in_Automated_Driving_Systems.pdf?v=1738548281
+[45] https://appliedgo.net/testmain/
+[46] https://github.com/fxamacker/cbor
+[47] https://www.science.gov/topicpages/s/sims+simulation+sinkhole
+[48] https://github.com/fxamacker/cbor
+[49] https://pkg.go.dev/github.com/fxamacker/cbor/v2
+[50] https://mdpi-res.com/bookfiles/book/5727/Advances_in_Automated_Driving_Systems.pdf?v=1738548281
+[51] https://www.science.gov/topicpages/s/sims+simulation+sinkhole
+[52] http://oops.uni-oldenburg.de/1768/1/schsim13.pdf
+[53] http://opensimulator.org/git/irc/irc.freenode.net/%23opensim-dev/out
+[54] https://www.tutorialspoint.com/flag-bool-function-in-golang-with-examples
+[55] https://mdpi-res.com/bookfiles/book/5727/Advances_in_Automated_Driving_Systems.pdf?v=1738548281
+[56] https://zetcode.com/golang/flag/
+[57] https://www.science.gov/topicpages/s/sims+simulation+sinkhole
+[58] https://reintech.io/blog/introduction-gos-flag-package-parsing-command-line-flags
+[59] https://pki-electronic.com/wp-content/uploads/2022/04/New-Catalogue-2022.pdf
+[60] https://golang.howtos.io/understanding-the-flag-package-in-go/
+[61] https://www.alexedwards.net/blog/custom-command-line-flags
+[62] https://pkg.go.dev/github.com/fxamacker/cbor/v2
+[63] https://github.com/fxamacker/cbor
+[64] https://pkg.go.dev/github.com/tinygo-pkg/cbor
+[65] https://go.libhunt.com/cbor-alternatives
+[66] https://mdpi-res.com/bookfiles/book/5727/Advances_in_Automated_Driving_Systems.pdf?v=1738548281
+[67] https://www.science.gov/topicpages/s/sims+simulation+sinkhole
+[68] https://pki-electronic.com/wp-content/uploads/2022/04/New-Catalogue-2022.pdf
+[69] http://oops.uni-oldenburg.de/1768/1/schsim13.pdf
+[70] https://pkg.go.dev/github.com/fxamacker/cbor/v2
+[71] https://github.com/fxamacker/cbor
+[72] https://duncanleung.com/go-json-encoding-and-decoding/
+[73] https://mdpi-res.com/bookfiles/book/5727/Advances_in_Automated_Driving_Systems.pdf?v=1738548281
+[74] https://go.libhunt.com/cbor-alternatives
+[75] https://www.science.gov/topicpages/s/sims+simulation+sinkhole
+[76] https://hildjj.github.io/cbor2/
+[77] https://pki-electronic.com/wp-content/uploads/2022/04/New-Catalogue-2022.pdf
 </references>
