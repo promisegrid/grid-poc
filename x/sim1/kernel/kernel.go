@@ -140,7 +140,7 @@ func (k *Kernel) handleConnection(conn net.Conn) {
 	}
 }
 
-func (k *Kernel) Publish(msg wire.Message) error {
+func (k *Kernel) Send(msg wire.Message) error {
 	k.connMu.Lock()
 	defer k.connMu.Unlock()
 
@@ -163,13 +163,13 @@ func (k *Kernel) Publish(msg wire.Message) error {
 	return nil
 }
 
-func (k *Kernel) Subscribe(protocol cid.Cid, handler func(wire.Message)) {
+func (k *Kernel) Register(protocol cid.Cid, handler func(wire.Message)) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.subscriptions[protocol.String()] = handler
 }
 
-func (k *Kernel) Unsubscribe(protocol cid.Cid) {
+func (k *Kernel) Deregister(protocol cid.Cid) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	delete(k.subscriptions, protocol.String())

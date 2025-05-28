@@ -48,7 +48,7 @@ func (a *Agent) Run(ctx context.Context) {
 	}
 
 	// Subscribe to the response protocol to receive replies.
-	a.k.Subscribe(respCid, func(msg wire.Message) {
+	a.k.Register(respCid, func(msg wire.Message) {
 		fmt.Println("Agent1 received:", string(msg.Payload))
 	})
 
@@ -61,7 +61,7 @@ func (a *Agent) Run(ctx context.Context) {
 			fmt.Println("Agent1 stopping...")
 			return
 		case <-ticker.C:
-			err := a.k.Publish(wire.Message{
+			err := a.k.Send(wire.Message{
 				Protocol: reqCid.Bytes(),
 				Payload:  []byte("hello from agent1"),
 			})

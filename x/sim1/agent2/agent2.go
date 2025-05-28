@@ -45,9 +45,9 @@ func (a *Agent) Run(ctx context.Context) {
 	}
 
 	// Subscribe to the request protocol. Upon receiving a message, send a reply.
-	a.k.Subscribe(reqCid, func(msg wire.Message) {
+	a.k.Register(reqCid, func(msg wire.Message) {
 		fmt.Println("Agent2 received:", string(msg.Payload))
-		err := a.k.Publish(wire.Message{
+		err := a.k.Send(wire.Message{
 			Protocol: respCid.Bytes(),
 			Payload:  []byte("hello back from agent2"),
 		})
