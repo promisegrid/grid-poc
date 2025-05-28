@@ -27,12 +27,9 @@ message to agent2, which should print the message to stdout.  Agent2
 should then send a "hello back" message to agent1, which should also
 print the message to stdout.  
 
-Fix errors:
-
-# sim1/kernel
-kernel/kernel.go:94:25: not enough arguments in call to cbor.NewEncoder
-	have (net.Conn)
-	want (io.Writer, "github.com/fxamacker/cbor".EncOptions)
+We want the connection between peers to be persistent, so that
+messages can be sent at any time without having to re-establish the
+TCP connection.  The kernel should handle this automatically.
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make
@@ -44,7 +41,6 @@ Sysmsg:
   unless you are making other changes to the paragraph.  Lines must be
   wrapped at 70 characters.  
 In:
-  x/wire/wire.go
   x/sim1/wire/wire.go
   x/sim1/kernel/kernel.go
   x/sim1/agent1/agent1.go

@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"sim1/wire"
 
@@ -17,6 +18,8 @@ type Kernel struct {
 	subscriptions map[string]func(wire.Message)
 	listener      net.Listener
 	peerAddr      string
+	conn          net.Conn
+	connMu        sync.Mutex
 	ctx           context.Context
 	cancel        context.CancelFunc
 }
@@ -37,22 +40,55 @@ func (k *Kernel) Start(port int) error {
 		return fmt.Errorf("failed to listen: %v", err)
 	}
 
-	go func() {
-		for {
-			conn, err := k.listener.Accept()
-			if err != nil {
-				select {
-				case <-k.ctx.Done():
-					return
-				default:
-					log.Printf("accept error: %v", err)
-				}
+	go k.acceptConnections()
+	go k.maintainOutgoingConnection()
+	return nil
+}
+
+func (k *Kernel) acceptConnections() {
+	for {
+		conn, err := k.listener.Accept()
+		if err != nil {
+			select {
+			case <-k.ctx.Done():
+				return
+			default:
+				log.Printf("accept error: %v", err)
+			}
+			continue
+		}
+		go k.handleConnection(conn)
+	}
+}
+
+func (k *Kernel) maintainOutgoingConnection() {
+	for {
+		select {
+		case <-k.ctx.Done():
+			return
+		default:
+			if k.peerAddr == "" {
+				time.Sleep(1 * time.Second)
 				continue
 			}
-			go k.handleConnection(conn)
+
+			k.connMu.Lock()
+			if k.conn == nil {
+				conn, err := net.Dial("tcp", k.peerAddr)
+				if err != nil {
+					log.Printf("dial error: %v", err)
+					k.connMu.Unlock()
+					time.Sleep(2 * time.Second)
+					continue
+				}
+				k.conn = conn
+				log.Printf("connected to peer %s", k.peerAddr)
+				go k.handleConnection(conn)
+			}
+			k.connMu.Unlock()
+			time.Sleep(5 * time.Second)
 		}
-	}()
-	return nil
+	}
 }
 
 func (k *Kernel) handleConnection(conn net.Conn) {
@@ -84,13 +120,14 @@ func (k *Kernel) handleConnection(conn net.Conn) {
 }
 
 func (k *Kernel) Publish(msg wire.Message) error {
-	conn, err := net.Dial("tcp", k.peerAddr)
-	if err != nil {
-		return fmt.Errorf("dial failed: %v", err)
-	}
-	defer conn.Close()
+	k.connMu.Lock()
+	defer k.connMu.Unlock()
 
-	enc := wire.Em.NewEncoder(conn)
+	if k.conn == nil {
+		return fmt.Errorf("no active connection to peer")
+	}
+
+	enc := wire.Em.NewEncoder(k.conn)
 	return enc.Encode(msg)
 }
 
@@ -112,6 +149,11 @@ func (k *Kernel) SetPeer(addr string) {
 
 func (k *Kernel) Stop() {
 	k.cancel()
+	k.connMu.Lock()
+	if k.conn != nil {
+		k.conn.Close()
+	}
+	k.connMu.Unlock()
 	if k.listener != nil {
 		k.listener.Close()
 	}

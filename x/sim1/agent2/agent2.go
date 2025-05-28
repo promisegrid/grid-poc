@@ -36,15 +36,13 @@ func main() {
 	defer k.Stop()
 
 	// Subscribe to main protocol
+	respCid, _ := cid.Decode("bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu")
 	k.Subscribe(protocolCid, func(msg wire.Message) {
 		fmt.Println("Agent2 received:", string(msg.Payload))
 
-		// Send response
-		respCid, _ := cid.Decode("bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu")
-		payload := []byte("hello back")
 		err := k.Publish(wire.Message{
 			Protocol: respCid.Bytes(),
-			Payload:  payload,
+			Payload:  []byte("hello back"),
 		})
 		if err != nil {
 			log.Print("response send failed:", err)
