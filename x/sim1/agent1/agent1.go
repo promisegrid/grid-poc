@@ -30,7 +30,7 @@ func NewAgent(k *kernel.Kernel) *Agent {
 	}
 }
 
-// Run starts Agent1, subscribing to the hello protocol and sending
+// Run starts Agent1, registering the hello protocol and sending
 // hello messages every second.
 func (a *Agent) Run(ctx context.Context) {
 	helloCid, err := cid.Decode(helloProtocolStr)
@@ -39,7 +39,7 @@ func (a *Agent) Run(ctx context.Context) {
 		return
 	}
 
-	// Subscribe to the hello protocol to receive messages.
+	// Register the hello protocol to receive messages.
 	a.k.Register(helloCid, func(msg wire.Message) {
 		text := string(msg.Payload)
 		// If the message starts with "hello from", reply with a hello

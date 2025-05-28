@@ -8,13 +8,13 @@ import (
 	"os/signal"
 	"syscall"
 
-	"sim1/agent1"
+	"sim1/hello1"
 	"sim1/kernel"
 )
 
 func main() {
-	peer := flag.String("peer", "localhost:7272",
-		"peer address for dialing")
+	peer := flag.String("peer", "localhost:7272", "peer address for dialing")
+	name := flag.String("name", "agent1", "agent name")
 	flag.Parse()
 
 	// Create a kernel instance and configure it for dialing.
@@ -26,11 +26,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create and register Agent1 with the kernel.
-	a := agent1.NewAgent(k)
+	// Create and register a hello1 agent with the kernel using the agent name.
+	a := hello1.NewAgent(k, *name)
 	k.AddAgent(a)
 
-	fmt.Println("Node1 (hosting Agent1) running. Press Ctrl+C to exit...")
+	fmt.Println("Node1 (hosting hello1 agent with name", *name,
+		") running. Press Ctrl+C to exit...")
 	// Create a context to propagate cancellation to agents.
 	ctx, cancel := context.WithCancel(context.Background())
 	go func() {

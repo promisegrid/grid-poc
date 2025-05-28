@@ -1,20 +1,9 @@
-use one pub/sub protocol CID
+consolidate agent* to hello1
 
-We want to simulate a system where the protocol CID refers to a hello
-protocol.  All agents use the same protocol CID for both sending and
-receiving messages.  The protocol CID is used to identify the
-particular variant of pub/sub protocol that we're using.
+Consolidate the agent*.go files into a single hello1.go file.  Pass the
+agent name as an argument to the NewAgent function.  
 
-The hello protocol works like this:
-
-- There are these message types:
-  - "hello from (.*)" 
-  - "hello back from (.*) to (.*)" 
-- every 1 seconds, I send a "hello from <my name>" message
-- if I receive a "hello from" message, I answer with a "hello back
-  from <my name> to <sender name>" message
-
-Make the needed changes to the code to implement this protocol.  
+Make the needed changes to the code.
 
 Update README.md to reflect the new design.
 
@@ -37,12 +26,8 @@ In:
   x/sim1/node1/node1.go
   x/sim1/node2/node2.go
   x/sim1/node3/node3.go
+  x/sim1/hello1/hello1.go
 Out:
-  x/sim1/README.md
-  x/sim1/kernel/kernel.go
-  x/sim1/agent1/agent1.go
-  x/sim1/agent2/agent2.go
-  x/sim1/agent3/agent3.go
   x/sim1/node1/node1.go
   x/sim1/node2/node2.go
   x/sim1/node3/node3.go
