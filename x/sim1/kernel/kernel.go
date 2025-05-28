@@ -94,6 +94,14 @@ func (k *Kernel) maintainOutgoingConnection() {
 func (k *Kernel) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
+	// Set this connection as active
+	k.connMu.Lock()
+	if k.conn != nil {
+		k.conn.Close()
+	}
+	k.conn = conn
+	k.connMu.Unlock()
+
 	for {
 		var msg wire.Message
 		dec := wire.Dm.NewDecoder(conn)

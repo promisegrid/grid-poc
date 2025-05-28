@@ -1,38 +1,9 @@
-write sim1 PromiseGrid simulation
+re-use TCP connection for response
 
-Based roughly on the message format in x/wire/wire.go, write a
-simulation of two promisegrid agents exchanging messages over the
-network.  Each agent should be started by the user in a separate
-process; a command line flag determines what the IP address and port
-number of the other agent are.
-
-Each agent should be a separate Go program that is started with the
-command line flag(s).  The agent imports x/sim1/wire and
-x/sim1/kernel.  
-
-The x/sim1/wire package defines the Message struct and the wire
-protocol for the agents to use.  
-
-The x/sim1/kernel package defines the kernel that the agents use to
-communicate with each other, and handles all network communications
-and message routing. The kernel provides these main functions to the
-agents:
-
-- Subscribe(protocol CID, onMessage func(msg Message))
-- Publish(protocol CID, msg Message)
-- Unsubscribe(protocol CID)
-
-For demonstration purposes, agent1 should send a "hello world"
-message to agent2, which should print the message to stdout.  Agent2
-should then send a "hello back" message to agent1, which should also
-print the message to stdout.  
-
-We want the connection between peers to be persistent, so that
-messages can be sent at any time without having to re-establish the
-TCP connection.  The kernel should handle this automatically.
-
-Write a README.md file in x/sim1 that describes the simulation and how
-it works, including all of the above, and how to run it.  
+- use the TCP connection from agent1 to agent2 for agent2 to send the
+  response back to agent1, instead of having agent2 contact agent1
+  via the TCP connection from agent2 to agent1.  
+- agent1 dials agent2, and agent2 accepts the connection
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make

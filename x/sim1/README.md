@@ -12,7 +12,7 @@ connections and message routing. Key features:
 - Persistent TCP connections with automatic reconnection
 - CID-based protocol subscriptions
 - Asynchronous message handling
-- Bi-directional communication
+- Bi-directional communication over single TCP connection
 
 ## Components
 
@@ -25,7 +25,8 @@ connections and message routing. Key features:
 - Manages network connections
 - Handles message routing to protocol handlers
 - Provides publish/subscribe interface to agents
-- Automatic connection maintenance
+- Single active TCP connection maintained between peers
+- Automatic connection failover and reconnection
 
 ### Agents
 - agent1: Initiates conversation, listens on port 7271
@@ -34,29 +35,25 @@ connections and message routing. Key features:
 ## How It Works
 
 1. Agents start with specified peer addresses and ports
-2. Kernel maintains persistent TCP connection between peers
+2. Kernel maintains single persistent TCP connection between peers
 3. Message flow:
-   - agent1 sends "hello world" every second
-   - agent2 receives message and sends "hello back" response
+   - agent1 sends "hello world" every second via outbound connection
+   - agent2 receives message and sends "hello back" response via same connection
    - Both agents print received messages to stdout
 
 ## Running the Simulation
 
 ### Setup
-1. Build both agents:
+1. In terminal 1 (agent1):
 ```bash
-go build -o agent1 ./agent1
-go build -o agent2 ./agent2
+cd agent1
+go run agent1.go -port 7271 -peer localhost:7272
 ```
 
-2. In terminal 1 (agent1):
+2. In terminal 2 (agent2):
 ```bash
-./agent1 -port 7271 -peer localhost:7272
-```
-
-3. In terminal 2 (agent2):
-```bash
-./agent2 -port 7272 -peer localhost:7271
+cd agent2
+go run agent2.go -port 7272 
 ```
 
 ### Expected Output
