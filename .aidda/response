@@ -1,427 +1,116 @@
 <think>
-Okay, let me try to figure out how to approach this problem. The user wants a simulation of two PromiseGrid agents communicating over a network using Go. Each agent runs as a separate process, and they exchange messages via a custom wire protocol and kernel package.
+Okay, I need to create the README.md file for the sim1 simulation based on the user's instructions. Let me start by understanding what the simulation does.
 
-First, I need to look at the existing wire.go file. It uses CBOR for message serialization, which makes sense because CBOR is efficient and supports structured data. The Message struct has Protocol (as a CID) and Payload. The init function sets up CBOR encoding modes with Core Deterministic Encoding for consistency. The MarshalCBOR and UnmarshalCBOR methods handle tagging, which is important for ensuring messages are correctly identified.
+The user described two agents, agent1 and agent2, which communicate using the PromiseGrid protocol. Each runs as a separate Go program, using the kernel and wire packages. The wire package handles message serialization with CBOR and CIDs, while the kernel manages network connections and message routing.
 
-Next, the kernel package. The Kernel struct manages subscriptions, network connections, and message handling. It uses a sync.RWMutex to protect subscriptions, which is necessary for concurrency. The Start method listens on a TCP port and handles incoming connections. The handleConnection function decodes messages using the wire package's decoder and dispatches them to the appropriate handler based on the protocol CID. The Publish method connects to the peer and sends messages over TCP.
+The README should explain the simulation overview, how it works, and how to run it. Let's break it down.
 
-For the agents, agent1 and agent2 are separate Go programs. They use command-line flags to specify peer addresses and ports. Each agent initializes a kernel, subscribes to a protocol CID, and publishes messages. Agent1 sends "hello world" periodically, and agent2 responds with "hello back".
+First, the overview: I'll mention that it's a demonstration of two agents communicating over TCP using persistent connections. The agents use the kernel for networking and the wire package for messages.
 
-The user specified using persistent TCP connections. The current Publish method in kernel.go dials a new connection each time, which isn't persistent. To fix this, the Kernel should maintain a persistent connection to the peer. I'll need to modify the Kernel struct to include a connection field and a way to manage reconnects if the connection drops. Also, the handleConnection should manage incoming messages on the accepted connection, and the Publish method should reuse an existing connection.
+Next, the components. The wire package defines the Message struct and CBOR serialization. The kernel handles connections, subscriptions, and message routing. The agents use these to send and receive messages.
 
-Another consideration is how the kernel handles multiple connections. Since each agent connects to one peer, maybe each Kernel should have a single outgoing connection and manage incoming ones. However, the current setup might not handle reconnections. The Publish method should check if the connection is alive before sending and reconnect if necessary.
+For the workflow, agent1 sends "hello world" to agent2, which responds with "hello back". The kernel ensures the TCP connection stays open. Each agent subscribes to a specific protocol CID to listen for messages.
 
-The agents use CID strings for protocols. These are hardcoded, which is okay for a demo. The Subscribe method in the kernel maps protocol CIDs to handlers, so when a message arrives, the kernel checks the CID and calls the corresponding handler.
+Setting up the environment requires Go 1.21 or later. I'll list the commands to run the agents in separate terminals, specifying their ports and peer addresses. Then, the expected output should show the messages being received by each agent.
 
-In agent1.go, the main function starts the kernel, subscribes to the response protocol, and sends messages every second. Agent2 subscribes to the main protocol and sends a response when it receives a message. Both agents use fmt.Scanln to wait for user input before exiting, which allows them to run until the user stops them.
+I should also include notes about the protocol CIDs being hardcoded for simplicity and the kernel's role in maintaining the connection. Make sure to mention that pressing enter stops the agents.
 
-Potential issues: The current kernel's Publish method dials a new connection each time, which isn't efficient or persistent. To maintain a persistent connection, the Kernel should have a Conn field that's reused. Also, the kernel should handle both incoming and outgoing connections, maybe using a separate goroutine to manage the outgoing connection and reconnect as needed.
+Let me structure the README with sections: Overview, Components, How It Works, Running the Simulation, and Notes. Use code blocks for commands and outputs. Keep lines wrapped at 70 characters as instructed.
 
-Another point is error handling. If a connection fails, the kernel should attempt to reconnect. The current code logs errors but doesn't retry. Implementing a retry mechanism with backoff could improve reliability.
+Check if all necessary details are covered: separate processes, command-line flags, kernel functions, message flow, and setup steps. Ensure the instructions are clear for someone to follow without prior knowledge.
 
-Testing the code would involve running agent1 and agent2 in separate terminals, specifying each other's addresses. Agent1 should send "hello world", and agent2 should print it and send "hello back", which agent1 then prints.
-
-I should also check if the CBOR encoding and decoding work correctly, especially with the custom tags. The wire package's tests should verify that messages are correctly marshaled and unmarshaled, including handling the grid tag number.
-
-In conclusion, the main changes needed are in the kernel to support persistent connections. The rest of the structure seems to meet the requirements. Adjusting the kernel to maintain and reuse a single connection for publishing, along with handling reconnects, should fulfill the persistent connection requirement.
+Finally, verify that the CIDs in the agent code match the description and that the ports used (7271 and 7272) are correctly noted in the run commands. Also, confirm that the response protocol CID is different from the main one to show bidirectional communication.
 </think>
 
-File: /home/stevegt/lab/grid-poc/x/sim1/wire/wire.go
-```go
-package wire
+File: /home/stevegt/lab/grid-poc/x/sim1/README.md
+```markdown
+# PromiseGrid Simulation (sim1)
 
-import (
-	"fmt"
+A demonstration of two agents communicating via persistent TCP
+connections using the PromiseGrid protocol pattern.
 
-	"github.com/fxamacker/cbor/v2"
-	"github.com/ipfs/go-cid"
-)
+## Overview
 
-// Message represents a protocol message with protocol CID and payload.
-type Message struct {
-	Protocol []byte
-	Payload  []byte
-}
+This simulation shows two Go processes (agent1 and agent2) exchanging
+CBOR-encoded messages through a kernel layer that manages network
+connections and message routing. Key features:
 
-var (
-	gridTagNum uint64 = 0x67726964 // 'grid' as 4-byte big-endian integer
-	encOpts    cbor.EncOptions
-	decOpts    cbor.DecOptions
-	Em         cbor.EncMode
-	Dm         cbor.DecMode
-)
+- Persistent TCP connections with automatic reconnection
+- CID-based protocol subscriptions
+- Asynchronous message handling
+- Bi-directional communication
 
-func init() {
-	var err error
-	encOpts = cbor.CoreDetEncOptions()
-	decOpts = cbor.DecOptions{}
+## Components
 
-	Em, err = encOpts.EncMode()
-	if err != nil {
-		panic(fmt.Sprintf("failed to create CBOR enc mode: %v", err))
-	}
+### wire Package
+- Defines `Message` struct with Protocol CID and Payload
+- CBOR serialization/deserialization with deterministic encoding
+- Custom CBOR tag (0x67726964) for message structure
 
-	Dm, err = decOpts.DecMode()
-	if err != nil {
-		panic(fmt.Sprintf("failed to create CBOR dec mode: %v", err))
-	}
-}
+### kernel Package
+- Manages network connections
+- Handles message routing to protocol handlers
+- Provides publish/subscribe interface to agents
+- Automatic connection maintenance
 
-// NewMessage creates a new CBOR-encoded message with protocol CID and payload
-func NewMessage(cidV1 cid.Cid, payload []byte) ([]byte, error) {
-	msg := Message{
-		Protocol: cidV1.Bytes(),
-		Payload:  payload,
-	}
-	return Em.Marshal(msg)
-}
+### Agents
+- agent1: Initiates conversation, listens on port 7271
+- agent2: Responds to messages, listens on port 7272
 
-func (m Message) MarshalCBOR() ([]byte, error) {
-	tag := cbor.Tag{
-		Number:  gridTagNum,
-		Content: []interface{}{m.Protocol, m.Payload},
-	}
-	return Em.Marshal(tag)
-}
+## How It Works
 
-func (m *Message) UnmarshalCBOR(data []byte) error {
-	var tag cbor.Tag
-	if err := Dm.Unmarshal(data, &tag); err != nil {
-		return err
-	}
+1. Agents start with specified peer addresses and ports
+2. Kernel maintains persistent TCP connection between peers
+3. Message flow:
+   - agent1 sends "hello world" every second
+   - agent2 receives message and sends "hello back" response
+   - Both agents print received messages to stdout
 
-	if tag.Number != gridTagNum {
-		return fmt.Errorf("invalid grid tag number: %d", tag.Number)
-	}
+## Running the Simulation
 
-	parts, ok := tag.Content.([]interface{})
-	if !ok || len(parts) != 2 {
-		return fmt.Errorf("invalid content format, expected 2-element array")
-	}
+### Prerequisites
+- Go 1.21 or later
+- Terminal split into two windows
 
-	switch v := parts[0].(type) {
-	case []byte:
-		m.Protocol = v
-	case nil:
-		m.Protocol = nil
-	default:
-		return fmt.Errorf("protocol field has unexpected type: %T", parts[0])
-	}
-
-	switch v := parts[1].(type) {
-	case []byte:
-		m.Payload = v
-	case nil:
-		m.Payload = nil
-	default:
-		return fmt.Errorf("payload field has unexpected type: %T", parts[1])
-	}
-
-	return nil
-}
+### Setup
+1. Build both agents:
+```bash
+go build -o agent1 ./agent1
+go build -o agent2 ./agent2
 ```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/wire/wire.go
 
-File: /home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
-```go
-package kernel
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"net"
-	"sync"
-	"time"
-
-	"sim1/wire"
-
-	"github.com/ipfs/go-cid"
-)
-
-type Kernel struct {
-	mu            sync.RWMutex
-	subscriptions map[string]func(wire.Message)
-	listener      net.Listener
-	peerAddr      string
-	conn          net.Conn
-	connMu        sync.Mutex
-	ctx           context.Context
-	cancel        context.CancelFunc
-}
-
-func NewKernel() *Kernel {
-	ctx, cancel := context.WithCancel(context.Background())
-	return &Kernel{
-		subscriptions: make(map[string]func(wire.Message)),
-		ctx:           ctx,
-		cancel:        cancel,
-	}
-}
-
-func (k *Kernel) Start(port int) error {
-	var err error
-	k.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
-	}
-
-	go k.acceptConnections()
-	go k.maintainOutgoingConnection()
-	return nil
-}
-
-func (k *Kernel) acceptConnections() {
-	for {
-		conn, err := k.listener.Accept()
-		if err != nil {
-			select {
-			case <-k.ctx.Done():
-				return
-			default:
-				log.Printf("accept error: %v", err)
-			}
-			continue
-		}
-		go k.handleConnection(conn)
-	}
-}
-
-func (k *Kernel) maintainOutgoingConnection() {
-	for {
-		select {
-		case <-k.ctx.Done():
-			return
-		default:
-			if k.peerAddr == "" {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			k.connMu.Lock()
-			if k.conn == nil {
-				conn, err := net.Dial("tcp", k.peerAddr)
-				if err != nil {
-					k.connMu.Unlock()
-					time.Sleep(2 * time.Second)
-					continue
-				}
-				k.conn = conn
-				go k.handleConnection(conn)
-			}
-			k.connMu.Unlock()
-			time.Sleep(5 * time.Second)
-		}
-	}
-}
-
-func (k *Kernel) handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	for {
-		var msg wire.Message
-		dec := wire.Dm.NewDecoder(conn)
-		err := dec.Decode(&msg)
-		if err != nil {
-			log.Printf("decode error: %v", err)
-			return
-		}
-
-		protocolCid, err := cid.Cast(msg.Protocol)
-		if err != nil {
-			log.Printf("invalid protocol CID: %v", err)
-			continue
-		}
-
-		k.mu.RLock()
-		handler, exists := k.subscriptions[protocolCid.String()]
-		k.mu.RUnlock()
-
-		if exists {
-			handler(msg)
-		}
-	}
-}
-
-func (k *Kernel) Publish(msg wire.Message) error {
-	k.connMu.Lock()
-	defer k.connMu.Unlock()
-
-	if k.conn == nil {
-		return fmt.Errorf("no active connection to peer")
-	}
-
-	enc := wire.Em.NewEncoder(k.conn)
-	return enc.Encode(msg)
-}
-
-func (k *Kernel) Subscribe(protocol cid.Cid, handler func(wire.Message)) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	k.subscriptions[protocol.String()] = handler
-}
-
-func (k *Kernel) Unsubscribe(protocol cid.Cid) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	delete(k.subscriptions, protocol.String())
-}
-
-func (k *Kernel) SetPeer(addr string) {
-	k.peerAddr = addr
-}
-
-func (k *Kernel) Stop() {
-	k.cancel()
-	k.connMu.Lock()
-	if k.conn != nil {
-		k.conn.Close()
-	}
-	k.connMu.Unlock()
-	if k.listener != nil {
-		k.listener.Close()
-	}
-}
+2. In terminal 1 (agent1):
+```bash
+./agent1 -port 7271 -peer localhost:7272
 ```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
 
-File: /home/stevegt/lab/grid-poc/x/sim1/agent1/agent1.go
-```go
-package main
-
-import (
-	"flag"
-	"fmt"
-	"log"
-	"os"
-	"time"
-
-	"sim1/kernel"
-	"sim1/wire"
-
-	"github.com/ipfs/go-cid"
-)
-
-var (
-	protocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-	peerAddr    = flag.String("peer", "localhost:7272", "peer address")
-	listenPort  = flag.Int("port", 7271, "listen port")
-)
-
-func main() {
-	flag.Parse()
-
-	protocolCid, err := cid.Decode(protocolStr)
-	if err != nil {
-		log.Fatal("invalid protocol CID:", err)
-	}
-
-	k := kernel.NewKernel()
-	k.SetPeer(*peerAddr)
-
-	err = k.Start(*listenPort)
-	if err != nil {
-		log.Fatal("kernel start failed:", err)
-	}
-	defer k.Stop()
-
-	respCid, _ := cid.Decode("bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu")
-	k.Subscribe(respCid, func(msg wire.Message) {
-		fmt.Println("Agent1 received:", string(msg.Payload))
-	})
-
-	go func() {
-		time.Sleep(1 * time.Second)
-		payload := []byte("hello world")
-		err := k.Publish(wire.Message{
-			Protocol: protocolCid.Bytes(),
-			Payload:  payload,
-		})
-		if err != nil {
-			log.Println("initial publish failed:", err)
-		}
-	}()
-
-	fmt.Fprintln(os.Stderr, "Agent1 running. Press enter to exit...")
-	fmt.Scanln()
-}
+3. In terminal 2 (agent2):
+```bash
+./agent2 -port 7272 -peer localhost:7271
 ```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/agent1/agent1.go
 
-File: /home/stevegt/lab/grid-poc/x/sim1/agent2/agent2.go
-```go
-package main
+### Expected Output
 
-import (
-	"flag"
-	"fmt"
-	"log"
-	"os"
-
-	"sim1/kernel"
-	"sim1/wire"
-
-	"github.com/ipfs/go-cid"
-)
-
-var (
-	protocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-	peerAddr    = flag.String("peer", "localhost:7271", "peer address")
-	listenPort  = flag.Int("port", 7272, "listen port")
-)
-
-func main() {
-	flag.Parse()
-
-	protocolCid, err := cid.Decode(protocolStr)
-	if err != nil {
-		log.Fatal("invalid protocol CID:", err)
-	}
-
-	k := kernel.NewKernel()
-	k.SetPeer(*peerAddr)
-
-	err = k.Start(*listenPort)
-	if err != nil {
-		log.Fatal("kernel start failed:", err)
-	}
-	defer k.Stop()
-
-	respCid, _ := cid.Decode("bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu")
-	k.Subscribe(protocolCid, func(msg wire.Message) {
-		fmt.Println("Agent2 received:", string(msg.Payload))
-		
-		err := k.Publish(wire.Message{
-			Protocol: respCid.Bytes(),
-			Payload:  []byte("hello back"),
-		})
-		if err != nil {
-			log.Print("response send failed:", err)
-		}
-	})
-
-	fmt.Fprintln(os.Stderr, "Agent2 running. Press enter to exit...")
-	fmt.Scanln()
-}
+**agent1:**
 ```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/agent2/agent2.go
+Agent1 running. Press enter to exit...
+Agent1 received: hello back
+```
+
+**agent2:**
+```
+Agent2 running. Press enter to exit...
+Agent2 received: hello world
+```
+
+## Notes
+
+- Protocol CIDs are hardcoded for demonstration:
+  - Main protocol: `bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny`
+  - Response protocol: `bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu`
+- The kernel automatically reconnects if the TCP connection drops
+- Press Enter in either terminal to gracefully shut down the agent
+```
 
 <references>
-[1] https://github.com/fxamacker/cbor
-[2] https://pkg.go.dev/github.com/fxamacker/cbor/v2
-[3] https://go.libhunt.com/cbor-alternatives
-[4] https://groups.google.com/g/golang-nuts/c/TXGRL2nmDxk
-[5] https://github.com/ipfs/go-cid
-[6] https://en.wikipedia.org/wiki/CID_(Indian_TV_series)
-[7] https://www.educative.io/answers/what-is-the-netlisten-function-in-go
-[8] https://github.com/elastic/go-lumber/issues/21
-[9] https://www.kelche.co/blog/go/flag/
-[10] https://www.scaler.com/topics/golang/golang-flag/
-[11] https://gosamples.dev/range-over-ticker/
-[12] https://www.educative.io/answers/what-is-the-scanln-function-in-golang
-[13] https://golangbot.com/context-timeout-cancellation/
-[14] https://victoriametrics.com/blog/go-sync-map/
-[15] https://github.com/golang/go/issues/62254
-[16] https://organicprogrammer.com/2021/10/25/understand-http1-1-persistent-connection-golang/
-[17] https://pkg.go.dev/net
 </references>

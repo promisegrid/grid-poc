@@ -31,6 +31,9 @@ We want the connection between peers to be persistent, so that
 messages can be sent at any time without having to re-establish the
 TCP connection.  The kernel should handle this automatically.
 
+Write a README.md file in x/sim1 that describes the simulation and how
+it works, including all of the above, and how to run it.  
+
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make
   the requested changes to the given code or documentation. Do not
@@ -41,11 +44,13 @@ Sysmsg:
   unless you are making other changes to the paragraph.  Lines must be
   wrapped at 70 characters.  
 In:
+  x/sim1/README.md
   x/sim1/wire/wire.go
   x/sim1/kernel/kernel.go
   x/sim1/agent1/agent1.go
   x/sim1/agent2/agent2.go
 Out:
+  x/sim1/README.md
   x/sim1/wire/wire.go
   x/sim1/kernel/kernel.go
   x/sim1/agent1/agent1.go
