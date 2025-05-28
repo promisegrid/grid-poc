@@ -1,24 +1,22 @@
-have kernel start agents
+use one pub/sub protocol CID
 
-We want to be able to simulate a system for each node that is similar
-to the design of a conventional operating system, where the bootloader
-starts first, which in turn loads the kernel and some init process,
-which in turn starts other processes.  
+We want to simulate a system where the protocol CID refers to a hello
+protocol.  All agents use the same protocol CID for both sending and
+receiving messages.  The protocol CID is used to identify the
+particular variant of pub/sub protocol that we're using.
 
-In our case, we will have a main() function in each node that serves
-the role of the bootloader.  The main() function in the node
-starts the kernel, then passes one or more agents to the kernel.
-The kernel is then responsible for starting and monitoring the agents.
+The hello protocol works like this:
 
-To implement this, make the following changes:
+- There are these message types:
+  - "hello from (.*)" 
+  - "hello back from (.*) to (.*)" 
+- every 1 seconds, I send a "hello from <my name>" message
+- if I receive a "hello from" message, I answer with a "hello back
+  from <my name> to <sender name>" message
 
-- Update README.md to reflect the new design and new starting
-  instructions.
-- Move the kernel start from the agent to the node; i.e. move
-  kernel.Start() from agent*.go to node*.go:main().
-- Add a kernel.AddAgent() method that takes an agent and adds it to the
-  kernel's list of agents.
-- Have the kernel.AddAgent() method start the agent.
+Make the needed changes to the code to implement this protocol.  
+
+Update README.md to reflect the new design.
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make

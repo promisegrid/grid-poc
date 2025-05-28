@@ -16,7 +16,7 @@ The main() function then registers an agent via the kernel.AddAgent() method.
 Key features:
 
 - Persistent TCP connections with automatic reconnection
-- CID-based protocol subscriptions
+- Single protocol CID used for both publishing and subscribing
 - Asynchronous message handling
 - Bi-directional communication over multiple TCP connections maintained in
   a map for dynamic routing
@@ -39,13 +39,20 @@ Key features:
 ### Agents (Library Packages)
 Each agent is implemented as a structure that exposes a Run() method to
 start its internal processing and a Stop() method for graceful shutdown.
-- agent1: Dials its peer (node2) and sends a "hello from agent1"
-  request every second.
-- agent2: Listens for incoming connections on its node, and upon receiving a
-  request from agent1 or agent3, sends a "hello back from agent2" response
-  using the same TCP connection.
-- agent3: Similar to agent1, dials its peer (node2) and sends a "hello from
-  agent3" request every second.
+All agents use the same protocol CID for both sending and receiving messages,
+implementing a simple hello protocol:
+
+- Every 1 second, each agent sends a "hello from <my name>" message.
+- Upon receiving a message beginning with "hello from", an agent extracts the
+  sender name and replies using the same connection with a message formatted as
+  "hello back from <my name> to <sender name>".
+- If a message does not match the "hello from" format (for example, a hello back
+  reply), the message is simply printed to stdout.
+
+- agent1: Dials a peer node and sends hello messages every second.
+- agent2: Listens for incoming connections and sends a reply upon receiving a
+  hello request; it also sends its own hello messages every second.
+- agent3: Similar to agent1, dials its peer and sends hello messages every second.
 
 ### Nodes (Executable Binaries)
 Each node hosts one agent instance. The main() functions now reside in the
@@ -62,15 +69,11 @@ node packages. In each node, the following steps occur:
    connections.
 2. The kernel maintains multiple persistent TCP connections between the nodes.
 3. Message flow:
-   - Agent1 sends a "hello from agent1" request every second via its outbound
-     connection.
-   - Agent3 sends a "hello from agent3" request every second via its outbound
-     connection.
-   - Agent2 receives requests on the accepted TCP connections and sends a
-     "hello back from agent2" response using the same connection that was used
-     to receive the request.
-   - Agents receive responses on the connection they used to send the request
-     and print them to stdout.
+   - Each agent sends a "hello from <agent_name>" message every second via its
+     outbound connection.
+   - Upon receiving a "hello from" message, the agent replies with a message
+     "hello back from <agent_name> to <sender name>" using the same connection.
+   - Agents print to stdout any message that does not trigger a reply.
 
 ## Running the Simulation
 
@@ -98,7 +101,7 @@ go run node3.go -peer localhost:7272
 **Node1 (hosting Agent1):**
 ```
 Node1 (hosting Agent1) running. Press Ctrl+C to exit...
-Agent1 received: hello back from agent2
+Agent1 received: hello back from agentX to agent1
 ```
 
 **Node2 (hosting Agent2):**
@@ -111,16 +114,14 @@ Agent2 received: hello from agent3
 **Node3 (hosting Agent3):**
 ```
 Node3 (hosting Agent3) running. Press Ctrl+C to exit...
-Agent3 received: hello back from agent2
+Agent3 received: hello back from agentX to agent3
 ```
 
 ## Notes
 
-- Protocol CIDs are hardcoded for demonstration:
-  - Request protocol:
+- A single protocol CID is used for the hello pub/sub protocol throughout:
+  - Hello protocol:
     bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny
-  - Response protocol:
-    bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu
 - The kernel automatically reconnects if a TCP connection drops.
 - Agents are started by the kernel after being registered via the
   AddAgent() method.
@@ -272,7 +273,7 @@ func (k *Kernel) handleConnection(conn net.Conn) {
 	}
 }
 
-func (k *Kernel) Publish(msg wire.Message) error {
+func (k *Kernel) Send(msg wire.Message) error {
 	k.connMu.Lock()
 	defer k.connMu.Unlock()
 
@@ -295,13 +296,13 @@ func (k *Kernel) Publish(msg wire.Message) error {
 	return nil
 }
 
-func (k *Kernel) Subscribe(protocol cid.Cid, handler func(wire.Message)) {
+func (k *Kernel) Register(protocol cid.Cid, handler func(wire.Message)) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.subscriptions[protocol.String()] = handler
 }
 
-func (k *Kernel) Unsubscribe(protocol cid.Cid) {
+func (k *Kernel) Deregister(protocol cid.Cid) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	delete(k.subscriptions, protocol.String())
@@ -341,6 +342,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"sim1/kernel"
@@ -349,11 +351,8 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
-// Request protocol used to send messages to agent2.
-var requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-
-// Response protocol expected from agent2.
-var responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
+// Hello protocol used for both sending and receiving messages.
+var helloProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
 
 // Agent represents Agent1.
 type Agent struct {
@@ -369,27 +368,41 @@ func NewAgent(k *kernel.Kernel) *Agent {
 	}
 }
 
-// Run starts Agent1, subscribing to responses and sending requests every
-// second.
+// Run starts Agent1, subscribing to the hello protocol and sending
+// hello messages every second.
 func (a *Agent) Run(ctx context.Context) {
-	respCid, err := cid.Decode(responseProtocolStr)
+	helloCid, err := cid.Decode(helloProtocolStr)
 	if err != nil {
-		log.Printf("Agent1: invalid response protocol CID: %v", err)
+		log.Printf("Agent1: invalid hello protocol CID: %v", err)
 		return
 	}
 
-	reqCid, err := cid.Decode(requestProtocolStr)
-	if err != nil {
-		log.Printf("Agent1: invalid request protocol CID: %v", err)
-		return
-	}
-
-	// Subscribe to the response protocol to receive replies.
-	a.k.Subscribe(respCid, func(msg wire.Message) {
-		fmt.Println("Agent1 received:", string(msg.Payload))
+	// Subscribe to the hello protocol to receive messages.
+	a.k.Register(helloCid, func(msg wire.Message) {
+		text := string(msg.Payload)
+		// If the message starts with "hello from", reply with a hello
+		// back message.
+		if strings.HasPrefix(text, "hello from ") {
+			sender := text[len("hello from "):]
+			// Avoid replying to self.
+			if sender == "agent1" {
+				return
+			}
+			reply := fmt.Sprintf("hello back from agent1 to %s", sender)
+			err := a.k.Send(wire.Message{
+				Protocol: helloCid.Bytes(),
+				Payload:  []byte(reply),
+			})
+			if err != nil {
+				log.Printf("Agent1 response send failed: %v", err)
+			}
+		} else {
+			// Print any non-reply message.
+			fmt.Println("Agent1 received:", text)
+		}
 	})
 
-	// Send messages every second.
+	// Send hello messages every second.
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -398,8 +411,8 @@ func (a *Agent) Run(ctx context.Context) {
 			fmt.Println("Agent1 stopping...")
 			return
 		case <-ticker.C:
-			err := a.k.Publish(wire.Message{
-				Protocol: reqCid.Bytes(),
+			err := a.k.Send(wire.Message{
+				Protocol: helloCid.Bytes(),
 				Payload:  []byte("hello from agent1"),
 			})
 			if err != nil {
@@ -426,6 +439,8 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
+	"time"
 
 	"sim1/kernel"
 	"sim1/wire"
@@ -433,58 +448,80 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
-// Request protocol expected on incoming messages from agent1 and agent3.
-var requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-
-// Response protocol used to reply to agent1 and agent3.
-var responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
+// Hello protocol used for both sending and receiving messages.
+var helloProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
 
 // Agent represents Agent2.
 type Agent struct {
-	k *kernel.Kernel
+	k    *kernel.Kernel
+	done chan struct{}
 }
 
 // NewAgent creates a new instance of Agent2 using the provided kernel.
 func NewAgent(k *kernel.Kernel) *Agent {
 	return &Agent{
-		k: k,
+		k:    k,
+		done: make(chan struct{}),
 	}
 }
 
-// Run starts Agent2, subscribing to incoming requests and replying using the
-// same connection.
+// Run starts Agent2, subscribing to the hello protocol, replying when a
+// "hello from" message is received, and sending its own hello messages every
+// second.
 func (a *Agent) Run(ctx context.Context) {
-	reqCid, err := cid.Decode(requestProtocolStr)
+	helloCid, err := cid.Decode(helloProtocolStr)
 	if err != nil {
-		log.Printf("Agent2: invalid request protocol CID: %v", err)
+		log.Printf("Agent2: invalid hello protocol CID: %v", err)
 		return
 	}
 
-	respCid, err := cid.Decode(responseProtocolStr)
-	if err != nil {
-		log.Printf("Agent2: invalid response protocol CID: %v", err)
-		return
-	}
-
-	// Subscribe to the request protocol. Upon receiving a message, send a reply.
-	a.k.Subscribe(reqCid, func(msg wire.Message) {
-		fmt.Println("Agent2 received:", string(msg.Payload))
-		err := a.k.Publish(wire.Message{
-			Protocol: respCid.Bytes(),
-			Payload:  []byte("hello back from agent2"),
-		})
-		if err != nil {
-			log.Printf("Agent2 response send failed: %v", err)
+	// Subscribe to the hello protocol to process incoming messages.
+	a.k.Register(helloCid, func(msg wire.Message) {
+		text := string(msg.Payload)
+		// If the message starts with "hello from", reply with a hello back message.
+		if strings.HasPrefix(text, "hello from ") {
+			sender := text[len("hello from "):]
+			if sender == "agent2" {
+				return
+			}
+			reply := fmt.Sprintf("hello back from agent2 to %s", sender)
+			err := a.k.Send(wire.Message{
+				Protocol: helloCid.Bytes(),
+				Payload:  []byte(reply),
+			})
+			if err != nil {
+				log.Printf("Agent2 response send failed: %v", err)
+			}
+		} else {
+			fmt.Println("Agent2 received:", text)
 		}
 	})
 
-	// Block until context is cancelled.
-	<-ctx.Done()
+	// Send hello messages every second.
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-a.done:
+			fmt.Println("Agent2 stopping...")
+			return
+		case <-ticker.C:
+			err := a.k.Send(wire.Message{
+				Protocol: helloCid.Bytes(),
+				Payload:  []byte("hello from agent2"),
+			})
+			if err != nil {
+				log.Printf("Agent2 publish failed: %v", err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }
 
-// Stop stops Agent2. No additional cleanup is required.
+// Stop signals Agent2 to stop processing.
 func (a *Agent) Stop() {
-	// No op.
+	close(a.done)
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/agent2/agent2.go
@@ -497,6 +534,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"sim1/kernel"
@@ -505,11 +543,8 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
-// Request protocol used to send messages to agent2.
-var requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-
-// Response protocol expected from agent2.
-var responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
+// Hello protocol used for both sending and receiving messages.
+var helloProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
 
 // Agent represents Agent3.
 type Agent struct {
@@ -525,27 +560,38 @@ func NewAgent(k *kernel.Kernel) *Agent {
 	}
 }
 
-// Run starts Agent3, subscribing to responses and sending requests every
-// second.
+// Run starts Agent3, subscribing to the hello protocol and sending
+// hello messages every second.
 func (a *Agent) Run(ctx context.Context) {
-	respCid, err := cid.Decode(responseProtocolStr)
+	helloCid, err := cid.Decode(helloProtocolStr)
 	if err != nil {
-		log.Printf("Agent3: invalid response protocol CID: %v", err)
+		log.Printf("Agent3: invalid hello protocol CID: %v", err)
 		return
 	}
 
-	reqCid, err := cid.Decode(requestProtocolStr)
-	if err != nil {
-		log.Printf("Agent3: invalid request protocol CID: %v", err)
-		return
-	}
-
-	// Subscribe to the response protocol to receive replies.
-	a.k.Subscribe(respCid, func(msg wire.Message) {
-		fmt.Println("Agent3 received:", string(msg.Payload))
+	// Subscribe to the hello protocol to receive messages.
+	a.k.Register(helloCid, func(msg wire.Message) {
+		text := string(msg.Payload)
+		// If the message starts with "hello from", reply with a hello back message.
+		if strings.HasPrefix(text, "hello from ") {
+			sender := text[len("hello from "):]
+			if sender == "agent3" {
+				return
+			}
+			reply := fmt.Sprintf("hello back from agent3 to %s", sender)
+			err := a.k.Send(wire.Message{
+				Protocol: helloCid.Bytes(),
+				Payload:  []byte(reply),
+			})
+			if err != nil {
+				log.Printf("Agent3 response send failed: %v", err)
+			}
+		} else {
+			fmt.Println("Agent3 received:", text)
+		}
 	})
 
-	// Send messages every second.
+	// Send hello messages every second.
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -554,8 +600,8 @@ func (a *Agent) Run(ctx context.Context) {
 			fmt.Println("Agent3 stopping...")
 			return
 		case <-ticker.C:
-			err := a.k.Publish(wire.Message{
-				Protocol: reqCid.Bytes(),
+			err := a.k.Send(wire.Message{
+				Protocol: helloCid.Bytes(),
 				Payload:  []byte("hello from agent3"),
 			})
 			if err != nil {

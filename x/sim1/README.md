@@ -14,7 +14,7 @@ The main() function then registers an agent via the kernel.AddAgent() method.
 Key features:
 
 - Persistent TCP connections with automatic reconnection
-- CID-based protocol subscriptions
+- Single protocol CID used for both publishing and subscribing
 - Asynchronous message handling
 - Bi-directional communication over multiple TCP connections maintained in
   a map for dynamic routing
@@ -37,13 +37,20 @@ Key features:
 ### Agents (Library Packages)
 Each agent is implemented as a structure that exposes a Run() method to
 start its internal processing and a Stop() method for graceful shutdown.
-- agent1: Dials its peer (node2) and sends a "hello from agent1"
-  request every second.
-- agent2: Listens for incoming connections on its node, and upon receiving a
-  request from agent1 or agent3, sends a "hello back from agent2" response
-  using the same TCP connection.
-- agent3: Similar to agent1, dials its peer (node2) and sends a "hello from
-  agent3" request every second.
+All agents use the same protocol CID for both sending and receiving messages,
+implementing a simple hello protocol:
+
+- Every 1 second, each agent sends a "hello from <my name>" message.
+- Upon receiving a message beginning with "hello from", an agent extracts the
+  sender name and replies using the same connection with a message formatted as
+  "hello back from <my name> to <sender name>".
+- If a message does not match the "hello from" format (for example, a hello back
+  reply), the message is simply printed to stdout.
+
+- agent1: Dials a peer node and sends hello messages every second.
+- agent2: Listens for incoming connections and sends a reply upon receiving a
+  hello request; it also sends its own hello messages every second.
+- agent3: Similar to agent1, dials its peer and sends hello messages every second.
 
 ### Nodes (Executable Binaries)
 Each node hosts one agent instance. The main() functions now reside in the
@@ -60,15 +67,11 @@ node packages. In each node, the following steps occur:
    connections.
 2. The kernel maintains multiple persistent TCP connections between the nodes.
 3. Message flow:
-   - Agent1 sends a "hello from agent1" request every second via its outbound
-     connection.
-   - Agent3 sends a "hello from agent3" request every second via its outbound
-     connection.
-   - Agent2 receives requests on the accepted TCP connections and sends a
-     "hello back from agent2" response using the same connection that was used
-     to receive the request.
-   - Agents receive responses on the connection they used to send the request
-     and print them to stdout.
+   - Each agent sends a "hello from <agent_name>" message every second via its
+     outbound connection.
+   - Upon receiving a "hello from" message, the agent replies with a message
+     "hello back from <agent_name> to <sender name>" using the same connection.
+   - Agents print to stdout any message that does not trigger a reply.
 
 ## Running the Simulation
 
@@ -96,7 +99,7 @@ go run node3.go -peer localhost:7272
 **Node1 (hosting Agent1):**
 ```
 Node1 (hosting Agent1) running. Press Ctrl+C to exit...
-Agent1 received: hello back from agent2
+Agent1 received: hello back from agentX to agent1
 ```
 
 **Node2 (hosting Agent2):**
@@ -109,16 +112,14 @@ Agent2 received: hello from agent3
 **Node3 (hosting Agent3):**
 ```
 Node3 (hosting Agent3) running. Press Ctrl+C to exit...
-Agent3 received: hello back from agent2
+Agent3 received: hello back from agentX to agent3
 ```
 
 ## Notes
 
-- Protocol CIDs are hardcoded for demonstration:
-  - Request protocol:
+- A single protocol CID is used for the hello pub/sub protocol throughout:
+  - Hello protocol:
     bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny
-  - Response protocol:
-    bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu
 - The kernel automatically reconnects if a TCP connection drops.
 - Agents are started by the kernel after being registered via the
   AddAgent() method.
