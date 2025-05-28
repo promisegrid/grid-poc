@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"sim1/kernel"
 	"sim1/wire"
@@ -41,17 +42,33 @@ func main() {
 		fmt.Println("Agent1 received:", string(msg.Payload))
 	})
 
-	// Send initial message
-	payload := []byte("hello world")
+	done := make(chan bool)
 
-	err = k.Publish(wire.Message{
-		Protocol: protocolCid.Bytes(),
-		Payload:  payload,
-	})
-	if err != nil {
-		log.Fatal("publish failed:", err)
-	}
+	go func() {
+		// Send messages
+		payload := []byte("hello world")
+
+		timer := time.NewTicker(1 * time.Second)
+		for {
+			select {
+			case <-done:
+				fmt.Println("Kernel stopped, exiting...")
+				return
+			case <-timer.C:
+				// send a message every second
+				err = k.Publish(wire.Message{
+					Protocol: protocolCid.Bytes(),
+					Payload:  payload,
+				})
+				if err != nil {
+					log.Fatal("publish failed:", err)
+				}
+			}
+		}
+	}()
 
 	fmt.Fprintln(os.Stderr, "Agent1 running. Press enter to exit...")
 	fmt.Scanln()
+	done <- true
+	time.Sleep(2 * time.Second) // Give time for any pending messages to be processed
 }
