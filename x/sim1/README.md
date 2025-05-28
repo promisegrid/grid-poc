@@ -5,16 +5,19 @@ persistent TCP connections using the PromiseGrid protocol pattern.
 
 ## Overview
 
-This simulation shows three Go nodes (node1, node2, and node3) each hosting
-an agent (agent1, agent2, and agent3 respectively) that exchange CBOR-encoded
-messages through a kernel layer that manages network connections and message
-routing. Key features:
+This simulation shows three Go nodes (node1, node2, and node3) each hosting a
+single agent (agent1, agent2, and agent3 respectively). Each node starts a
+kernel that is responsible for managing network connections, routing messages,
+and starting the agents. The kernel is started by the node’s main() function.
+The main() function then registers an agent via the kernel.AddAgent() method.
+
+Key features:
 
 - Persistent TCP connections with automatic reconnection
 - CID-based protocol subscriptions
 - Asynchronous message handling
-- Bi-directional communication over multiple TCP connections maintained
-  in a map for dynamic routing
+- Bi-directional communication over multiple TCP connections maintained in
+  a map for dynamic routing
 
 ## Components
 
@@ -29,27 +32,32 @@ routing. Key features:
 - Provides publish/subscribe interface to agents
 - Multiple active TCP connections maintained between peers
 - Automatic connection failover and reconnection
+- Starts registered agents via the AddAgent() method
 
 ### Agents (Library Packages)
-- agent1: Initiates conversation by dialing peer (node2) and sending a
-  request with the payload "hello from agent1".
-- agent2: Listens for connections from agent1 and agent3 (on node2) and upon
-  receiving a request, sends a response "hello back from agent2" using the same
-  TCP connection.
-- agent3: Also initiates conversation by dialing peer (node2) and sending a
-  request with the payload "hello from agent3".
+Each agent is implemented as a structure that exposes a Run() method to
+start its internal processing and a Stop() method for graceful shutdown.
+- agent1: Dials its peer (node2) and sends a "hello from agent1"
+  request every second.
+- agent2: Listens for incoming connections on its node, and upon receiving a
+  request from agent1 or agent3, sends a "hello back from agent2" response
+  using the same TCP connection.
+- agent3: Similar to agent1, dials its peer (node2) and sends a "hello from
+  agent3" request every second.
 
 ### Nodes (Executable Binaries)
-Each node hosts one agent instance. The main functions now reside in the node
-packages.
-- node1: Hosts agent1. It dials agent2 at the specified peer address.
-- node2: Hosts agent2. It listens on a configurable TCP port.
-- node3: Hosts agent3. It dials agent2 at the specified peer address.
+Each node hosts one agent instance. The main() functions now reside in the
+node packages. In each node, the following steps occur:
+- A kernel instance is created and started.
+- The kernel is configured for dialing or listening.
+- The agent is instantiated and registered with the kernel via
+  kernel.AddAgent(), which in turn starts the agent.
+- Agents run asynchronously and interact via the kernel.
 
 ## How It Works
 
-1. Nodes are started. node1 and node3 will dial node2 while node2 accepts
-   incoming connections.
+1. Nodes are started. Node1 and Node3 dial node2 while node2 accepts incoming
+   connections.
 2. The kernel maintains multiple persistent TCP connections between the nodes.
 3. Message flow:
    - Agent1 sends a "hello from agent1" request every second via its outbound
@@ -112,4 +120,6 @@ Agent3 received: hello back from agent2
   - Response protocol:
     bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu
 - The kernel automatically reconnects if a TCP connection drops.
+- Agents are started by the kernel after being registered via the
+  AddAgent() method.
 - Press Ctrl+C in any terminal to gracefully shut down the node.

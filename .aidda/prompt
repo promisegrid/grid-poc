@@ -1,12 +1,24 @@
-move main functions from agents to nodes
+have kernel start agents
 
-We want to be able to simulate multipe nodes, each of which might be
-hosting one or more agents.  Make the following changes:
+We want to be able to simulate a system for each node that is similar
+to the design of a conventional operating system, where the bootloader
+starts first, which in turn loads the kernel and some init process,
+which in turn starts other processes.  
+
+In our case, we will have a main() function in each node that serves
+the role of the bootloader.  The main() function in the node
+starts the kernel, then passes one or more agents to the kernel.
+The kernel is then responsible for starting and monitoring the agents.
+
+To implement this, make the following changes:
 
 - Update README.md to reflect the new design and new starting
   instructions.
-- Move the main() functions from the agents to the nodes; i.e. move
-  main() from agent*.go to node*.go
+- Move the kernel start from the agent to the node; i.e. move
+  kernel.Start() from agent*.go to node*.go:main().
+- Add a kernel.AddAgent() method that takes an agent and adds it to the
+  kernel's list of agents.
+- Have the kernel.AddAgent() method start the agent.
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make
@@ -24,8 +36,12 @@ In:
   x/sim1/agent1/agent1.go
   x/sim1/agent2/agent2.go
   x/sim1/agent3/agent3.go
+  x/sim1/node1/node1.go
+  x/sim1/node2/node2.go
+  x/sim1/node3/node3.go
 Out:
   x/sim1/README.md
+  x/sim1/kernel/kernel.go
   x/sim1/agent1/agent1.go
   x/sim1/agent2/agent2.go
   x/sim1/agent3/agent3.go

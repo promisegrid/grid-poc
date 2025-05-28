@@ -1,6 +1,7 @@
 package agent3
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -17,62 +18,63 @@ var requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a
 // Response protocol expected from agent2.
 var responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
 
-// Start initializes Agent3 with the given peer address and begins sending
-// messages every second. It returns a stop function to gracefully shut down the
-// agent.
-func Start(peer string) (func(), error) {
-	reqCid, err := cid.Decode(requestProtocolStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid request protocol CID: %v", err)
-	}
+// Agent represents Agent3.
+type Agent struct {
+	k    *kernel.Kernel
+	done chan struct{}
+}
 
+// NewAgent creates a new instance of Agent3 using the provided kernel.
+func NewAgent(k *kernel.Kernel) *Agent {
+	return &Agent{
+		k:    k,
+		done: make(chan struct{}),
+	}
+}
+
+// Run starts Agent3, subscribing to responses and sending requests every
+// second.
+func (a *Agent) Run(ctx context.Context) {
 	respCid, err := cid.Decode(responseProtocolStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid response protocol CID: %v", err)
+		log.Printf("Agent3: invalid response protocol CID: %v", err)
+		return
 	}
 
-	k := kernel.NewKernel()
-	k.SetPeer(peer)
-
-	err = k.Start(0)
+	reqCid, err := cid.Decode(requestProtocolStr)
 	if err != nil {
-		return nil, fmt.Errorf("kernel start failed: %v", err)
+		log.Printf("Agent3: invalid request protocol CID: %v", err)
+		return
 	}
 
-	// Subscribe to response protocol to receive replies.
-	k.Subscribe(respCid, func(msg wire.Message) {
+	// Subscribe to the response protocol to receive replies.
+	a.k.Subscribe(respCid, func(msg wire.Message) {
 		fmt.Println("Agent3 received:", string(msg.Payload))
 	})
 
-	done := make(chan struct{})
-
-	go func() {
-		// Send messages every second.
-		payload := []byte("hello from agent3")
-		timer := time.NewTicker(1 * time.Second)
-		defer timer.Stop()
-		for {
-			select {
-			case <-done:
-				fmt.Println("Agent3 stopping...")
-				return
-			case <-timer.C:
-				err = k.Publish(wire.Message{
-					Protocol: reqCid.Bytes(),
-					Payload:  payload,
-				})
-				if err != nil {
-					log.Printf("Agent3 publish failed: %v", err)
-				}
+	// Send messages every second.
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-a.done:
+			fmt.Println("Agent3 stopping...")
+			return
+		case <-ticker.C:
+			err := a.k.Publish(wire.Message{
+				Protocol: reqCid.Bytes(),
+				Payload:  []byte("hello from agent3"),
+			})
+			if err != nil {
+				log.Printf("Agent3 publish failed: %v", err)
 			}
+		case <-ctx.Done():
+			return
 		}
-	}()
-
-	stop := func() {
-		close(done)
-		time.Sleep(2 * time.Second)
-		k.Stop()
 	}
+}
 
-	return stop, nil
+// Stop signals Agent3 to stop processing.
+func (a *Agent) Stop() {
+	close(a.done)
 }

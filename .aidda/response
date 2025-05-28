@@ -7,16 +7,19 @@ persistent TCP connections using the PromiseGrid protocol pattern.
 
 ## Overview
 
-This simulation shows three Go nodes (node1, node2, and node3) each hosting
-an agent (agent1, agent2, and agent3 respectively) that exchange CBOR-encoded
-messages through a kernel layer that manages network connections and message
-routing. Key features:
+This simulation shows three Go nodes (node1, node2, and node3) each hosting a
+single agent (agent1, agent2, and agent3 respectively). Each node starts a
+kernel that is responsible for managing network connections, routing messages,
+and starting the agents. The kernel is started by the node’s main() function.
+The main() function then registers an agent via the kernel.AddAgent() method.
+
+Key features:
 
 - Persistent TCP connections with automatic reconnection
 - CID-based protocol subscriptions
 - Asynchronous message handling
-- Bi-directional communication over multiple TCP connections maintained
-  in a map for dynamic routing
+- Bi-directional communication over multiple TCP connections maintained in
+  a map for dynamic routing
 
 ## Components
 
@@ -31,27 +34,32 @@ routing. Key features:
 - Provides publish/subscribe interface to agents
 - Multiple active TCP connections maintained between peers
 - Automatic connection failover and reconnection
+- Starts registered agents via the AddAgent() method
 
 ### Agents (Library Packages)
-- agent1: Initiates conversation by dialing peer (node2) and sending a
-  request with the payload "hello from agent1".
-- agent2: Listens for connections from agent1 and agent3 (on node2) and upon
-  receiving a request, sends a response "hello back from agent2" using the same
-  TCP connection.
-- agent3: Also initiates conversation by dialing peer (node2) and sending a
-  request with the payload "hello from agent3".
+Each agent is implemented as a structure that exposes a Run() method to
+start its internal processing and a Stop() method for graceful shutdown.
+- agent1: Dials its peer (node2) and sends a "hello from agent1"
+  request every second.
+- agent2: Listens for incoming connections on its node, and upon receiving a
+  request from agent1 or agent3, sends a "hello back from agent2" response
+  using the same TCP connection.
+- agent3: Similar to agent1, dials its peer (node2) and sends a "hello from
+  agent3" request every second.
 
 ### Nodes (Executable Binaries)
-Each node hosts one agent instance. The main functions now reside in the node
-packages.
-- node1: Hosts agent1. It dials agent2 at the specified peer address.
-- node2: Hosts agent2. It listens on a configurable TCP port.
-- node3: Hosts agent3. It dials agent2 at the specified peer address.
+Each node hosts one agent instance. The main() functions now reside in the
+node packages. In each node, the following steps occur:
+- A kernel instance is created and started.
+- The kernel is configured for dialing or listening.
+- The agent is instantiated and registered with the kernel via
+  kernel.AddAgent(), which in turn starts the agent.
+- Agents run asynchronously and interact via the kernel.
 
 ## How It Works
 
-1. Nodes are started. node1 and node3 will dial node2 while node2 accepts
-   incoming connections.
+1. Nodes are started. Node1 and Node3 dial node2 while node2 accepts incoming
+   connections.
 2. The kernel maintains multiple persistent TCP connections between the nodes.
 3. Message flow:
    - Agent1 sends a "hello from agent1" request every second via its outbound
@@ -114,15 +122,223 @@ Agent3 received: hello back from agent2
   - Response protocol:
     bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu
 - The kernel automatically reconnects if a TCP connection drops.
+- Agents are started by the kernel after being registered via the
+  AddAgent() method.
 - Press Ctrl+C in any terminal to gracefully shut down the node.
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/README.md
+
+File: /home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
+```go
+package kernel
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net"
+	"sync"
+	"time"
+
+	"sim1/wire"
+
+	"github.com/ipfs/go-cid"
+)
+
+// Agent defines the interface that each agent must implement.
+type Agent interface {
+	Run(context.Context)
+	Stop()
+}
+
+type Kernel struct {
+	mu            sync.RWMutex
+	subscriptions map[string]func(wire.Message)
+	listener      net.Listener
+	peerAddr      string
+	conns         map[string]net.Conn
+	connMu        sync.Mutex
+	ctx           context.Context
+	cancel        context.CancelFunc
+	agents        []Agent
+}
+
+func NewKernel() *Kernel {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Kernel{
+		subscriptions: make(map[string]func(wire.Message)),
+		conns:         make(map[string]net.Conn),
+		ctx:           ctx,
+		cancel:        cancel,
+	}
+}
+
+func (k *Kernel) Start(port int) error {
+	var err error
+	if port > 0 {
+		k.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			return fmt.Errorf("failed to listen: %v", err)
+		}
+		log.Printf("listening on port %d", port)
+		go k.acceptConnections()
+	} else {
+		log.Println("not listening for incoming connections")
+		go k.maintainOutgoingConnection()
+	}
+	return nil
+}
+
+func (k *Kernel) acceptConnections() {
+	for {
+		conn, err := k.listener.Accept()
+		if err != nil {
+			select {
+			case <-k.ctx.Done():
+				return
+			default:
+				log.Printf("accept error: %v", err)
+			}
+			continue
+		}
+		log.Printf("accepted connection from %s", conn.RemoteAddr())
+		k.connMu.Lock()
+		k.conns[conn.RemoteAddr().String()] = conn
+		k.connMu.Unlock()
+		go k.handleConnection(conn)
+	}
+}
+
+func (k *Kernel) maintainOutgoingConnection() {
+	for {
+		select {
+		case <-k.ctx.Done():
+			return
+		default:
+			if k.peerAddr == "" {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			k.connMu.Lock()
+			_, exists := k.conns[k.peerAddr]
+			k.connMu.Unlock()
+			if !exists {
+				conn, err := net.Dial("tcp", k.peerAddr)
+				if err != nil {
+					log.Printf("dial error: %v", err)
+					time.Sleep(2 * time.Second)
+					continue
+				}
+				k.connMu.Lock()
+				k.conns[k.peerAddr] = conn
+				k.connMu.Unlock()
+				log.Printf("connected to peer %s", k.peerAddr)
+				go k.handleConnection(conn)
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+func (k *Kernel) handleConnection(conn net.Conn) {
+	defer func() {
+		conn.Close()
+		k.connMu.Lock()
+		delete(k.conns, conn.RemoteAddr().String())
+		k.connMu.Unlock()
+	}()
+	dec := wire.Dm.NewDecoder(conn)
+	for {
+		var msg wire.Message
+		err := dec.Decode(&msg)
+		if err != nil {
+			log.Printf("decode error from %s: %v", conn.RemoteAddr(), err)
+			return
+		}
+
+		protocolCid, err := cid.Cast(msg.Protocol)
+		if err != nil {
+			log.Printf("invalid protocol CID: %v", err)
+			continue
+		}
+
+		k.mu.RLock()
+		handler, exists := k.subscriptions[protocolCid.String()]
+		k.mu.RUnlock()
+
+		if exists {
+			handler(msg)
+		}
+	}
+}
+
+func (k *Kernel) Publish(msg wire.Message) error {
+	k.connMu.Lock()
+	defer k.connMu.Unlock()
+
+	var firstErr error
+	for addr, conn := range k.conns {
+		enc := wire.Em.NewEncoder(conn)
+		err := enc.Encode(msg)
+		if err != nil {
+			log.Printf("encode error on conn %s: %v", addr, err)
+			conn.Close()
+			delete(k.conns, addr)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("failed to encode message on %s: %v", addr, err)
+			}
+		}
+	}
+	if firstErr != nil {
+		return firstErr
+	}
+	return nil
+}
+
+func (k *Kernel) Subscribe(protocol cid.Cid, handler func(wire.Message)) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.subscriptions[protocol.String()] = handler
+}
+
+func (k *Kernel) Unsubscribe(protocol cid.Cid) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.subscriptions, protocol.String())
+}
+
+func (k *Kernel) SetPeer(addr string) {
+	k.peerAddr = addr
+}
+
+func (k *Kernel) AddAgent(a Agent) {
+	k.mu.Lock()
+	k.agents = append(k.agents, a)
+	k.mu.Unlock()
+	go a.Run(k.ctx)
+}
+
+func (k *Kernel) Stop() {
+	k.cancel()
+	k.connMu.Lock()
+	for addr, conn := range k.conns {
+		conn.Close()
+		delete(k.conns, addr)
+	}
+	k.connMu.Unlock()
+	if k.listener != nil {
+		k.listener.Close()
+	}
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
 
 File: /home/stevegt/lab/grid-poc/x/sim1/agent1/agent1.go
 ```go
 package agent1
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -139,64 +355,65 @@ var requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a
 // Response protocol expected from agent2.
 var responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
 
-// Start initializes Agent1 with the given peer address and begins sending
-// messages every second. It returns a stop function to gracefully shut down the
-// agent.
-func Start(peer string) (func(), error) {
-	reqCid, err := cid.Decode(requestProtocolStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid request protocol CID: %v", err)
-	}
+// Agent represents Agent1.
+type Agent struct {
+	k    *kernel.Kernel
+	done chan struct{}
+}
 
+// NewAgent creates a new instance of Agent1 using the provided kernel.
+func NewAgent(k *kernel.Kernel) *Agent {
+	return &Agent{
+		k:    k,
+		done: make(chan struct{}),
+	}
+}
+
+// Run starts Agent1, subscribing to responses and sending requests every
+// second.
+func (a *Agent) Run(ctx context.Context) {
 	respCid, err := cid.Decode(responseProtocolStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid response protocol CID: %v", err)
+		log.Printf("Agent1: invalid response protocol CID: %v", err)
+		return
 	}
 
-	k := kernel.NewKernel()
-	k.SetPeer(peer)
-
-	err = k.Start(0)
+	reqCid, err := cid.Decode(requestProtocolStr)
 	if err != nil {
-		return nil, fmt.Errorf("kernel start failed: %v", err)
+		log.Printf("Agent1: invalid request protocol CID: %v", err)
+		return
 	}
 
-	// Subscribe to response protocol to receive replies.
-	k.Subscribe(respCid, func(msg wire.Message) {
+	// Subscribe to the response protocol to receive replies.
+	a.k.Subscribe(respCid, func(msg wire.Message) {
 		fmt.Println("Agent1 received:", string(msg.Payload))
 	})
 
-	done := make(chan struct{})
-
-	go func() {
-		// Send messages every second.
-		payload := []byte("hello from agent1")
-		timer := time.NewTicker(1 * time.Second)
-		defer timer.Stop()
-		for {
-			select {
-			case <-done:
-				fmt.Println("Agent1 stopping...")
-				return
-			case <-timer.C:
-				err = k.Publish(wire.Message{
-					Protocol: reqCid.Bytes(),
-					Payload:  payload,
-				})
-				if err != nil {
-					log.Printf("Agent1 publish failed: %v", err)
-				}
+	// Send messages every second.
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-a.done:
+			fmt.Println("Agent1 stopping...")
+			return
+		case <-ticker.C:
+			err := a.k.Publish(wire.Message{
+				Protocol: reqCid.Bytes(),
+				Payload:  []byte("hello from agent1"),
+			})
+			if err != nil {
+				log.Printf("Agent1 publish failed: %v", err)
 			}
+		case <-ctx.Done():
+			return
 		}
-	}()
-
-	stop := func() {
-		close(done)
-		time.Sleep(2 * time.Second)
-		k.Stop()
 	}
+}
 
-	return stop, nil
+// Stop signals Agent1 to stop processing.
+func (a *Agent) Stop() {
+	close(a.done)
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/agent1/agent1.go
@@ -206,6 +423,7 @@ File: /home/stevegt/lab/grid-poc/x/sim1/agent2/agent2.go
 package agent2
 
 import (
+	"context"
 	"fmt"
 	"log"
 
@@ -221,31 +439,37 @@ var requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a
 // Response protocol used to reply to agent1 and agent3.
 var responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
 
-// Start initializes Agent2 to listen on the given port. It returns a stop
-// function to gracefully shut down the agent.
-func Start(port int) (func(), error) {
+// Agent represents Agent2.
+type Agent struct {
+	k *kernel.Kernel
+}
+
+// NewAgent creates a new instance of Agent2 using the provided kernel.
+func NewAgent(k *kernel.Kernel) *Agent {
+	return &Agent{
+		k: k,
+	}
+}
+
+// Run starts Agent2, subscribing to incoming requests and replying using the
+// same connection.
+func (a *Agent) Run(ctx context.Context) {
 	reqCid, err := cid.Decode(requestProtocolStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid request protocol CID: %v", err)
+		log.Printf("Agent2: invalid request protocol CID: %v", err)
+		return
 	}
 
 	respCid, err := cid.Decode(responseProtocolStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid response protocol CID: %v", err)
+		log.Printf("Agent2: invalid response protocol CID: %v", err)
+		return
 	}
 
-	k := kernel.NewKernel()
-
-	err = k.Start(port)
-	if err != nil {
-		return nil, fmt.Errorf("kernel start failed: %v", err)
-	}
-
-	// Subscribe to the request protocol. Upon receiving a message, send a reply
-	// using the same TCP connection.
-	k.Subscribe(reqCid, func(msg wire.Message) {
+	// Subscribe to the request protocol. Upon receiving a message, send a reply.
+	a.k.Subscribe(reqCid, func(msg wire.Message) {
 		fmt.Println("Agent2 received:", string(msg.Payload))
-		err := k.Publish(wire.Message{
+		err := a.k.Publish(wire.Message{
 			Protocol: respCid.Bytes(),
 			Payload:  []byte("hello back from agent2"),
 		})
@@ -254,11 +478,13 @@ func Start(port int) (func(), error) {
 		}
 	})
 
-	stop := func() {
-		k.Stop()
-	}
+	// Block until context is cancelled.
+	<-ctx.Done()
+}
 
-	return stop, nil
+// Stop stops Agent2. No additional cleanup is required.
+func (a *Agent) Stop() {
+	// No op.
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/agent2/agent2.go
@@ -268,6 +494,7 @@ File: /home/stevegt/lab/grid-poc/x/sim1/agent3/agent3.go
 package agent3
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -284,64 +511,65 @@ var requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a
 // Response protocol expected from agent2.
 var responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
 
-// Start initializes Agent3 with the given peer address and begins sending
-// messages every second. It returns a stop function to gracefully shut down the
-// agent.
-func Start(peer string) (func(), error) {
-	reqCid, err := cid.Decode(requestProtocolStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid request protocol CID: %v", err)
-	}
+// Agent represents Agent3.
+type Agent struct {
+	k    *kernel.Kernel
+	done chan struct{}
+}
 
+// NewAgent creates a new instance of Agent3 using the provided kernel.
+func NewAgent(k *kernel.Kernel) *Agent {
+	return &Agent{
+		k:    k,
+		done: make(chan struct{}),
+	}
+}
+
+// Run starts Agent3, subscribing to responses and sending requests every
+// second.
+func (a *Agent) Run(ctx context.Context) {
 	respCid, err := cid.Decode(responseProtocolStr)
 	if err != nil {
-		return nil, fmt.Errorf("invalid response protocol CID: %v", err)
+		log.Printf("Agent3: invalid response protocol CID: %v", err)
+		return
 	}
 
-	k := kernel.NewKernel()
-	k.SetPeer(peer)
-
-	err = k.Start(0)
+	reqCid, err := cid.Decode(requestProtocolStr)
 	if err != nil {
-		return nil, fmt.Errorf("kernel start failed: %v", err)
+		log.Printf("Agent3: invalid request protocol CID: %v", err)
+		return
 	}
 
-	// Subscribe to response protocol to receive replies.
-	k.Subscribe(respCid, func(msg wire.Message) {
+	// Subscribe to the response protocol to receive replies.
+	a.k.Subscribe(respCid, func(msg wire.Message) {
 		fmt.Println("Agent3 received:", string(msg.Payload))
 	})
 
-	done := make(chan struct{})
-
-	go func() {
-		// Send messages every second.
-		payload := []byte("hello from agent3")
-		timer := time.NewTicker(1 * time.Second)
-		defer timer.Stop()
-		for {
-			select {
-			case <-done:
-				fmt.Println("Agent3 stopping...")
-				return
-			case <-timer.C:
-				err = k.Publish(wire.Message{
-					Protocol: reqCid.Bytes(),
-					Payload:  payload,
-				})
-				if err != nil {
-					log.Printf("Agent3 publish failed: %v", err)
-				}
+	// Send messages every second.
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-a.done:
+			fmt.Println("Agent3 stopping...")
+			return
+		case <-ticker.C:
+			err := a.k.Publish(wire.Message{
+				Protocol: reqCid.Bytes(),
+				Payload:  []byte("hello from agent3"),
+			})
+			if err != nil {
+				log.Printf("Agent3 publish failed: %v", err)
 			}
+		case <-ctx.Done():
+			return
 		}
-	}()
-
-	stop := func() {
-		close(done)
-		time.Sleep(2 * time.Second)
-		k.Stop()
 	}
+}
 
-	return stop, nil
+// Stop signals Agent3 to stop processing.
+func (a *Agent) Stop() {
+	close(a.done)
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/agent3/agent3.go
@@ -351,6 +579,7 @@ File: /home/stevegt/lab/grid-poc/x/sim1/node1/node1.go
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -358,24 +587,40 @@ import (
 	"syscall"
 
 	"sim1/agent1"
+	"sim1/kernel"
 )
 
 func main() {
-	peer := flag.String("peer", "localhost:7272", "peer address for dialing")
+	peer := flag.String("peer", "localhost:7272",
+		"peer address for dialing")
 	flag.Parse()
 
-	stop, err := agent1.Start(*peer)
+	// Create a kernel instance and configure it for dialing.
+	k := kernel.NewKernel()
+	k.SetPeer(*peer)
+	err := k.Start(0)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error starting Agent1:", err)
+		fmt.Fprintln(os.Stderr, "Kernel start failed:", err)
 		os.Exit(1)
 	}
 
+	// Create and register Agent1 with the kernel.
+	a := agent1.NewAgent(k)
+	k.AddAgent(a)
+
 	fmt.Println("Node1 (hosting Agent1) running. Press Ctrl+C to exit...")
+	// Create a context to propagate cancellation to agents.
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-ctx.Done()
+	}()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
-	stop()
+	a.Stop()
+	cancel()
+	k.Stop()
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/node1/node1.go
@@ -385,6 +630,7 @@ File: /home/stevegt/lab/grid-poc/x/sim1/node2/node2.go
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -392,24 +638,37 @@ import (
 	"syscall"
 
 	"sim1/agent2"
+	"sim1/kernel"
 )
 
 func main() {
 	port := flag.Int("port", 7272, "listen port for node2")
 	flag.Parse()
 
-	stop, err := agent2.Start(*port)
+	// Create a kernel instance and start listening on the specified port.
+	k := kernel.NewKernel()
+	err := k.Start(*port)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error starting Agent2:", err)
+		fmt.Fprintln(os.Stderr, "Kernel start failed:", err)
 		os.Exit(1)
 	}
 
+	// Create and register Agent2 with the kernel.
+	a := agent2.NewAgent(k)
+	k.AddAgent(a)
+
 	fmt.Println("Node2 (hosting Agent2) running. Press Ctrl+C to exit...")
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-ctx.Done()
+	}()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
-	stop()
+	a.Stop()
+	cancel()
+	k.Stop()
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/node2/node2.go
@@ -419,6 +678,7 @@ File: /home/stevegt/lab/grid-poc/x/sim1/node3/node3.go
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -426,24 +686,39 @@ import (
 	"syscall"
 
 	"sim1/agent3"
+	"sim1/kernel"
 )
 
 func main() {
-	peer := flag.String("peer", "localhost:7272", "peer address for dialing")
+	peer := flag.String("peer", "localhost:7272",
+		"peer address for dialing")
 	flag.Parse()
 
-	stop, err := agent3.Start(*peer)
+	// Create a kernel instance and configure it for dialing.
+	k := kernel.NewKernel()
+	k.SetPeer(*peer)
+	err := k.Start(0)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Error starting Agent3:", err)
+		fmt.Fprintln(os.Stderr, "Kernel start failed:", err)
 		os.Exit(1)
 	}
 
+	// Create and register Agent3 with the kernel.
+	a := agent3.NewAgent(k)
+	k.AddAgent(a)
+
 	fmt.Println("Node3 (hosting Agent3) running. Press Ctrl+C to exit...")
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-ctx.Done()
+	}()
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 	<-sig
 
-	stop()
+	a.Stop()
+	cancel()
+	k.Stop()
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/node3/node3.go

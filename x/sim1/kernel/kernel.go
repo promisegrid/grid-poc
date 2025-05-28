@@ -13,6 +13,12 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
+// Agent defines the interface that each agent must implement.
+type Agent interface {
+	Run(context.Context)
+	Stop()
+}
+
 type Kernel struct {
 	mu            sync.RWMutex
 	subscriptions map[string]func(wire.Message)
@@ -22,6 +28,7 @@ type Kernel struct {
 	connMu        sync.Mutex
 	ctx           context.Context
 	cancel        context.CancelFunc
+	agents        []Agent
 }
 
 func NewKernel() *Kernel {
@@ -170,6 +177,13 @@ func (k *Kernel) Unsubscribe(protocol cid.Cid) {
 
 func (k *Kernel) SetPeer(addr string) {
 	k.peerAddr = addr
+}
+
+func (k *Kernel) AddAgent(a Agent) {
+	k.mu.Lock()
+	k.agents = append(k.agents, a)
+	k.mu.Unlock()
+	go a.Run(k.ctx)
 }
 
 func (k *Kernel) Stop() {
