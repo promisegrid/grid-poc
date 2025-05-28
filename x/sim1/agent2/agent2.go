@@ -1,10 +1,8 @@
-package main
+package agent2
 
 import (
-	"flag"
 	"fmt"
 	"log"
-	"os"
 
 	"sim1/kernel"
 	"sim1/wire"
@@ -12,49 +10,48 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
-var (
-	// Request protocol expected on incoming messages from agent1 and agent3.
-	requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-	// Response protocol used to reply to agent1 and agent3.
-	responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
-	listenPort          = flag.Int("port", 7272, "listen port")
-)
+// Request protocol expected on incoming messages from agent1 and agent3.
+var requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
 
-func main() {
-	flag.Parse()
+// Response protocol used to reply to agent1 and agent3.
+var responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
 
+// Start initializes Agent2 to listen on the given port. It returns a stop
+// function to gracefully shut down the agent.
+func Start(port int) (func(), error) {
 	reqCid, err := cid.Decode(requestProtocolStr)
 	if err != nil {
-		log.Fatal("invalid request protocol CID:", err)
+		return nil, fmt.Errorf("invalid request protocol CID: %v", err)
 	}
 
 	respCid, err := cid.Decode(responseProtocolStr)
 	if err != nil {
-		log.Fatal("invalid response protocol CID:", err)
+		return nil, fmt.Errorf("invalid response protocol CID: %v", err)
 	}
 
 	k := kernel.NewKernel()
 
-	err = k.Start(*listenPort)
+	err = k.Start(port)
 	if err != nil {
-		log.Fatal("kernel start failed:", err)
+		return nil, fmt.Errorf("kernel start failed: %v", err)
 	}
-	defer k.Stop()
 
-	// Subscribe to the request protocol. When a message is received from
-	// agent1 or agent3, send back a response using the same TCP connection.
+	// Subscribe to the request protocol. Upon receiving a message, send a reply
+	// using the same TCP connection.
 	k.Subscribe(reqCid, func(msg wire.Message) {
 		fmt.Println("Agent2 received:", string(msg.Payload))
-
 		err := k.Publish(wire.Message{
 			Protocol: respCid.Bytes(),
 			Payload:  []byte("hello back from agent2"),
 		})
 		if err != nil {
-			log.Print("response send failed:", err)
+			log.Printf("Agent2 response send failed: %v", err)
 		}
 	})
 
-	fmt.Fprintln(os.Stderr, "Agent2 running. Press enter to exit...")
-	fmt.Scanln()
+	stop := func() {
+		k.Stop()
+	}
+
+	return stop, nil
 }

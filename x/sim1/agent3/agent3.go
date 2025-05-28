@@ -1,10 +1,8 @@
-package main
+package agent3
 
 import (
-	"flag"
 	"fmt"
 	"log"
-	"os"
 	"time"
 
 	"sim1/kernel"
@@ -13,53 +11,50 @@ import (
 	"github.com/ipfs/go-cid"
 )
 
-var (
-	// Request protocol used to send messages to agent2.
-	requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-	// Response protocol expected from agent2.
-	responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
-	peerAddr            = flag.String("peer", "localhost:7272", "peer address")
-)
+// Request protocol used to send messages to agent2.
+var requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
 
-func main() {
-	flag.Parse()
+// Response protocol expected from agent2.
+var responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
 
+// Start initializes Agent3 with the given peer address and begins sending
+// messages every second. It returns a stop function to gracefully shut down the
+// agent.
+func Start(peer string) (func(), error) {
 	reqCid, err := cid.Decode(requestProtocolStr)
 	if err != nil {
-		log.Fatal("invalid request protocol CID:", err)
+		return nil, fmt.Errorf("invalid request protocol CID: %v", err)
 	}
 
 	respCid, err := cid.Decode(responseProtocolStr)
 	if err != nil {
-		log.Fatal("invalid response protocol CID:", err)
+		return nil, fmt.Errorf("invalid response protocol CID: %v", err)
 	}
 
 	k := kernel.NewKernel()
-	k.SetPeer(*peerAddr)
+	k.SetPeer(peer)
 
 	err = k.Start(0)
 	if err != nil {
-		log.Fatal("kernel start failed:", err)
+		return nil, fmt.Errorf("kernel start failed: %v", err)
 	}
-	defer k.Stop()
 
-	// Subscribe to response protocol to receive replies on the same TCP
-	// connection that was used to send the request.
+	// Subscribe to response protocol to receive replies.
 	k.Subscribe(respCid, func(msg wire.Message) {
 		fmt.Println("Agent3 received:", string(msg.Payload))
 	})
 
-	done := make(chan bool)
+	done := make(chan struct{})
 
 	go func() {
 		// Send messages every second.
 		payload := []byte("hello from agent3")
-
 		timer := time.NewTicker(1 * time.Second)
+		defer timer.Stop()
 		for {
 			select {
 			case <-done:
-				fmt.Println("Kernel stopped, exiting...")
+				fmt.Println("Agent3 stopping...")
 				return
 			case <-timer.C:
 				err = k.Publish(wire.Message{
@@ -67,14 +62,17 @@ func main() {
 					Payload:  payload,
 				})
 				if err != nil {
-					log.Printf("publish failed: %v", err)
+					log.Printf("Agent3 publish failed: %v", err)
 				}
 			}
 		}
 	}()
 
-	fmt.Fprintln(os.Stderr, "Agent3 running. Press enter to exit...")
-	fmt.Scanln()
-	done <- true
-	time.Sleep(2 * time.Second) // Allow time for processing pending messages.
+	stop := func() {
+		close(done)
+		time.Sleep(2 * time.Second)
+		k.Stop()
+	}
+
+	return stop, nil
 }

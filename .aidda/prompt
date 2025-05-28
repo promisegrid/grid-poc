@@ -1,10 +1,12 @@
-add a third agent to the simulation
+move main functions from agents to nodes
 
-- use a slice or map of connections instead of a single k.conn
-- add a third agent (agent3) the connects to agent2
-- change the "hello world" message to "hello from agent1" and "hello from agent2"
-- change the "hello back" message to "hello back from agent2"
-- update the README.md to reflect the changes
+We want to be able to simulate multipe nodes, each of which might be
+hosting one or more agents.  Make the following changes:
+
+- Update README.md to reflect the new design and new starting
+  instructions.
+- Move the main() functions from the agents to the nodes; i.e. move
+  main() from agent*.go to node*.go
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make
@@ -21,13 +23,15 @@ In:
   x/sim1/kernel/kernel.go
   x/sim1/agent1/agent1.go
   x/sim1/agent2/agent2.go
+  x/sim1/agent3/agent3.go
 Out:
   x/sim1/README.md
-  x/sim1/wire/wire.go
-  x/sim1/kernel/kernel.go
   x/sim1/agent1/agent1.go
   x/sim1/agent2/agent2.go
-  x/sim1/agent2/agent3.go
+  x/sim1/agent3/agent3.go
+  x/sim1/node1/node1.go
+  x/sim1/node2/node2.go
+  x/sim1/node3/node3.go
 
 .stop
 
