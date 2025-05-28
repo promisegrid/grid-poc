@@ -46,14 +46,14 @@ func main() {
 	// Subscribe to response protocol to receive replies on the same TCP
 	// connection that was used to send the request.
 	k.Subscribe(respCid, func(msg wire.Message) {
-		fmt.Println("Agent1 received:", string(msg.Payload))
+		fmt.Println("Agent3 received:", string(msg.Payload))
 	})
 
 	done := make(chan bool)
 
 	go func() {
 		// Send messages every second.
-		payload := []byte("hello from agent1")
+		payload := []byte("hello from agent3")
 
 		timer := time.NewTicker(1 * time.Second)
 		for {
@@ -73,7 +73,7 @@ func main() {
 		}
 	}()
 
-	fmt.Fprintln(os.Stderr, "Agent1 running. Press enter to exit...")
+	fmt.Fprintln(os.Stderr, "Agent3 running. Press enter to exit...")
 	fmt.Scanln()
 	done <- true
 	time.Sleep(2 * time.Second) // Allow time for processing pending messages.

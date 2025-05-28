@@ -1,14 +1,10 @@
-re-use TCP connection for response
+add a third agent to the simulation
 
-- use the TCP connection from agent1 to agent2 for agent2 to send the
-  response back to agent1, instead of having agent2 contact agent1
-  via the TCP connection from agent2 to agent1.  
-- agent2 listens
-- agent1 dials agent2, and agent2 accepts the connection
-- agent2 sends the response to agent1 over the TCP connection
-  established by agent1 dialing agent2
-- modify agent1 to expect to receive the response over the same TCP
-  connection it used to send the request to agent2
+- use a slice or map of connections instead of a single k.conn
+- add a third agent (agent3) the connects to agent2
+- change the "hello world" message to "hello from agent1" and "hello from agent2"
+- change the "hello back" message to "hello back from agent2"
+- update the README.md to reflect the changes
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make
@@ -31,6 +27,7 @@ Out:
   x/sim1/kernel/kernel.go
   x/sim1/agent1/agent1.go
   x/sim1/agent2/agent2.go
+  x/sim1/agent2/agent3.go
 
 .stop
 

@@ -18,7 +18,7 @@ type Kernel struct {
 	subscriptions map[string]func(wire.Message)
 	listener      net.Listener
 	peerAddr      string
-	conn          net.Conn
+	conns         map[string]net.Conn
 	connMu        sync.Mutex
 	ctx           context.Context
 	cancel        context.CancelFunc
@@ -28,6 +28,7 @@ func NewKernel() *Kernel {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Kernel{
 		subscriptions: make(map[string]func(wire.Message)),
+		conns:         make(map[string]net.Conn),
 		ctx:           ctx,
 		cancel:        cancel,
 	}
@@ -62,8 +63,10 @@ func (k *Kernel) acceptConnections() {
 			continue
 		}
 		log.Printf("accepted connection from %s", conn.RemoteAddr())
-		k.conn = conn
-		go k.handleConnection()
+		k.connMu.Lock()
+		k.conns[conn.RemoteAddr().String()] = conn
+		k.connMu.Unlock()
+		go k.handleConnection(conn)
 	}
 }
 
@@ -77,36 +80,40 @@ func (k *Kernel) maintainOutgoingConnection() {
 				time.Sleep(1 * time.Second)
 				continue
 			}
-
 			k.connMu.Lock()
-			if k.conn == nil {
+			_, exists := k.conns[k.peerAddr]
+			k.connMu.Unlock()
+			if !exists {
 				conn, err := net.Dial("tcp", k.peerAddr)
 				if err != nil {
 					log.Printf("dial error: %v", err)
-					k.connMu.Unlock()
 					time.Sleep(2 * time.Second)
 					continue
 				}
-				k.conn = conn
+				k.connMu.Lock()
+				k.conns[k.peerAddr] = conn
+				k.connMu.Unlock()
 				log.Printf("connected to peer %s", k.peerAddr)
-				go k.handleConnection()
+				go k.handleConnection(conn)
 			}
-			k.connMu.Unlock()
 			time.Sleep(5 * time.Second)
 		}
 	}
 }
 
-func (k *Kernel) handleConnection() {
-	conn := k.conn
-	defer conn.Close()
-
+func (k *Kernel) handleConnection(conn net.Conn) {
+	defer func() {
+		conn.Close()
+		k.connMu.Lock()
+		delete(k.conns, conn.RemoteAddr().String())
+		k.connMu.Unlock()
+	}()
+	dec := wire.Dm.NewDecoder(conn)
 	for {
 		var msg wire.Message
-		dec := wire.Dm.NewDecoder(conn)
 		err := dec.Decode(&msg)
 		if err != nil {
-			log.Printf("decode error: %v", err)
+			log.Printf("decode error from %s: %v", conn.RemoteAddr(), err)
 			return
 		}
 
@@ -130,20 +137,23 @@ func (k *Kernel) Publish(msg wire.Message) error {
 	k.connMu.Lock()
 	defer k.connMu.Unlock()
 
-	if k.conn == nil {
-		return fmt.Errorf("no active connection to peer")
+	var firstErr error
+	for addr, conn := range k.conns {
+		enc := wire.Em.NewEncoder(conn)
+		err := enc.Encode(msg)
+		if err != nil {
+			log.Printf("encode error on conn %s: %v", addr, err)
+			conn.Close()
+			delete(k.conns, addr)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("failed to encode message on %s: %v", addr, err)
+			}
+		}
 	}
-
-	enc := wire.Em.NewEncoder(k.conn)
-	err := enc.Encode(msg)
-	if err != nil {
-		log.Printf("encode error: %v", err)
-		k.conn.Close()
-		k.conn = nil
-		return fmt.Errorf("failed to encode message: %v", err)
+	if firstErr != nil {
+		return firstErr
 	}
 	return nil
-
 }
 
 func (k *Kernel) Subscribe(protocol cid.Cid, handler func(wire.Message)) {
@@ -165,8 +175,9 @@ func (k *Kernel) SetPeer(addr string) {
 func (k *Kernel) Stop() {
 	k.cancel()
 	k.connMu.Lock()
-	if k.conn != nil {
-		k.conn.Close()
+	for addr, conn := range k.conns {
+		conn.Close()
+		delete(k.conns, addr)
 	}
 	k.connMu.Unlock()
 	if k.listener != nil {
