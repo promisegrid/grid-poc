@@ -83,7 +83,7 @@ func (k *Kernel) handleConnection(conn net.Conn) {
 	}
 }
 
-func (k *Kernel) Publish(protocol cid.Cid, msg wire.Message) error {
+func (k *Kernel) Publish(msg wire.Message) error {
 	conn, err := net.Dial("tcp", k.peerAddr)
 	if err != nil {
 		return fmt.Errorf("dial failed: %v", err)

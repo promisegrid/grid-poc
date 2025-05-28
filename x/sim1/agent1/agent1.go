@@ -14,8 +14,8 @@ import (
 
 var (
 	protocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-	peerAddr    = flag.String("peer", "localhost:8081", "peer address")
-	listenPort  = flag.Int("port", 8080, "listen port")
+	peerAddr    = flag.String("peer", "localhost:7272", "peer address")
+	listenPort  = flag.Int("port", 7271, "listen port")
 )
 
 func main() {
@@ -43,12 +43,8 @@ func main() {
 
 	// Send initial message
 	payload := []byte("hello world")
-	msg, err := wire.NewMessage(protocolCid, payload)
-	if err != nil {
-		log.Fatal("create message failed:", err)
-	}
 
-	err = k.Publish(protocolCid, wire.Message{
+	err = k.Publish(wire.Message{
 		Protocol: protocolCid.Bytes(),
 		Payload:  payload,
 	})

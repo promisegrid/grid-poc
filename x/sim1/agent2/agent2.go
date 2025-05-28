@@ -14,8 +14,8 @@ import (
 
 var (
 	protocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-	peerAddr    = flag.String("peer", "localhost:8080", "peer address")
-	listenPort  = flag.Int("port", 8081, "listen port")
+	peerAddr    = flag.String("peer", "localhost:7271", "peer address")
+	listenPort  = flag.Int("port", 7272, "listen port")
 )
 
 func main() {
@@ -42,7 +42,7 @@ func main() {
 		// Send response
 		respCid, _ := cid.Decode("bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu")
 		payload := []byte("hello back")
-		err := k.Publish(respCid, wire.Message{
+		err := k.Publish(wire.Message{
 			Protocol: respCid.Bytes(),
 			Payload:  payload,
 		})
