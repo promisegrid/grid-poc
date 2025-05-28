@@ -3,7 +3,12 @@ re-use TCP connection for response
 - use the TCP connection from agent1 to agent2 for agent2 to send the
   response back to agent1, instead of having agent2 contact agent1
   via the TCP connection from agent2 to agent1.  
+- agent2 listens
 - agent1 dials agent2, and agent2 accepts the connection
+- agent2 sends the response to agent1 over the TCP connection
+  established by agent1 dialing agent2
+- modify agent1 to expect to receive the response over the same TCP
+  connection it used to send the request to agent2
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make

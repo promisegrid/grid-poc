@@ -1,23 +1,23 @@
 # PromiseGrid Simulation (sim1)
 
-A demonstration of two agents communicating via persistent TCP
-connections using the PromiseGrid protocol pattern.
+A demonstration of two agents communicating via persistent TCP connections
+using the PromiseGrid protocol pattern.
 
 ## Overview
 
-This simulation shows two Go processes (agent1 and agent2) exchanging
-CBOR-encoded messages through a kernel layer that manages network
-connections and message routing. Key features:
+This simulation shows two Go processes (agent1 and agent2) exchanging CBOR-
+encoded messages through a kernel layer that manages network connections and
+message routing. Key features:
 
 - Persistent TCP connections with automatic reconnection
 - CID-based protocol subscriptions
 - Asynchronous message handling
-- Bi-directional communication over single TCP connection
+- Bi-directional communication over a single TCP connection
 
 ## Components
 
 ### wire Package
-- Defines `Message` struct with Protocol CID and Payload
+- Defines `Message` struct with protocol CID and payload
 - CBOR serialization/deserialization with deterministic encoding
 - Custom CBOR tag (0x67726964) for message structure
 
@@ -29,17 +29,23 @@ connections and message routing. Key features:
 - Automatic connection failover and reconnection
 
 ### Agents
-- agent1: Initiates conversation, listens on port 7271
-- agent2: Responds to messages, listens on port 7272
+- agent1: Initiates conversation by dialing agent2 and sending a request
+- agent2: Listens for connections from agent1, processes the request and
+  sends a response using the same TCP connection established by agent1
 
 ## How It Works
 
-1. Agents start with specified peer addresses and ports
-2. Kernel maintains single persistent TCP connection between peers
-3. Message flow:
-   - agent1 sends "hello world" every second via outbound connection
-   - agent2 receives message and sends "hello back" response via same connection
-   - Both agents print received messages to stdout
+1. Agents start with specified peer addresses and ports.
+2. Agent1 dials agent2 and agent2 accepts the connection.
+3. The kernel maintains one persistent TCP connection between the peers.
+4. Message flow:
+   - agent1 sends a "hello world" request every second via the outbound
+     connection.
+   - agent2 receives the request on the accepted TCP connection and sends a
+     "hello back" response using the same connection.
+   - agent1 receives the response on the connection it used to send the
+     request.
+   - Both agents print received messages to stdout.
 
 ## Running the Simulation
 
@@ -47,7 +53,7 @@ connections and message routing. Key features:
 1. In terminal 1 (agent1):
 ```bash
 cd agent1
-go run agent1.go -port 7271 -peer localhost:7272
+go run agent1.go -peer localhost:7272
 ```
 
 2. In terminal 2 (agent2):
@@ -73,7 +79,8 @@ Agent2 received: hello world
 ## Notes
 
 - Protocol CIDs are hardcoded for demonstration:
-  - Main protocol: `bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny`
-  - Response protocol: `bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu`
-- The kernel automatically reconnects if the TCP connection drops
-- Press Enter in either terminal to gracefully shut down the agent
+  - Request protocol: `bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny`
+  - Response protocol:
+    `bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu`
+- The kernel automatically reconnects if the TCP connection drops.
+- Press Enter in either terminal to gracefully shut down the agent.

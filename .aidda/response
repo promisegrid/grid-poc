@@ -1,282 +1,25 @@
-<think>
-Okay, I need to modify the code so that agent2 uses the existing TCP connection from agent1 to send the response back, instead of creating a new connection. Let me start by understanding how the current setup works.
-
-Looking at the Kernel code, each agent starts a listener and tries to maintain an outgoing connection to the peer. So agent1 connects to agent2's port, and agent2 connects to agent1's port. This creates two separate TCP connections. But we want to use the same connection for both directions.
-
-The user wants agent2 to send the response back through the connection that agent1 initiated. That means when agent1 connects to agent2, agent2 should use that incoming connection to send messages back, instead of agent2 creating its own connection to agent1.
-
-In the Kernel's maintainOutgoingConnection function, each agent is trying to dial the peer's address. This is causing the two-way connections. To fix this, maybe we should have agent2 not dial agent1. But how do we ensure that agent2 uses the incoming connection from agent1?
-
-Wait, the Kernel's handleConnection function is called for both incoming and outgoing connections. When agent1 dials agent2, agent2's listener accepts the connection and handles it. So in agent2's Kernel, the conn variable would be the incoming connection from agent1. But currently, the Kernel's Publish method uses the outgoing connection (k.conn) which is agent2's attempt to connect to agent1. So we need to make sure that when agent2 sends a response, it uses the incoming connection from agent1 instead of its own outgoing connection.
-
-Hmm, maybe the issue is that each Kernel maintains its own outgoing connection (k.conn), but for the response, we should use the incoming connection. So perhaps the Kernel should track all active connections and allow sending messages through any of them. But since it's a peer-to-peer setup, there should only be one active connection between the two agents. However, in the current code, each agent might have two connections: one incoming and one outgoing.
-
-Wait, in the maintainOutgoingConnection function, when an outgoing connection is established, it's stored in k.conn. But when an incoming connection is accepted (via acceptConnections), handleConnection is called, which processes messages but doesn't store the connection. So the outgoing connection is stored, but incoming connections are not. So when agent2 receives a connection from agent1, it's handled but not stored, and agent2's Publish method uses its own outgoing connection (which may not exist if agent2 is not the one initiating).
-
-So the problem is that agent2 is trying to use its own outgoing connection to send messages back, but if agent1 is the one that initiated the connection, agent2's outgoing connection might not be established. Therefore, agent2 should send responses back through the incoming connection from agent1.
-
-To fix this, the Kernel should track the incoming connection and use that for sending responses. Let me look at the Kernel struct. It has a conn field which is the outgoing connection. But incoming connections are not stored. So when agent2 accepts a connection from agent1, that connection is handled but not stored. Therefore, when agent2 tries to Publish, it uses its own outgoing connection (which may not exist), leading to an error.
-
-So the solution is to have the Kernel use the incoming connection for sending messages, instead of the outgoing one. But how to track which connection to use. Since it's a peer-to-peer setup, there should only be one active connection. Maybe the Kernel should have a single connection, whether it's incoming or outgoing.
-
-Wait, in the current code, when agent1 connects to agent2, agent2's Kernel has an incoming connection. But agent2's Kernel is also trying to connect to agent1's port, creating another connection. This results in two separate connections, which is not desired.
-
-The user wants to have a single TCP connection that's reused for both directions. So the agents should only have one connection between them. To achieve this, perhaps we should prevent the agents from dialing each other if a connection is already established.
-
-Wait, in the maintainOutgoingConnection function, the Kernel tries to dial the peer address repeatedly. But if an incoming connection is already accepted, maybe we should disable the outgoing connection attempt. Alternatively, when an incoming connection is accepted, we should close any outgoing connection and use the incoming one.
-
-Alternatively, we can modify the Kernel to only have one connection, whether it's incoming or outgoing. Let's adjust the Kernel struct to track the active connection, regardless of how it was established.
-
-In the current code, when an incoming connection is accepted, handleConnection is called, which processes messages but doesn't store the connection. The outgoing connection is stored in k.conn. So to reuse the incoming connection, we need to set k.conn to the incoming connection when it's accepted.
-
-Wait, in the handleConnection function, which is called for both incoming and outgoing connections, perhaps we should set k.conn to the connection being handled. But we need to make sure that only one connection is active at a time.
-
-So in the handleConnection function, when a new connection is accepted (incoming), we can close any existing connection and set k.conn to this new one. Similarly, when an outgoing connection is established, we set k.conn to that. But this might lead to conflicts if both agents are trying to connect to each other simultaneously.
-
-Alternatively, perhaps we should have the Kernel only maintain one connection, whether it's incoming or outgoing. So when a connection is established (either via dialing or accepting), it becomes the active connection, and any previous connection is closed.
-
-Let me modify the Kernel's handleConnection function to set the active connection when a new connection is accepted. Also, in the maintainOutgoingConnection function, when dialing succeeds, set the connection as the active one.
-
-But we need to make sure that both incoming and outgoing connections are stored in k.conn. So in the handleConnection function, which is called for incoming connections, we can lock the connMu and set k.conn to the incoming connection. Similarly, when dialing succeeds, set k.conn to the outgoing connection.
-
-This way, whichever connection is established (incoming or outgoing) becomes the active one. Then, when sending messages via Publish, it uses the active connection.
-
-But there's a problem if both agents are trying to connect to each other, leading to two connections. To prevent this, perhaps we should have a way to prefer one direction. For example, the agent with the lower port number initiates the connection, and the other agent does not. But that might complicate things.
-
-Alternatively, when a connection is established, the Kernel should close any existing connection. So in the handleConnection function, when a new connection is accepted, we lock connMu, close the existing k.conn if any, and set k.conn to the new incoming connection. Similarly, when dialing, after establishing the connection, we close any existing connection and set k.conn to the new one.
-
-This way, only one connection is active at a time. Let's implement that.
-
-In the handleConnection function:
-
-When a new connection is accepted (incoming), we do:
-
-k.connMu.Lock()
-if k.conn != nil {
-    k.conn.Close()
-}
-k.conn = conn
-k.connMu.Unlock()
-
-Similarly, in maintainOutgoingConnection, when dialing succeeds:
-
-k.connMu.Lock()
-if k.conn != nil {
-    k.conn.Close()
-}
-k.conn = conn
-k.connMu.Unlock()
-
-This way, whether the connection is incoming or outgoing, it becomes the active one, and any previous connection is closed.
-
-But wait, in the handleConnection function, the connection is already being handled in a goroutine. So when we set k.conn = conn, and then later if another connection comes in, the old one is closed. However, the handleConnection function for the old connection is still running. We need to make sure that when we replace k.conn, the old connection is closed, which would cause the handleConnection loop to exit due to the closed connection.
-
-This should work. Let me adjust the code accordingly.
-
-In the Kernel's acceptConnections function, when a new connection is accepted, we pass it to handleConnection, which will set it as the active connection.
-
-In handleConnection:
-
-func (k *Kernel) handleConnection(conn net.Conn) {
-    defer conn.Close()
-
-    // Set this connection as the active one
-    k.connMu.Lock()
-    if k.conn != nil {
-        k.conn.Close()
-    }
-    k.conn = conn
-    k.connMu.Unlock()
-
-    // Rest of the handling code...
-}
-
-Similarly, in maintainOutgoingConnection, when dialing:
-
-conn, err := net.Dial("tcp", k.peerAddr)
-if err != nil {
-    // handle error
-}
-k.connMu.Lock()
-if k.conn != nil {
-    k.conn.Close()
-}
-k.conn = conn
-k.connMu.Unlock()
-go k.handleConnection(conn)
-
-Wait, but the handleConnection function is already called for the outgoing connection. So in that case, when we call handleConnection(conn), it will set k.conn to conn again, which is redundant. Maybe we shouldn't call handleConnection for outgoing connections, but instead, the maintainOutgoingConnection function should set k.conn and then start reading from it.
-
-Alternatively, perhaps the handleConnection function should be responsible for both incoming and outgoing connections, setting k.conn and processing messages.
-
-Wait, in the current code, the maintainOutgoingConnection function, after dialing, calls go k.handleConnection(conn). So both incoming and outgoing connections go through handleConnection, which sets k.conn to the new connection and processes messages.
-
-But when handleConnection is called for an outgoing connection, it will replace the existing k.conn (if any) with the new one. So this should ensure that only one active connection is present.
-
-With this change, when agent1 connects to agent2, agent2's handleConnection sets k.conn to the incoming connection. Then, when agent2's maintainOutgoingConnection tries to dial agent1, it will fail (since agent1 is already connected), or if it succeeds, it will replace the connection. But we want to prevent agent2 from dialing if there's already an active connection.
-
-Alternatively, modify the maintainOutgoingConnection function to only dial if there's no active connection. But how?
-
-Wait, in the maintainOutgoingConnection loop:
-
-if k.conn == nil {
-    // dial
-}
-
-But after the first connection is established (incoming), k.conn is set, so the maintainOutgoingConnection will not dial again. That would prevent agent2 from trying to connect if it already has a connection.
-
-Wait, no. The maintainOutgoingConnection function is a loop that runs every 5 seconds. So even if k.conn is set, after 5 seconds, it will check again. But if k.conn is not nil, it will skip dialing. Wait, looking at the current code:
-
-In maintainOutgoingConnection:
-
-for {
-    select {
-    case <-k.ctx.Done():
-        return
-    default:
-        if k.peerAddr == "" {
-            time.Sleep(1 * time.Second)
-            continue
-        }
-
-        k.connMu.Lock()
-        if k.conn == nil {
-            // dial
-        }
-        k.connMu.Unlock()
-        time.Sleep(5 * time.Second)
-    }
-}
-
-So if k.conn is not nil, it skips dialing. Therefore, once a connection is established (either incoming or outgoing), maintainOutgoingConnection will not attempt to dial again. That's good. So when agent1 connects to agent2, agent2's k.conn is set, so agent2 won't dial agent1.
-
-Therefore, with the changes to handleConnection where it sets k.conn to the incoming connection, agent2 will use that connection for sending messages.
-
-Now, in the Publish method, it uses k.conn, which is the active connection (the one established by agent1). So when agent2 sends a response, it will go through the same connection.
-
-This should solve the problem of reusing the same TCP connection for both directions.
-
-Now, the next part of the user's request is to update the README.md to use 'go run' instead of 'go build'.
-
-Looking at the README.md, under the "Running the Simulation" section, it currently says to build the agents using go build and then run the executables. The user wants to change this to use 'go run' commands.
-
-So instead of:
-
-go build -o agent1 ./agent1
-go build -o agent2 ./agent2
-
-And then running the executables, the user wants to use:
-
-go run agent1/main.go ...
-go run agent2/main.go ...
-
-But looking at the file structure, the agent1 and agent2 are in their own directories. The agent1.go is in the agent1 directory, so the command would be:
-
-go run ./agent1 -port 7271 -peer localhost:7272
-
-Similarly for agent2.
-
-So in the README.md, the setup instructions should be modified to remove the build steps and replace the run commands with 'go run'.
-
-So the revised README section would be:
-
-## Running the Simulation
-
-### Setup
-1. In terminal 1 (agent1):
-```bash
-go run ./agent1 -port 7271 -peer localhost:7272
-```
-
-2. In terminal 2 (agent2):
-```bash
-go run ./agent2 -port 7272 -peer localhost:7271
-```
-
-This removes the build step and uses 'go run' directly.
-
-Now, putting it all together, the changes needed are:
-
-1. Modify the Kernel's handleConnection function to set the active connection when a new connection is accepted or dialed.
-2. Update the README.md to use 'go run' commands.
-
-Let me check the Kernel code. In the current handleConnection function, there's no code that sets k.conn. So I need to add code in handleConnection to set k.conn to the incoming connection.
-
-Wait, in the current code, when a connection is accepted (incoming), it's passed to handleConnection, but the Kernel's conn field is only set when dialing. So the handleConnection for incoming connections does not update k.conn. Therefore, when agent2 receives a connection from agent1, it doesn't set k.conn, so when agent2 tries to publish, it uses its own outgoing connection (which may not exist).
-
-So the fix is to modify the handleConnection function to set k.conn to the connection it's handling, whether it's incoming or outgoing.
-
-Wait, but in the current code, the maintainOutgoingConnection function, after dialing, sets k.conn to the outgoing connection and then calls handleConnection(conn). So for outgoing connections, k.conn is set before handleConnection is called.
-
-For incoming connections, the handleConnection is called without setting k.conn. So in that case, agent2's k.conn remains nil unless it successfully dials out.
-
-Therefore, to ensure that the incoming connection is used, in handleConnection, we need to set k.conn to the incoming connection.
-
-So modifying handleConnection as follows:
-
-func (k *Kernel) handleConnection(conn net.Conn) {
-    defer conn.Close()
-
-    // Set this connection as the active one
-    k.connMu.Lock()
-    if k.conn != nil {
-        k.conn.Close()
-    }
-    k.conn = conn
-    k.connMu.Unlock()
-
-    // Rest of the code...
-}
-
-This way, whether the connection is incoming or outgoing, it becomes the active connection, and any previous connection is closed.
-
-But wait, in the maintainOutgoingConnection function, after dialing, it sets k.conn = conn and then calls handleConnection(conn), which would again set k.conn = conn. This is redundant but harmless. However, when handleConnection is called for the outgoing connection, it would replace k.conn with the same connection, which is already set. Not a problem.
-
-But for incoming connections, handleConnection will set k.conn to the incoming connection. Then, when agent2 tries to publish, it uses this connection.
-
-This should ensure that agent2 uses the incoming connection from agent1 to send responses.
-
-With this change, the Publish method in agent2 will use the same connection that agent1 established.
-
-Now, in the Kernel's Publish method, it uses k.conn, which is now set to the active connection (the incoming one in agent2's case).
-
-Therefore, agent2's responses will be sent through the same TCP connection that agent1 initiated.
-
-Now, the code modifications are:
-
-In kernel/kernel.go, in the handleConnection function, add the code to set k.conn to the incoming connection.
-
-Next, update the README.md to use 'go run' commands.
-
-Additionally, in the agent2 code, when responding, the Publish method should now use the correct connection.
-
-Testing this would involve running both agents with 'go run', and ensuring that the response is sent back through the same connection.
-
-Finally, ensuring that the TCP connection is reused and that only one connection exists between the agents.
-</think>
-
 File: /home/stevegt/lab/grid-poc/x/sim1/README.md
-```
+```markdown
 # PromiseGrid Simulation (sim1)
 
-A demonstration of two agents communicating via persistent TCP
-connections using the PromiseGrid protocol pattern.
+A demonstration of two agents communicating via persistent TCP connections
+using the PromiseGrid protocol pattern.
 
 ## Overview
 
-This simulation shows two Go processes (agent1 and agent2) exchanging
-CBOR-encoded messages through a kernel layer that manages network
-connections and message routing. Key features:
+This simulation shows two Go processes (agent1 and agent2) exchanging CBOR-
+encoded messages through a kernel layer that manages network connections and
+message routing. Key features:
 
 - Persistent TCP connections with automatic reconnection
 - CID-based protocol subscriptions
 - Asynchronous message handling
-- Bi-directional communication over single TCP connection
+- Bi-directional communication over a single TCP connection
 
 ## Components
 
 ### wire Package
-- Defines `Message` struct with Protocol CID and Payload
+- Defines `Message` struct with protocol CID and payload
 - CBOR serialization/deserialization with deterministic encoding
 - Custom CBOR tag (0x67726964) for message structure
 
@@ -288,29 +31,37 @@ connections and message routing. Key features:
 - Automatic connection failover and reconnection
 
 ### Agents
-- agent1: Initiates conversation, listens on port 7271
-- agent2: Responds to messages, listens on port 7272
+- agent1: Initiates conversation by dialing agent2 and sending a request
+- agent2: Listens for connections from agent1, processes the request and
+  sends a response using the same TCP connection established by agent1
 
 ## How It Works
 
-1. Agents start with specified peer addresses and ports
-2. Kernel maintains single persistent TCP connection between peers
-3. Message flow:
-   - agent1 sends "hello world" every second via outbound connection
-   - agent2 receives message and sends "hello back" response via same connection
-   - Both agents print received messages to stdout
+1. Agents start with specified peer addresses and ports.
+2. Agent1 dials agent2 and agent2 accepts the connection.
+3. The kernel maintains one persistent TCP connection between the peers.
+4. Message flow:
+   - agent1 sends a "hello world" request every second via the outbound
+     connection.
+   - agent2 receives the request on the accepted TCP connection and sends a
+     "hello back" response using the same connection.
+   - agent1 receives the response on the connection it used to send the
+     request.
+   - Both agents print received messages to stdout.
 
 ## Running the Simulation
 
 ### Setup
 1. In terminal 1 (agent1):
 ```bash
-go run ./agent1 -port 7271 -peer localhost:7272
+cd agent1
+go run agent1.go -peer localhost:7272
 ```
 
 2. In terminal 2 (agent2):
 ```bash
-go run ./agent2 -port 7272 -peer localhost:7271
+cd agent2
+go run agent2.go -port 7272 
 ```
 
 ### Expected Output
@@ -330,190 +81,16 @@ Agent2 received: hello world
 ## Notes
 
 - Protocol CIDs are hardcoded for demonstration:
-  - Main protocol: `bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny`
-  - Response protocol: `bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu`
-- The kernel automatically reconnects if the TCP connection drops
-- Press Enter in either terminal to gracefully shut down the agent
+  - Request protocol: `bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny`
+  - Response protocol:
+    `bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu`
+- The kernel automatically reconnects if the TCP connection drops.
+- Press Enter in either terminal to gracefully shut down the agent.
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/README.md
 
-
-File: /home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
-```
-package kernel
-
-import (
-	"context"
-	"fmt"
-	"log"
-	"net"
-	"sync"
-	"time"
-
-	"sim1/wire"
-
-	"github.com/ipfs/go-cid"
-)
-
-type Kernel struct {
-	mu            sync.RWMutex
-	subscriptions map[string]func(wire.Message)
-	listener      net.Listener
-	peerAddr      string
-	conn          net.Conn
-	connMu        sync.Mutex
-	ctx           context.Context
-	cancel        context.CancelFunc
-}
-
-func NewKernel() *Kernel {
-	ctx, cancel := context.WithCancel(context.Background())
-	return &Kernel{
-		subscriptions: make(map[string]func(wire.Message)),
-		ctx:           ctx,
-		cancel:        cancel,
-	}
-}
-
-func (k *Kernel) Start(port int) error {
-	var err error
-	k.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
-	}
-
-	go k.acceptConnections()
-	go k.maintainOutgoingConnection()
-	return nil
-}
-
-func (k *Kernel) acceptConnections() {
-	for {
-		conn, err := k.listener.Accept()
-		if err != nil {
-			select {
-			case <-k.ctx.Done():
-				return
-			default:
-				log.Printf("accept error: %v", err)
-			}
-			continue
-		}
-		go k.handleConnection(conn)
-	}
-}
-
-func (k *Kernel) maintainOutgoingConnection() {
-	for {
-		select {
-		case <-k.ctx.Done():
-			return
-		default:
-			if k.peerAddr == "" {
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			k.connMu.Lock()
-			if k.conn == nil {
-				conn, err := net.Dial("tcp", k.peerAddr)
-				if err != nil {
-					log.Printf("dial error: %v", err)
-					k.connMu.Unlock()
-					time.Sleep(2 * time.Second)
-					continue
-				}
-				k.conn = conn
-				log.Printf("connected to peer %s", k.peerAddr)
-				go k.handleConnection(conn)
-			}
-			k.connMu.Unlock()
-			time.Sleep(5 * time.Second)
-		}
-	}
-}
-
-func (k *Kernel) handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	// Set this connection as active
-	k.connMu.Lock()
-	if k.conn != nil {
-		k.conn.Close()
-	}
-	k.conn = conn
-	k.connMu.Unlock()
-
-	for {
-		var msg wire.Message
-		dec := wire.Dm.NewDecoder(conn)
-		err := dec.Decode(&msg)
-		if err != nil {
-			log.Printf("decode error: %v", err)
-			return
-		}
-
-		protocolCid, err := cid.Cast(msg.Protocol)
-		if err != nil {
-			log.Printf("invalid protocol CID: %v", err)
-			continue
-		}
-
-		k.mu.RLock()
-		handler, exists := k.subscriptions[protocolCid.String()]
-		k.mu.RUnlock()
-
-		if exists {
-			handler(msg)
-		}
-	}
-}
-
-func (k *Kernel) Publish(msg wire.Message) error {
-	k.connMu.Lock()
-	defer k.connMu.Unlock()
-
-	if k.conn == nil {
-		return fmt.Errorf("no active connection to peer")
-	}
-
-	enc := wire.Em.NewEncoder(k.conn)
-	return enc.Encode(msg)
-}
-
-func (k *Kernel) Subscribe(protocol cid.Cid, handler func(wire.Message)) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	k.subscriptions[protocol.String()] = handler
-}
-
-func (k *Kernel) Unsubscribe(protocol cid.Cid) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	delete(k.subscriptions, protocol.String())
-}
-
-func (k *Kernel) SetPeer(addr string) {
-	k.peerAddr = addr
-}
-
-func (k *Kernel) Stop() {
-	k.cancel()
-	k.connMu.Lock()
-	if k.conn != nil {
-		k.conn.Close()
-	}
-	k.connMu.Unlock()
-	if k.listener != nil {
-		k.listener.Close()
-	}
-}
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
-
-
 File: /home/stevegt/lab/grid-poc/x/sim1/wire/wire.go
-```
+```go
 package wire
 
 import (
@@ -611,9 +188,181 @@ func (m *Message) UnmarshalCBOR(data []byte) error {
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/wire/wire.go
 
+File: /home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
+```go
+package kernel
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net"
+	"sync"
+	"time"
+
+	"sim1/wire"
+
+	"github.com/ipfs/go-cid"
+)
+
+type Kernel struct {
+	mu            sync.RWMutex
+	subscriptions map[string]func(wire.Message)
+	listener      net.Listener
+	peerAddr      string
+	conn          net.Conn
+	connMu        sync.Mutex
+	ctx           context.Context
+	cancel        context.CancelFunc
+}
+
+func NewKernel() *Kernel {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &Kernel{
+		subscriptions: make(map[string]func(wire.Message)),
+		ctx:           ctx,
+		cancel:        cancel,
+	}
+}
+
+func (k *Kernel) Start(port int) error {
+	var err error
+	k.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		return fmt.Errorf("failed to listen: %v", err)
+	}
+
+	go k.acceptConnections()
+	go k.maintainOutgoingConnection()
+	return nil
+}
+
+func (k *Kernel) acceptConnections() {
+	for {
+		conn, err := k.listener.Accept()
+		if err != nil {
+			select {
+			case <-k.ctx.Done():
+				return
+			default:
+				log.Printf("accept error: %v", err)
+			}
+			continue
+		}
+		go k.handleConnection(conn)
+	}
+}
+
+func (k *Kernel) maintainOutgoingConnection() {
+	for {
+		select {
+		case <-k.ctx.Done():
+			return
+		default:
+			if k.peerAddr == "" {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+
+			k.connMu.Lock()
+			if k.conn == nil {
+				conn, err := net.Dial("tcp", k.peerAddr)
+				if err != nil {
+					log.Printf("dial error: %v", err)
+					k.connMu.Unlock()
+					time.Sleep(2 * time.Second)
+					continue
+				}
+				k.conn = conn
+				log.Printf("connected to peer %s", k.peerAddr)
+				go k.handleConnection(conn)
+			}
+			k.connMu.Unlock()
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+func (k *Kernel) handleConnection(conn net.Conn) {
+	defer conn.Close()
+
+	// Set this connection as active.
+	k.connMu.Lock()
+	if k.conn != nil {
+		k.conn.Close()
+	}
+	k.conn = conn
+	k.connMu.Unlock()
+
+	for {
+		var msg wire.Message
+		dec := wire.Dm.NewDecoder(conn)
+		err := dec.Decode(&msg)
+		if err != nil {
+			log.Printf("decode error: %v", err)
+			return
+		}
+
+		protocolCid, err := cid.Cast(msg.Protocol)
+		if err != nil {
+			log.Printf("invalid protocol CID: %v", err)
+			continue
+		}
+
+		k.mu.RLock()
+		handler, exists := k.subscriptions[protocolCid.String()]
+		k.mu.RUnlock()
+
+		if exists {
+			handler(msg)
+		}
+	}
+}
+
+func (k *Kernel) Publish(msg wire.Message) error {
+	k.connMu.Lock()
+	defer k.connMu.Unlock()
+
+	if k.conn == nil {
+		return fmt.Errorf("no active connection to peer")
+	}
+
+	enc := wire.Em.NewEncoder(k.conn)
+	return enc.Encode(msg)
+}
+
+func (k *Kernel) Subscribe(protocol cid.Cid, handler func(wire.Message)) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.subscriptions[protocol.String()] = handler
+}
+
+func (k *Kernel) Unsubscribe(protocol cid.Cid) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.subscriptions, protocol.String())
+}
+
+func (k *Kernel) SetPeer(addr string) {
+	k.peerAddr = addr
+}
+
+func (k *Kernel) Stop() {
+	k.cancel()
+	k.connMu.Lock()
+	if k.conn != nil {
+		k.conn.Close()
+	}
+	k.connMu.Unlock()
+	if k.listener != nil {
+		k.listener.Close()
+	}
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
 
 File: /home/stevegt/lab/grid-poc/x/sim1/agent1/agent1.go
-```
+```go
 package main
 
 import (
@@ -630,17 +379,25 @@ import (
 )
 
 var (
-	protocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-	peerAddr    = flag.String("peer", "localhost:7272", "peer address")
-	listenPort  = flag.Int("port", 7271, "listen port")
+	// Request protocol used to send messages to agent2.
+	requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
+	// Response protocol expected from agent2.
+	responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
+	peerAddr            = flag.String("peer", "localhost:7272", "peer address")
+	listenPort          = flag.Int("port", 7271, "listen port")
 )
 
 func main() {
 	flag.Parse()
 
-	protocolCid, err := cid.Decode(protocolStr)
+	reqCid, err := cid.Decode(requestProtocolStr)
 	if err != nil {
-		log.Fatal("invalid protocol CID:", err)
+		log.Fatal("invalid request protocol CID:", err)
+	}
+
+	respCid, err := cid.Decode(responseProtocolStr)
+	if err != nil {
+		log.Fatal("invalid response protocol CID:", err)
 	}
 
 	k := kernel.NewKernel()
@@ -652,8 +409,8 @@ func main() {
 	}
 	defer k.Stop()
 
-	// Subscribe to response protocol
-	respCid, _ := cid.Decode("bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu")
+	// Subscribe to response protocol to receive replies on the same TCP
+	// connection that was used to send the request.
 	k.Subscribe(respCid, func(msg wire.Message) {
 		fmt.Println("Agent1 received:", string(msg.Payload))
 	})
@@ -661,7 +418,7 @@ func main() {
 	done := make(chan bool)
 
 	go func() {
-		// Send messages
+		// Send messages every second.
 		payload := []byte("hello world")
 
 		timer := time.NewTicker(1 * time.Second)
@@ -671,9 +428,8 @@ func main() {
 				fmt.Println("Kernel stopped, exiting...")
 				return
 			case <-timer.C:
-				// send a message every second
 				err = k.Publish(wire.Message{
-					Protocol: protocolCid.Bytes(),
+					Protocol: reqCid.Bytes(),
 					Payload:  payload,
 				})
 				if err != nil {
@@ -686,14 +442,13 @@ func main() {
 	fmt.Fprintln(os.Stderr, "Agent1 running. Press enter to exit...")
 	fmt.Scanln()
 	done <- true
-	time.Sleep(2 * time.Second) // Give time for any pending messages to be processed
+	time.Sleep(2 * time.Second) // Allow time for processing pending messages.
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/agent1/agent1.go
 
-
 File: /home/stevegt/lab/grid-poc/x/sim1/agent2/agent2.go
-```
+```go
 package main
 
 import (
@@ -709,21 +464,27 @@ import (
 )
 
 var (
-	protocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-	peerAddr    = flag.String("peer", "localhost:7271", "peer address")
-	listenPort  = flag.Int("port", 7272, "listen port")
+	// Request protocol expected on incoming messages from agent1.
+	requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
+	// Response protocol used to reply to agent1.
+	responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
+	listenPort          = flag.Int("port", 7272, "listen port")
 )
 
 func main() {
 	flag.Parse()
 
-	protocolCid, err := cid.Decode(protocolStr)
+	reqCid, err := cid.Decode(requestProtocolStr)
 	if err != nil {
-		log.Fatal("invalid protocol CID:", err)
+		log.Fatal("invalid request protocol CID:", err)
+	}
+
+	respCid, err := cid.Decode(responseProtocolStr)
+	if err != nil {
+		log.Fatal("invalid response protocol CID:", err)
 	}
 
 	k := kernel.NewKernel()
-	k.SetPeer(*peerAddr)
 
 	err = k.Start(*listenPort)
 	if err != nil {
@@ -731,9 +492,9 @@ func main() {
 	}
 	defer k.Stop()
 
-	// Subscribe to main protocol
-	respCid, _ := cid.Decode("bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu")
-	k.Subscribe(protocolCid, func(msg wire.Message) {
+	// Subscribe to the request protocol. When a message is received from
+	// agent1, send back a response using the same TCP connection.
+	k.Subscribe(reqCid, func(msg wire.Message) {
 		fmt.Println("Agent2 received:", string(msg.Payload))
 
 		err := k.Publish(wire.Message{
@@ -750,24 +511,3 @@ func main() {
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/agent2/agent2.go
-
-<references>
-[1] https://dev.to/hgsgtk/how-go-handles-network-and-system-calls-when-tcp-server-1nbd
-[2] https://dev.to/bitecode/golang-a-simple-echo-server-1den
-[3] https://til.jakegut.com/net-conn/
-[4] https://github.com/nordicdyno/golang-tcp-port-reuse
-[5] https://labex.io/questions/what-is-the-difference-between-go-run-and-go-build-commands-92714
-[6] https://bencane.com/keeping-tcp-connections-alive-in-golang-801a78b7cf1
-[7] https://github.com/timakin/bodyclose
-[8] https://groups.google.com/g/golang-nuts/c/joOcUHiffUc
-[9] https://pkg.go.dev/net
-[10] https://www.stavros.io/posts/proxying-two-connections-go/
-[11] https://github.com/mitchellh/go-grpc-net-conn
-[12] https://scarff.id.au/blog/2022/go-concurrency-idioms-dont-work-for-duplex-sockets/
-[13] https://groups.google.com/g/golang-nuts/c/IZ2p1sHkeBQ
-[14] https://andregri.github.io/http-proxy-in-go/
-[15] https://pkg.go.dev/google.golang.org/grpc/examples/features/proto/echo
-[16] https://organicprogrammer.com/2021/12/15/understand-http-1-1-client-golang-part2/
-[17] https://www.thepolyglotdeveloper.com/2017/05/network-sockets-with-the-go-programming-language/
-[18] https://groups.google.com/g/golang-nuts/c/qsMfKWZ8HgI/m/cxITVAn5AgAJ
-</references>

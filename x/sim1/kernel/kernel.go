@@ -35,13 +35,17 @@ func NewKernel() *Kernel {
 
 func (k *Kernel) Start(port int) error {
 	var err error
-	k.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
-	if err != nil {
-		return fmt.Errorf("failed to listen: %v", err)
+	if port > 0 {
+		k.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			return fmt.Errorf("failed to listen: %v", err)
+		}
+		log.Printf("listening on port %d", port)
+		go k.acceptConnections()
+	} else {
+		log.Println("not listening for incoming connections")
+		go k.maintainOutgoingConnection()
 	}
-
-	go k.acceptConnections()
-	go k.maintainOutgoingConnection()
 	return nil
 }
 
@@ -57,7 +61,9 @@ func (k *Kernel) acceptConnections() {
 			}
 			continue
 		}
-		go k.handleConnection(conn)
+		log.Printf("accepted connection from %s", conn.RemoteAddr())
+		k.conn = conn
+		go k.handleConnection()
 	}
 }
 
@@ -83,7 +89,7 @@ func (k *Kernel) maintainOutgoingConnection() {
 				}
 				k.conn = conn
 				log.Printf("connected to peer %s", k.peerAddr)
-				go k.handleConnection(conn)
+				go k.handleConnection()
 			}
 			k.connMu.Unlock()
 			time.Sleep(5 * time.Second)
@@ -91,16 +97,9 @@ func (k *Kernel) maintainOutgoingConnection() {
 	}
 }
 
-func (k *Kernel) handleConnection(conn net.Conn) {
+func (k *Kernel) handleConnection() {
+	conn := k.conn
 	defer conn.Close()
-
-	// Set this connection as active
-	k.connMu.Lock()
-	if k.conn != nil {
-		k.conn.Close()
-	}
-	k.conn = conn
-	k.connMu.Unlock()
 
 	for {
 		var msg wire.Message
@@ -136,7 +135,15 @@ func (k *Kernel) Publish(msg wire.Message) error {
 	}
 
 	enc := wire.Em.NewEncoder(k.conn)
-	return enc.Encode(msg)
+	err := enc.Encode(msg)
+	if err != nil {
+		log.Printf("encode error: %v", err)
+		k.conn.Close()
+		k.conn = nil
+		return fmt.Errorf("failed to encode message: %v", err)
+	}
+	return nil
+
 }
 
 func (k *Kernel) Subscribe(protocol cid.Cid, handler func(wire.Message)) {

@@ -14,30 +14,37 @@ import (
 )
 
 var (
-	protocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
-	peerAddr    = flag.String("peer", "localhost:7272", "peer address")
-	listenPort  = flag.Int("port", 7271, "listen port")
+	// Request protocol used to send messages to agent2.
+	requestProtocolStr = "bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny"
+	// Response protocol expected from agent2.
+	responseProtocolStr = "bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu"
+	peerAddr            = flag.String("peer", "localhost:7272", "peer address")
 )
 
 func main() {
 	flag.Parse()
 
-	protocolCid, err := cid.Decode(protocolStr)
+	reqCid, err := cid.Decode(requestProtocolStr)
 	if err != nil {
-		log.Fatal("invalid protocol CID:", err)
+		log.Fatal("invalid request protocol CID:", err)
+	}
+
+	respCid, err := cid.Decode(responseProtocolStr)
+	if err != nil {
+		log.Fatal("invalid response protocol CID:", err)
 	}
 
 	k := kernel.NewKernel()
 	k.SetPeer(*peerAddr)
 
-	err = k.Start(*listenPort)
+	err = k.Start(0)
 	if err != nil {
 		log.Fatal("kernel start failed:", err)
 	}
 	defer k.Stop()
 
-	// Subscribe to response protocol
-	respCid, _ := cid.Decode("bafkreieq5jui4j25l3wpyw54my6fzdtcssgxhtd7wvb5klqnbawtgta5iu")
+	// Subscribe to response protocol to receive replies on the same TCP
+	// connection that was used to send the request.
 	k.Subscribe(respCid, func(msg wire.Message) {
 		fmt.Println("Agent1 received:", string(msg.Payload))
 	})
@@ -45,7 +52,7 @@ func main() {
 	done := make(chan bool)
 
 	go func() {
-		// Send messages
+		// Send messages every second.
 		payload := []byte("hello world")
 
 		timer := time.NewTicker(1 * time.Second)
@@ -55,13 +62,12 @@ func main() {
 				fmt.Println("Kernel stopped, exiting...")
 				return
 			case <-timer.C:
-				// send a message every second
 				err = k.Publish(wire.Message{
-					Protocol: protocolCid.Bytes(),
+					Protocol: reqCid.Bytes(),
 					Payload:  payload,
 				})
 				if err != nil {
-					log.Fatal("publish failed:", err)
+					log.Printf("publish failed: %v", err)
 				}
 			}
 		}
@@ -70,5 +76,5 @@ func main() {
 	fmt.Fprintln(os.Stderr, "Agent1 running. Press enter to exit...")
 	fmt.Scanln()
 	done <- true
-	time.Sleep(2 * time.Second) // Give time for any pending messages to be processed
+	time.Sleep(2 * time.Second) // Allow time for processing pending messages.
 }
