@@ -1,165 +1,23 @@
-Below are the complete files with changes that introduce a design concept for
-multi‐hop routing based on “routing promises,” along with a new section in the
-README documenting the ideas. In this design a node may advertise a promise such
-as “I promise that if you give me a message for Alice I will forward it her
-direction.” The kernel now holds a routing promises table mapping destination
-names to a next-hop network address. The Send() method and handleConnection()
-function could be enhanced later to check if a given message has an explicit
-destination (for example, by embedding a destination header in the payload) and
-use the routing table for source routing – similar to UUCPnet-style relaying.
-This implementation is experimental and intended for further discussion and
-experimentation.
+Below are two complete files that illustrate several alternative designs for
+multi‐hop routing. In the updated kernel code we add three distinct routing
+mechanisms:
 
-------------------------------
-File: /home/stevegt/lab/grid-poc/x/sim1/README.md
-------------------------------
-# PromiseGrid Simulation (sim1)
+• The original experimental “routing promises” mapping a destination (such as an
+  agent name) to a next hop network address.
 
-A demonstration of three agents hosted on separate nodes that communicate via
-persistent TCP connections using the PromiseGrid protocol pattern.
+• A node‐routing layer where nodes can promise to forward messages for a given
+  node identifier. This is analogous to routing IP packets to the correct host.
 
-## Overview
+• An agent‐routing layer that allows an agent-level promise such as “if you give me a
+  message for Alice the agent, I will forward it along the correct node route.” This
+  is similar to TCP/UDP port demultiplexing on an IP host.
 
-This simulation shows three Go nodes (node1, node2, and node3) each hosting a
-hello1 agent. Each node starts a kernel that is responsible for managing network
-connections, routing messages, and starting the agents. The kernel is started by
-the node’s main() function. The main() function then registers an agent via the
-kernel.AddAgent() method. The hello1 agent is a consolidated implementation that
-accepts an agent name as a parameter, allowing multiple nodes to use the same code.
+The README is also updated to describe these and additional ideas, including a
+future possibility of a pub/sub ARP-like discovery protocol for routing promises.
 
-Key features:
-
-- Persistent TCP connections with automatic reconnection
-- Single protocol CID used for both publishing and subscribing
-- Asynchronous message handling
-- Bi-directional communication over multiple TCP connections maintained in
-  a map for dynamic routing
-
-## Components
-
-### wire Package
-- Defines Message struct with protocol CID and payload
-- CBOR serialization/deserialization with deterministic encoding
-- Custom CBOR tag (0x67726964) for message structure
-
-### kernel Package
-- Manages network connections using a map of active connections
-- Handles message routing to protocol handlers
-- Provides publish/subscribe interface to agents
-- Multiple active TCP connections maintained between peers
-- Automatic connection failover and reconnection
-- Starts registered agents via the AddAgent() method
-- (Experimental) Multi-hop routing support via routing promises
-
-### Agents (Library Package)
-A single consolidated agent implementation, hello1, is used by all nodes.
-The agent name is passed as an argument to the NewAgent function. It implements a
-simple hello protocol:
-
-- Every 1 second, the agent sends a "hello from <agent name>" message.
-- Upon receiving a message beginning with "hello from", an agent extracts the
-  sender name and replies using the same connection with a message formatted as
-  "hello back from <agent name> to <sender name>".
-- If a message does not match the "hello from" format, the message is simply
-  printed to stdout.
-
-### Nodes (Executable Binaries)
-Each node hosts one hello1 agent instance. The main() functions reside in
-the node packages. In each node, the following steps occur:
-- A kernel instance is created and started.
-- The kernel is configured for dialing or listening.
-- The hello1 agent is instantiated with a unique agent name (for example,
-  "agent1", "agent2", or "agent3") and registered with the kernel via
-  kernel.AddAgent(), which in turn starts the agent.
-- Agents run asynchronously and interact via the kernel.
-
-## How It Works
-
-1. Nodes are started. Node1 and Node3 dial node2 while node2 accepts incoming
-   connections.
-2. The kernel maintains multiple persistent TCP connections between the nodes.
-3. Message flow:
-   - Each hello1 agent sends a "hello from <agent name>" message every second
-     via its outbound connection.
-   - Upon receiving a "hello from" message, the agent replies with a message
-     "hello back from <agent name> to <sender name>" using the same connection.
-   - Agents print to stdout any message that does not trigger a reply.
-
-## Multi-Hop Routing and Routing Promises
-
-As a future extension, PromiseGrid may support multi-hop routing using a scheme
-that combines traditional ARP-like discovery with source routing. In this model,
-nodes would advertise routing promises, for example:
-"I promise that if you give me a message for Alice I will forward it her
-direction."  
-A chain of these promises could be used for routing a message over several hops,
-similar in style to the UUCPnet protocol. The kernel maintains a routing promises
-table that maps a destination (such as an agent name) to a next hop address. With
-further enhancements, the Send() method or a dedicated routing handler could
-detect a destination header in the message payload and forward messages only to the
-appropriate next hop rather than broadcasting them to all peers.
-
-## Running the Simulation
-
-### Setup
-1. In terminal 1 (node1 hosting hello1 with agent name "agent1"):
-```bash
-cd node1
-go run node1.go -peer localhost:7272 -name agent1
-```
-
-2. In terminal 2 (node2 hosting hello1 with agent name "agent2"):
-```bash
-cd node2
-go run node2.go -port 7272 -name agent2
-```
-
-3. In terminal 3 (node3 hosting hello1 with agent name "agent3"):
-```bash
-cd node3
-go run node3.go -peer localhost:7272 -name agent3
-```
-
-### Expected Output
-
-**Node1 (hosting agent "agent1"):**
-```
-Node1 (hosting hello1 agent with name agent1) running. Press Ctrl+C to
-exit...
-Agent agent1 received: hello back from <agent_name> to agent1
-```
-
-**Node2 (hosting agent "agent2"):**
-```
-Node2 (hosting hello1 agent with name agent2) running. Press Ctrl+C to
-exit...
-Agent agent2 received: hello from agent1
-Agent agent2 received: hello from agent3
-```
-
-**Node3 (hosting agent "agent3"):**
-```
-Node3 (hosting hello1 agent with name agent3) running. Press Ctrl+C to
-exit...
-Agent agent3 received: hello back from <agent_name> to agent3
-```
-
-## Notes
-
-- A single protocol CID is used for the hello pub/sub protocol throughout:
-  - Hello protocol:
-    bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny
-- The kernel automatically reconnects if a TCP connection drops.
-- The hello1 agent is started by the kernel after being registered via the
-  AddAgent() method.
-- (Experimental) Multi-hop routing is under consideration using the notion
-  of routing promises.
-- Press Ctrl+C in any terminal to gracefully shut down the node.
-EOF_/home/stevegt/lab/grid-poc/x/sim1/README.md
-
-------------------------------
+------------------------------------------------------------
 File: /home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
-------------------------------
+------------------------------------------------------------
 package kernel
 
 import (
@@ -167,6 +25,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -182,29 +41,39 @@ type Agent interface {
 }
 
 type Kernel struct {
-	mu              sync.RWMutex
-	subscriptions   map[string]func(wire.Message)
-	listener        net.Listener
-	peerAddr        string
-	conns           map[string]net.Conn
-	connMu          sync.Mutex
-	ctx             context.Context
-	cancel          context.CancelFunc
-	agents          []Agent
-	// routingPromises maps a destination (for example, an agent name) to
-	// the next hop address. This enables multi-hop routing based on
+	mu                    sync.RWMutex
+	subscriptions         map[string]func(wire.Message)
+	listener              net.Listener
+	peerAddr              string
+	conns                 map[string]net.Conn
+	connMu                sync.Mutex
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	agents                []Agent
+	// routingPromises maps a destination (for example, an agent name) to the
+	// next hop address. This is the original experimental design based on
 	// advertised routing promises.
-	routingPromises map[string]string
+	routingPromises       map[string]string
+	// nodeRoutingPromises maps a node identifier (for example, a hostname)
+	// to a next hop address. This supports a node routing layer similar to IP
+	// routing.
+	nodeRoutingPromises   map[string]string
+	// agentRoutingPromises maps an agent name to a next hop address. This
+	// supports an agent routing layer for directing messages to the correct
+	// agent on a host.
+	agentRoutingPromises  map[string]string
 }
 
 func NewKernel() *Kernel {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &Kernel{
-		subscriptions:   make(map[string]func(wire.Message)),
-		conns:           make(map[string]net.Conn),
-		routingPromises: make(map[string]string),
-		ctx:             ctx,
-		cancel:          cancel,
+		subscriptions:        make(map[string]func(wire.Message)),
+		conns:                make(map[string]net.Conn),
+		routingPromises:      make(map[string]string),
+		nodeRoutingPromises:  make(map[string]string),
+		agentRoutingPromises: make(map[string]string),
+		ctx:                  ctx,
+		cancel:               cancel,
 	}
 }
 
@@ -306,17 +175,26 @@ func (k *Kernel) handleConnection(conn net.Conn) {
 			handler(msg)
 			continue
 		}
+
 		// (Experimental) If no subscription directly handles this message,
-		// check the routing promises table to see if the message should be
-		// forwarded to a next hop. In a full implementation the message would
-		// carry a destination header.
-		k.mu.RLock()
-		// For example, extract a hypothetical destination from the payload.
-		// This is a stub showing how routing might be looked up.
-		nextHop, hasPromise := k.routingPromises[string(msg.Payload)]
-		k.mu.RUnlock()
-		if hasPromise {
+		// inspect the payload for a destination header to decide
+		// multi-hop routing.  We support three cases:
+		// 1. A simple routing promise mapping (original design).
+		// 2. A node routing promise if the payload starts with "node:".
+		// 3. An agent routing promise if the payload starts with "agent:".
+		payloadStr := string(msg.Payload)
+		if nextHop, ok := k.routingPromises[payloadStr]; ok {
 			k.forwardMessage(nextHop, msg)
+		} else if strings.HasPrefix(payloadStr, "node:") {
+			nodeID := strings.TrimPrefix(payloadStr, "node:")
+			if nextHop, ok := k.GetNodeNextHop(nodeID); ok {
+				k.forwardMessage(nextHop, msg)
+			}
+		} else if strings.HasPrefix(payloadStr, "agent:") {
+			agentName := strings.TrimPrefix(payloadStr, "agent:")
+			if nextHop, ok := k.GetAgentNextHop(agentName); ok {
+				k.forwardMessage(nextHop, msg)
+			}
 		}
 	}
 }
@@ -349,8 +227,8 @@ func (k *Kernel) Send(msg wire.Message) error {
 
 	var firstErr error
 	// (Experimental) In a multi-hop scenario one might inspect the msg for a
-	// destination header and use the routing promises table to send the
-	// message via a specific connection rather than broadcasting.
+	// destination header and use the appropriate routing promise table to send
+	// the message via a specific connection rather than broadcasting.
 	for addr, conn := range k.conns {
 		enc := wire.Em.NewEncoder(conn)
 		err := enc.Encode(msg)
@@ -413,6 +291,56 @@ func (k *Kernel) GetNextHop(destination string) (string, bool) {
 	return nextHop, ok
 }
 
+// AddNodeRoutingPromise registers a promise for node-level routing.
+// destination should be a node identifier.
+func (k *Kernel) AddNodeRoutingPromise(destination, nextHop string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.nodeRoutingPromises[destination] = nextHop
+	log.Printf("added node routing promise: %s -> %s", destination, nextHop)
+}
+
+// RemoveNodeRoutingPromise removes a node routing promise.
+func (k *Kernel) RemoveNodeRoutingPromise(destination string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.nodeRoutingPromises, destination)
+	log.Printf("removed node routing promise for destination %s", destination)
+}
+
+// GetNodeNextHop returns the next hop for a given node destination.
+func (k *Kernel) GetNodeNextHop(destination string) (string, bool) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	nextHop, ok := k.nodeRoutingPromises[destination]
+	return nextHop, ok
+}
+
+// AddAgentRoutingPromise registers a promise for agent-level routing.
+// destination should be an agent name.
+func (k *Kernel) AddAgentRoutingPromise(destination, nextHop string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.agentRoutingPromises[destination] = nextHop
+	log.Printf("added agent routing promise: %s -> %s", destination, nextHop)
+}
+
+// RemoveAgentRoutingPromise removes an agent routing promise.
+func (k *Kernel) RemoveAgentRoutingPromise(destination string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.agentRoutingPromises, destination)
+	log.Printf("removed agent routing promise for destination %s", destination)
+}
+
+// GetAgentNextHop returns the next hop for a given agent destination.
+func (k *Kernel) GetAgentNextHop(destination string) (string, bool) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	nextHop, ok := k.agentRoutingPromises[destination]
+	return nextHop, ok
+}
+
 func (k *Kernel) AddAgent(a Agent) {
 	k.mu.Lock()
 	k.agents = append(k.agents, a)
@@ -432,4 +360,162 @@ func (k *Kernel) Stop() {
 		k.listener.Close()
 	}
 }
-EOF_/home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
+------------------------------------------------------------
+File: /home/stevegt/lab/grid-poc/x/sim1/README.md
+------------------------------------------------------------
+# PromiseGrid Simulation (sim1)
+
+A demonstration of three agents hosted on separate nodes that communicate via
+persistent TCP connections using the PromiseGrid protocol pattern.
+
+## Overview
+
+This simulation shows three Go nodes (node1, node2, and node3) each hosting a
+hello1 agent. Each node starts a kernel that is responsible for managing network
+connections, routing messages, and starting the agents. The kernel is started by
+the node’s main() function. The main() function then registers an agent via the
+kernel.AddAgent() method. The hello1 agent is a consolidated implementation that
+accepts an agent name as a parameter, allowing multiple nodes to use the same code.
+
+Key features:
+
+- Persistent TCP connections with automatic reconnection
+- Single protocol CID used for both publishing and subscribing
+- Asynchronous message handling
+- Bi-directional communication over multiple TCP connections maintained in a
+  map for dynamic routing
+
+## Components
+
+### wire Package
+- Defines Message struct with protocol CID and payload
+- CBOR serialization/deserialization with deterministic encoding
+- Custom CBOR tag (0x67726964) for message structure
+
+### kernel Package
+- Manages network connections using a map of active connections
+- Handles message routing to protocol handlers
+- Provides publish/subscribe interface to agents
+- Multiple active TCP connections maintained between peers
+- Automatic connection failover and reconnection
+- Starts registered agents via the AddAgent() method
+- (Experimental) Multi-hop routing support via several routing layers:
+  - A simple routing promises table for destination-to-next-hop mapping.
+  - A node routing layer for directing messages to the correct node.
+  - An agent routing layer for delivering messages to the correct agent on a
+    node.
+
+### Agents (Library Package)
+A single consolidated agent implementation, hello1, is used by all nodes.
+The agent name is passed as an argument to the NewAgent function. It implements a
+simple hello protocol:
+
+- Every 1 second, the agent sends a "hello from <agent name>" message.
+- Upon receiving a message beginning with "hello from", an agent extracts the
+  sender name and replies using the same connection with a message formatted as
+  "hello back from <agent name> to <sender name>".
+- If a message does not match the "hello from" format, the message is simply
+  printed to stdout.
+
+### Nodes (Executable Binaries)
+Each node hosts one hello1 agent instance. The main() functions reside in the
+node packages. In each node, the following steps occur:
+- A kernel instance is created and started.
+- The kernel is configured for dialing or listening.
+- The hello1 agent is instantiated with a unique agent name (for example,
+  "agent1", "agent2", or "agent3") and registered with the kernel via
+  kernel.AddAgent(), which in turn starts the agent.
+- Agents run asynchronously and interact via the kernel.
+
+## How It Works
+
+1. Nodes are started. Node1 and Node3 dial node2 while node2 accepts incoming
+   connections.
+2. The kernel maintains multiple persistent TCP connections between the nodes.
+3. Message flow:
+   - Each hello1 agent sends a "hello from <agent name>" message every second
+     via its outbound connection.
+   - Upon receiving a "hello from" message, the agent replies with a message
+     "hello back from <agent name> to <sender name>" using the same connection.
+   - If a message does not trigger a reply, it may be forwarded based on one of
+     the experimental multi-hop routing schemes:
+     * A generic routing promise (e.g. using the entire payload as key).
+     * A node routing promise if the payload starts with "node:".
+     * An agent routing promise if the payload starts with "agent:".
+     
+## Multi-Hop Routing and Alternative Designs
+
+As a future extension, PromiseGrid may support multi-hop routing using one or more
+of the following schemes:
+
+- A combination of ARP-like discovery with source routing based on routing
+  promises. In this model, nodes advertise promises such as "I promise that if you
+  give me a message for Alice I will forward it her direction."
+- A routing table where the destination is specified as a node or agent identifier
+  (CID, DID, agent name, or topic), with routing hints including a set of peer IDs.
+- Separate routing layers for nodes and agents. The node routing layer directs
+  messages to the correct node (like IP addresses routing packets to hosts) while
+  the agent routing layer routes the message to the correct agent on that node
+  (like TCP/UDP ports).
+- A pub/sub system combined with an ARP-like promise chain that informs nodes how
+  to route messages for specific topics.
+- Variations using deterministic promise chains or source routing akin to UUCPnet.
+
+These ideas may be combined or tailored in future revisions of the protocol.
+
+## Running the Simulation
+
+### Setup
+1. In terminal 1 (node1 hosting hello1 with agent name "agent1"):
+```bash
+cd node1
+go run node1.go -peer localhost:7272 -name agent1
+```
+
+2. In terminal 2 (node2 hosting hello1 with agent name "agent2"):
+```bash
+cd node2
+go run node2.go -port 7272 -name agent2
+```
+
+3. In terminal 3 (node3 hosting hello1 with agent name "agent3"):
+```bash
+cd node3
+go run node3.go -peer localhost:7272 -name agent3
+```
+
+### Expected Output
+
+**Node1 (hosting agent "agent1"):**
+```
+Node1 (hosting hello1 agent with name agent1) running. Press Ctrl+C to
+exit...
+Agent agent1 received: hello back from <agent_name> to agent1
+```
+
+**Node2 (hosting agent "agent2"):**
+```
+Node2 (hosting hello1 agent with name agent2) running. Press Ctrl+C to
+exit...
+Agent agent2 received: hello from agent1
+Agent agent2 received: hello from agent3
+```
+
+**Node3 (hosting agent "agent3"):**
+```
+Node3 (hosting hello1 agent with name agent3) running. Press Ctrl+C to
+exit...
+Agent agent3 received: hello back from <agent_name> to agent3
+```
+
+## Notes
+
+- A single protocol CID is used for the hello pub/sub protocol throughout:
+  - Hello protocol:
+    bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny
+- The kernel automatically reconnects if a TCP connection drops.
+- The hello1 agent is started by the kernel after being registered via the
+  AddAgent() method.
+- (Experimental) Multi-hop routing is under consideration using one or more
+  of the routing schemes described above.
+- Press Ctrl+C in any terminal to gracefully shut down the node.
