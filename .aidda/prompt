@@ -1,11 +1,15 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add a few promise-theory-based protocols.
+Add several protocols that incorporate the idea of personal currencies,
+where each agent issues personal currency that is used to pay for
+routing and other services.  The personal currency is a promise, IOU,
+or capability token that, when presented to the issuer, can be
+redeemed for routing, services, storage, CPU, GPU, bandwidth, or other
+resources. The issuer can be the agent itself, or it can be a third
+party that has a relationship with the agent.  
 
-Add a few market-based protocols.
-
-Add a few prediction-market-based protocols.
-
+Add several protocols that recombine pub/sub, store-and-forward,
+promises, markets, prediction markets, and personal currencies.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -18,13 +22,6 @@ Sysmsg:
   wrapped at 70 characters.  
 In:
   x/sim1/routing.md
-  x/sim1/README.md
-  x/sim1/wire/wire.go
-  x/sim1/kernel/kernel.go
-  x/sim1/node1/node1.go
-  x/sim1/node2/node2.go
-  x/sim1/node3/node3.go
-  x/sim1/hello1/hello1.go
 Out:
   x/sim1/routing.md
 
@@ -34,6 +31,15 @@ Make the needed changes to the code.
 
 Update README.md to reflect the new design.
 
+In:
+  x/sim1/routing.md
+  x/sim1/README.md
+  x/sim1/wire/wire.go
+  x/sim1/kernel/kernel.go
+  x/sim1/node1/node1.go
+  x/sim1/node2/node2.go
+  x/sim1/node3/node3.go
+  x/sim1/hello1/hello1.go
 Out:
   x/sim1/node1/node1.go
   x/sim1/node2/node2.go

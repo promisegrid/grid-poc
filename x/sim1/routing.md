@@ -164,3 +164,36 @@ mechanisms.
     on route success. The route with the highest consensus via market-based
     scoring is selected, rewarding nodes for accurate predictions and
     efficient forwarding.
+
+28. Personal Currency: Routing Collateral Tokens  
+    Nodes issue personal currency tokens as collateral for message
+    forwarding. Each token represents a promise to provide routing or
+    other services such as storage, CPU, or bandwidth. Upon successful
+    delivery, the tokens can be redeemed with the issuer, creating an
+    incentive structure that rewards reliable behavior.
+
+29. Personal-Currency-Enabled Store-and-Forward  
+    Agents use their self-issued IOUs or tokens to pay for temporary storage
+    services. In this protocol, nodes holding messages collect personal
+    currency as a fee, which can later be used to request services from
+    peers, creating a decentralized market for delay tolerant networking.
+
+30. Prediction Market with Personal Currency Hedging  
+    In this protocol, agents back their route efficiency predictions with
+    personal currency tokens. These tokens act as a hedge against route
+    failures. Nodes that accurately forecast performance earn tokens that
+    can be exchanged for premium routing services in future transactions.
+
+31. Pub/Sub with Dynamic Personal Currency Markets  
+    Subscribers assign personal currency values to topics of interest.
+    Messages are routed along paths where nodes with higher currency stakes
+    gain priority in delivery. This dynamic market mechanism aligns the
+    distribution incentives with the subscribers' valuations ensuring that
+    high-value messages are prioritized.
+
+32. Hybrid Promise-Personal Currency Routing  
+    Combining promise-based routing with personal currency tokens, nodes first
+    exchange tokens as a commitment to forward messages. Failure to complete
+    the promise results in penalties measured in lost tokens. This hybrid
+    protocol reinforces accountability and encourages robust routing
+    through mutually beneficial exchanges.
