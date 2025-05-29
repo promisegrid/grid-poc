@@ -1,152 +1,435 @@
-File: /home/stevegt/lab/grid-poc/x/sim1/node1/node1.go
-```go
-package main
+Below are the complete files with changes that introduce a design concept for
+multi‐hop routing based on “routing promises,” along with a new section in the
+README documenting the ideas. In this design a node may advertise a promise such
+as “I promise that if you give me a message for Alice I will forward it her
+direction.” The kernel now holds a routing promises table mapping destination
+names to a next-hop network address. The Send() method and handleConnection()
+function could be enhanced later to check if a given message has an explicit
+destination (for example, by embedding a destination header in the payload) and
+use the routing table for source routing – similar to UUCPnet-style relaying.
+This implementation is experimental and intended for further discussion and
+experimentation.
+
+------------------------------
+File: /home/stevegt/lab/grid-poc/x/sim1/README.md
+------------------------------
+# PromiseGrid Simulation (sim1)
+
+A demonstration of three agents hosted on separate nodes that communicate via
+persistent TCP connections using the PromiseGrid protocol pattern.
+
+## Overview
+
+This simulation shows three Go nodes (node1, node2, and node3) each hosting a
+hello1 agent. Each node starts a kernel that is responsible for managing network
+connections, routing messages, and starting the agents. The kernel is started by
+the node’s main() function. The main() function then registers an agent via the
+kernel.AddAgent() method. The hello1 agent is a consolidated implementation that
+accepts an agent name as a parameter, allowing multiple nodes to use the same code.
+
+Key features:
+
+- Persistent TCP connections with automatic reconnection
+- Single protocol CID used for both publishing and subscribing
+- Asynchronous message handling
+- Bi-directional communication over multiple TCP connections maintained in
+  a map for dynamic routing
+
+## Components
+
+### wire Package
+- Defines Message struct with protocol CID and payload
+- CBOR serialization/deserialization with deterministic encoding
+- Custom CBOR tag (0x67726964) for message structure
+
+### kernel Package
+- Manages network connections using a map of active connections
+- Handles message routing to protocol handlers
+- Provides publish/subscribe interface to agents
+- Multiple active TCP connections maintained between peers
+- Automatic connection failover and reconnection
+- Starts registered agents via the AddAgent() method
+- (Experimental) Multi-hop routing support via routing promises
+
+### Agents (Library Package)
+A single consolidated agent implementation, hello1, is used by all nodes.
+The agent name is passed as an argument to the NewAgent function. It implements a
+simple hello protocol:
+
+- Every 1 second, the agent sends a "hello from <agent name>" message.
+- Upon receiving a message beginning with "hello from", an agent extracts the
+  sender name and replies using the same connection with a message formatted as
+  "hello back from <agent name> to <sender name>".
+- If a message does not match the "hello from" format, the message is simply
+  printed to stdout.
+
+### Nodes (Executable Binaries)
+Each node hosts one hello1 agent instance. The main() functions reside in
+the node packages. In each node, the following steps occur:
+- A kernel instance is created and started.
+- The kernel is configured for dialing or listening.
+- The hello1 agent is instantiated with a unique agent name (for example,
+  "agent1", "agent2", or "agent3") and registered with the kernel via
+  kernel.AddAgent(), which in turn starts the agent.
+- Agents run asynchronously and interact via the kernel.
+
+## How It Works
+
+1. Nodes are started. Node1 and Node3 dial node2 while node2 accepts incoming
+   connections.
+2. The kernel maintains multiple persistent TCP connections between the nodes.
+3. Message flow:
+   - Each hello1 agent sends a "hello from <agent name>" message every second
+     via its outbound connection.
+   - Upon receiving a "hello from" message, the agent replies with a message
+     "hello back from <agent name> to <sender name>" using the same connection.
+   - Agents print to stdout any message that does not trigger a reply.
+
+## Multi-Hop Routing and Routing Promises
+
+As a future extension, PromiseGrid may support multi-hop routing using a scheme
+that combines traditional ARP-like discovery with source routing. In this model,
+nodes would advertise routing promises, for example:
+"I promise that if you give me a message for Alice I will forward it her
+direction."  
+A chain of these promises could be used for routing a message over several hops,
+similar in style to the UUCPnet protocol. The kernel maintains a routing promises
+table that maps a destination (such as an agent name) to a next hop address. With
+further enhancements, the Send() method or a dedicated routing handler could
+detect a destination header in the message payload and forward messages only to the
+appropriate next hop rather than broadcasting them to all peers.
+
+## Running the Simulation
+
+### Setup
+1. In terminal 1 (node1 hosting hello1 with agent name "agent1"):
+```bash
+cd node1
+go run node1.go -peer localhost:7272 -name agent1
+```
+
+2. In terminal 2 (node2 hosting hello1 with agent name "agent2"):
+```bash
+cd node2
+go run node2.go -port 7272 -name agent2
+```
+
+3. In terminal 3 (node3 hosting hello1 with agent name "agent3"):
+```bash
+cd node3
+go run node3.go -peer localhost:7272 -name agent3
+```
+
+### Expected Output
+
+**Node1 (hosting agent "agent1"):**
+```
+Node1 (hosting hello1 agent with name agent1) running. Press Ctrl+C to
+exit...
+Agent agent1 received: hello back from <agent_name> to agent1
+```
+
+**Node2 (hosting agent "agent2"):**
+```
+Node2 (hosting hello1 agent with name agent2) running. Press Ctrl+C to
+exit...
+Agent agent2 received: hello from agent1
+Agent agent2 received: hello from agent3
+```
+
+**Node3 (hosting agent "agent3"):**
+```
+Node3 (hosting hello1 agent with name agent3) running. Press Ctrl+C to
+exit...
+Agent agent3 received: hello back from <agent_name> to agent3
+```
+
+## Notes
+
+- A single protocol CID is used for the hello pub/sub protocol throughout:
+  - Hello protocol:
+    bafkreibm6jg3ux5qumhcn2b3flc3tyu6dmlb4xa7u5bf44ydelk6a2mhny
+- The kernel automatically reconnects if a TCP connection drops.
+- The hello1 agent is started by the kernel after being registered via the
+  AddAgent() method.
+- (Experimental) Multi-hop routing is under consideration using the notion
+  of routing promises.
+- Press Ctrl+C in any terminal to gracefully shut down the node.
+EOF_/home/stevegt/lab/grid-poc/x/sim1/README.md
+
+------------------------------
+File: /home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go
+------------------------------
+package kernel
 
 import (
 	"context"
-	"flag"
 	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
+	"log"
+	"net"
+	"sync"
+	"time"
 
-	"sim1/hello1"
-	"sim1/kernel"
+	"sim1/wire"
+
+	"github.com/ipfs/go-cid"
 )
 
-func main() {
-	peer := flag.String("peer", "localhost:7272", "peer address for dialing")
-	name := flag.String("name", "agent1", "agent name")
-	flag.Parse()
-
-	// Create a kernel instance and configure it for dialing.
-	k := kernel.NewKernel()
-	k.SetPeer(*peer)
-	err := k.Start(0)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Kernel start failed:", err)
-		os.Exit(1)
-	}
-
-	// Create and register a hello1 agent with the kernel using the agent name.
-	a := hello1.NewAgent(k, *name)
-	k.AddAgent(a)
-
-	fmt.Println("Node1 (hosting hello1 agent with name", *name,
-		") running. Press Ctrl+C to exit...")
-	// Create a context to propagate cancellation to agents.
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-ctx.Done()
-	}()
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-
-	a.Stop()
-	cancel()
-	k.Stop()
+// Agent defines the interface that each agent must implement.
+type Agent interface {
+	Run(context.Context)
+	Stop()
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/node1/node1.go
 
-File: /home/stevegt/lab/grid-poc/x/sim1/node2/node2.go
-```go
-package main
-
-import (
-	"context"
-	"flag"
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
-
-	"sim1/hello1"
-	"sim1/kernel"
-)
-
-func main() {
-	port := flag.Int("port", 7272, "listen port for node2")
-	name := flag.String("name", "agent2", "agent name")
-	flag.Parse()
-
-	// Create a kernel instance and start listening on the specified port.
-	k := kernel.NewKernel()
-	err := k.Start(*port)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Kernel start failed:", err)
-		os.Exit(1)
-	}
-
-	// Create and register a hello1 agent with the kernel using the agent name.
-	a := hello1.NewAgent(k, *name)
-	k.AddAgent(a)
-
-	fmt.Println("Node2 (hosting hello1 agent with name", *name,
-		") running. Press Ctrl+C to exit...")
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-ctx.Done()
-	}()
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-
-	a.Stop()
-	cancel()
-	k.Stop()
+type Kernel struct {
+	mu              sync.RWMutex
+	subscriptions   map[string]func(wire.Message)
+	listener        net.Listener
+	peerAddr        string
+	conns           map[string]net.Conn
+	connMu          sync.Mutex
+	ctx             context.Context
+	cancel          context.CancelFunc
+	agents          []Agent
+	// routingPromises maps a destination (for example, an agent name) to
+	// the next hop address. This enables multi-hop routing based on
+	// advertised routing promises.
+	routingPromises map[string]string
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/node2/node2.go
 
-File: /home/stevegt/lab/grid-poc/x/sim1/node3/node3.go
-```go
-package main
-
-import (
-	"context"
-	"flag"
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
-
-	"sim1/hello1"
-	"sim1/kernel"
-)
-
-func main() {
-	peer := flag.String("peer", "localhost:7272", "peer address for dialing")
-	name := flag.String("name", "agent3", "agent name")
-	flag.Parse()
-
-	// Create a kernel instance and configure it for dialing.
-	k := kernel.NewKernel()
-	k.SetPeer(*peer)
-	err := k.Start(0)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "Kernel start failed:", err)
-		os.Exit(1)
-	}
-
-	// Create and register a hello1 agent with the kernel using the agent name.
-	a := hello1.NewAgent(k, *name)
-	k.AddAgent(a)
-
-	fmt.Println("Node3 (hosting hello1 agent with name", *name,
-		") running. Press Ctrl+C to exit...")
+func NewKernel() *Kernel {
 	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-ctx.Done()
-	}()
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-	<-sig
-
-	a.Stop()
-	cancel()
-	k.Stop()
+	return &Kernel{
+		subscriptions:   make(map[string]func(wire.Message)),
+		conns:           make(map[string]net.Conn),
+		routingPromises: make(map[string]string),
+		ctx:             ctx,
+		cancel:          cancel,
+	}
 }
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/node3/node3.go
+
+func (k *Kernel) Start(port int) error {
+	var err error
+	if port > 0 {
+		k.listener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			return fmt.Errorf("failed to listen: %v", err)
+		}
+		log.Printf("listening on port %d", port)
+		go k.acceptConnections()
+	} else {
+		log.Println("not listening for incoming connections")
+		go k.maintainOutgoingConnection()
+	}
+	return nil
+}
+
+func (k *Kernel) acceptConnections() {
+	for {
+		conn, err := k.listener.Accept()
+		if err != nil {
+			select {
+			case <-k.ctx.Done():
+				return
+			default:
+				log.Printf("accept error: %v", err)
+			}
+			continue
+		}
+		log.Printf("accepted connection from %s", conn.RemoteAddr())
+		k.connMu.Lock()
+		k.conns[conn.RemoteAddr().String()] = conn
+		k.connMu.Unlock()
+		go k.handleConnection(conn)
+	}
+}
+
+func (k *Kernel) maintainOutgoingConnection() {
+	for {
+		select {
+		case <-k.ctx.Done():
+			return
+		default:
+			if k.peerAddr == "" {
+				time.Sleep(1 * time.Second)
+				continue
+			}
+			k.connMu.Lock()
+			_, exists := k.conns[k.peerAddr]
+			k.connMu.Unlock()
+			if !exists {
+				conn, err := net.Dial("tcp", k.peerAddr)
+				if err != nil {
+					log.Printf("dial error: %v", err)
+					time.Sleep(2 * time.Second)
+					continue
+				}
+				k.connMu.Lock()
+				k.conns[k.peerAddr] = conn
+				k.connMu.Unlock()
+				log.Printf("connected to peer %s", k.peerAddr)
+				go k.handleConnection(conn)
+			}
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+func (k *Kernel) handleConnection(conn net.Conn) {
+	defer func() {
+		conn.Close()
+		k.connMu.Lock()
+		delete(k.conns, conn.RemoteAddr().String())
+		k.connMu.Unlock()
+	}()
+	dec := wire.Dm.NewDecoder(conn)
+	for {
+		var msg wire.Message
+		err := dec.Decode(&msg)
+		if err != nil {
+			log.Printf("decode error from %s: %v",
+				conn.RemoteAddr(), err)
+			return
+		}
+
+		protocolCid, err := cid.Cast(msg.Protocol)
+		if err != nil {
+			log.Printf("invalid protocol CID: %v", err)
+			continue
+		}
+
+		k.mu.RLock()
+		handler, exists := k.subscriptions[protocolCid.String()]
+		k.mu.RUnlock()
+
+		if exists {
+			handler(msg)
+			continue
+		}
+		// (Experimental) If no subscription directly handles this message,
+		// check the routing promises table to see if the message should be
+		// forwarded to a next hop. In a full implementation the message would
+		// carry a destination header.
+		k.mu.RLock()
+		// For example, extract a hypothetical destination from the payload.
+		// This is a stub showing how routing might be looked up.
+		nextHop, hasPromise := k.routingPromises[string(msg.Payload)]
+		k.mu.RUnlock()
+		if hasPromise {
+			k.forwardMessage(nextHop, msg)
+		}
+	}
+}
+
+func (k *Kernel) forwardMessage(nextHop string, msg wire.Message) {
+	k.connMu.Lock()
+	conn, exists := k.conns[nextHop]
+	k.connMu.Unlock()
+	if exists {
+		enc := wire.Em.NewEncoder(conn)
+		err := enc.Encode(msg)
+		if err != nil {
+			log.Printf("forward encode error on conn %s: %v",
+				nextHop, err)
+			conn.Close()
+			k.connMu.Lock()
+			delete(k.conns, nextHop)
+			k.connMu.Unlock()
+		} else {
+			log.Printf("forwarded message to %s", nextHop)
+		}
+	} else {
+		log.Printf("no connection for next hop %s", nextHop)
+	}
+}
+
+func (k *Kernel) Send(msg wire.Message) error {
+	k.connMu.Lock()
+	defer k.connMu.Unlock()
+
+	var firstErr error
+	// (Experimental) In a multi-hop scenario one might inspect the msg for a
+	// destination header and use the routing promises table to send the
+	// message via a specific connection rather than broadcasting.
+	for addr, conn := range k.conns {
+		enc := wire.Em.NewEncoder(conn)
+		err := enc.Encode(msg)
+		if err != nil {
+			log.Printf("encode error on conn %s: %v", addr, err)
+			conn.Close()
+			delete(k.conns, addr)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("failed to encode message on %s: %v",
+					addr, err)
+			}
+		}
+	}
+	if firstErr != nil {
+		return firstErr
+	}
+	return nil
+}
+
+func (k *Kernel) Register(protocol cid.Cid, handler func(wire.Message)) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.subscriptions[protocol.String()] = handler
+}
+
+func (k *Kernel) Deregister(protocol cid.Cid) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.subscriptions, protocol.String())
+}
+
+func (k *Kernel) SetPeer(addr string) {
+	k.peerAddr = addr
+}
+
+// AddRoutingPromise allows a node to advertise a promise that it will forward
+// messages destined for the given destination via the specified next hop.
+func (k *Kernel) AddRoutingPromise(destination, nextHop string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.routingPromises[destination] = nextHop
+	log.Printf("added routing promise: %s -> %s", destination, nextHop)
+}
+
+// RemoveRoutingPromise removes a previously set routing promise for a given
+// destination.
+func (k *Kernel) RemoveRoutingPromise(destination string) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	delete(k.routingPromises, destination)
+	log.Printf("removed routing promise for destination %s", destination)
+}
+
+// GetNextHop returns the next hop for a message destined to the given
+// destination, if a routing promise exists.
+func (k *Kernel) GetNextHop(destination string) (string, bool) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
+	nextHop, ok := k.routingPromises[destination]
+	return nextHop, ok
+}
+
+func (k *Kernel) AddAgent(a Agent) {
+	k.mu.Lock()
+	k.agents = append(k.agents, a)
+	k.mu.Unlock()
+	go a.Run(k.ctx)
+}
+
+func (k *Kernel) Stop() {
+	k.cancel()
+	k.connMu.Lock()
+	for addr, conn := range k.conns {
+		conn.Close()
+		delete(k.conns, addr)
+	}
+	k.connMu.Unlock()
+	if k.listener != nil {
+		k.listener.Close()
+	}
+}
+EOF_/home/stevegt/lab/grid-poc/x/sim1/kernel/kernel.go

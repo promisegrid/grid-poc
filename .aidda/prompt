@@ -1,11 +1,12 @@
-consolidate agent* to hello1
+suggest routing
 
-Consolidate the agent*.go files into a single hello1.go file.  Pass the
-agent name as an argument to the NewAgent function.  
-
-Make the needed changes to the code.
-
-Update README.md to reflect the new design.
+Brainstorm how PromiseGrid might do multi-hop routing -- need to
+somehow give routing clues to kernel from higher layers.  Something
+like a combination of ARP and routing tables.  Needs to be based on
+promises or claims, as in "I promise that if you give me a message for
+Alice I will forward it her direction".  Might even be a combination
+of a chain of those promises combined with source routing,
+UUCPnet-style.  
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make
@@ -20,20 +21,23 @@ In:
   x/sim1/README.md
   x/sim1/wire/wire.go
   x/sim1/kernel/kernel.go
-  x/sim1/agent1/agent1.go
-  x/sim1/agent2/agent2.go
-  x/sim1/agent3/agent3.go
   x/sim1/node1/node1.go
   x/sim1/node2/node2.go
   x/sim1/node3/node3.go
   x/sim1/hello1/hello1.go
+
+.stop
+
+Make the needed changes to the code.
+
+Update README.md to reflect the new design.
+
 Out:
   x/sim1/node1/node1.go
   x/sim1/node2/node2.go
   x/sim1/node3/node3.go
 
 .stop
-
 
 replace protocol CID with routing info array
 
