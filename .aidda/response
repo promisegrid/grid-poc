@@ -180,8 +180,8 @@ mechanisms.
     structure that rewards reliable behavior.
 
 29. Personal-Currency-Enabled Store-and-Forward  
-    Agents use their self-issued IOUs or tokens to pay for temporary storage
-    services. In this protocol, nodes holding messages collect personal
+    Agents use their self-issued IOUs or tokens to pay for temporary
+    storage services. In this protocol, nodes holding messages collect personal
     currency as a fee, which can later be used to request services from
     peers, creating a decentralized market for delay tolerant networking.
 
@@ -330,5 +330,26 @@ mechanisms.
     explicit routing promises. This hybrid approach reinforces reliable
     message forwarding while dynamically adapting to changing network
     conditions.
+
+48. Floating-Exchange Double Auction Routing  
+    Agents use personal currencies with floating exchange rates to pay
+    for promises and routing services. An open double-auction market
+    dynamically sets the exchange rates between currency pairs. Nodes
+    bid for reliable routes, and payments are automatically settled upon
+    promise fulfillment.
+
+49. Real-Time Market Negotiation Routing  
+    In this protocol, nodes engage in real-time double auctions to set
+    rates for routing services. Each agent maintains a personal currency,
+    and current bids and asks determine the exchange rates. Dynamic
+    pricing encourages fair competition and rewards nodes that offer
+    consistently reliable message forwarding.
+
+50. Floating Credit Exchange Routing  
+    Nodes trade credits representing their personal currencies on an open
+    double-auction platform. Messages require a deposit of credits that
+    adjusts in real time. Local supply and demand fluctuations yield an
+    adaptive pricing model, ensuring that only the best-informed nodes
+    act as reliable routers.
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/routing.md

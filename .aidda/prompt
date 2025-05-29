@@ -1,6 +1,11 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add a few ant-routing protocols.
+Add a few protocols in which agents use personal currencies with
+floating exchange rates to pay for receiving promises and for routing
+and other services.  Each agent has a personal currency, and the
+exchange rate between currency pairs is determined by an open
+double-auction currency market.  
+
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
