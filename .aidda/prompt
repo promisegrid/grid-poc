@@ -1,15 +1,6 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add several protocols that incorporate the idea of personal currencies,
-where each agent issues personal currency that is used to pay for
-routing and other services.  The personal currency is a promise, IOU,
-or capability token that, when presented to the issuer, can be
-redeemed for routing, services, storage, CPU, GPU, bandwidth, or other
-resources. The issuer can be the agent itself, or it can be a third
-party that has a relationship with the agent.  
-
-Add several protocols that recombine pub/sub, store-and-forward,
-promises, markets, prediction markets, and personal currencies.
+Add several protocols that focus on preventing tragedy of the commons.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
