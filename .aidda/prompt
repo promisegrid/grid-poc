@@ -1,43 +1,12 @@
-brainstorm routing.md
-
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Consider combinations of the following ideas:
+Add several gossip protocols.
 
-- Something like a combination of ARP and routing tables.  
-- Something like a routing table, but with the ability to specify a
-  CID or DID as the destination, and a set of routing hints that are
-  used to route the message to the destination.  The routing hints
-  could be a set of CIDs, DIDs, or topics that are used to route the
-  message to the destination.
-- Something based on promises or claims, as in "I promise that if you
-  give me a message for Alice I will forward it her direction".  Might
-  even be a combination of a chain of those promises combined with
-  source routing, UUCPnet-style.  
-- Consider the idea that, perhaps, the protocol CID is actually a
-  routing method CID.
-- Maybe there's a node routing layer and an agent routing layer, and
-  the node routing layer is used to route messages to the correct node,
-  and the agent routing layer is used to route messages to the correct
-  agent on that node.  Roughly analogous to the way that IP
-  addresses route packets to the correct host, and TCP/UDP ports route
-  packets to the correct process on that host.  
-- Maybe it's simply a pub/sub system.  We'd still need some sort of
-  ARP-like whohas/ihave promise chain to let nodes know which
-  nodes are interested in which topics, and to let the kernel know
-  which agents are interested in which topics.  
+Add some epidemic protocols.
 
-Provide several alternative designs, including the above, but add
-several designs of your own based on the above ideas, and several more
-that are not based on the above ideas.  Examine the OSI model, the
-TCP/IP model, and the Usenet and UUCP models to see if there are any
-ideas that can be adapted from those models.  
-
-The routing.md document should contain at least 15 alternative
-designs, each with a brief description of the design and how it works.
 
 Sysmsg: 
-  You are protocol designer and an expert Go programmer. Please make
+  You are a protocol designer and an expert Go programmer. Please make
   the requested changes to the given code or documentation. Do not
   quote or escape single backticks in the code -- Go uses backticks
   for raw string literals.  Do not remove or alter comments unless
@@ -46,6 +15,7 @@ Sysmsg:
   unless you are making other changes to the paragraph.  Lines must be
   wrapped at 70 characters.  
 In:
+  x/sim1/routing.md
   x/sim1/README.md
   x/sim1/wire/wire.go
   x/sim1/kernel/kernel.go
