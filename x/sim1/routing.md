@@ -1,9 +1,10 @@
 # PromiseGrid Multi-Hop Routing Brainstorm
 
-Below are 15 alternative designs for multi-hop routing in PromiseGrid. Each
-alternative builds upon ideas from ARP, routing tables with hints, promises,
-CID-based routing, layered routing assemblies, pub/sub systems, and additional
-novel strategies inspired by OSI/TCP-IP, Usenet, and UUCP mechanisms.
+Below are alternative designs for multi-hop routing in PromiseGrid.
+Each alternative builds upon ideas from ARP, routing tables with hints,
+promises, CID-based routing, layered routing assemblies, pub/sub systems,
+and additional novel strategies inspired by OSI/TCP-IP, Usenet, and UUCP
+mechanisms.
 
 1. ARP-Inspired Dynamic Discovery  
    In this design, each node maintains an ARP-like table mapping peer
@@ -114,3 +115,52 @@ novel strategies inspired by OSI/TCP-IP, Usenet, and UUCP mechanisms.
     monitor acknowledgements. If delivery rates fall below a threshold, the
     protocol switches to an epidemic mode with controlled backoff to achieve
     robust broadcast in sparse network conditions.
+
+19. Promise-Theory: Conditional Promise Routing  
+    Nodes make explicit promises with conditions attached to each hop.
+    If a promise is unfulfilled, nodes dynamically reroute the message to a
+    different path. This protocol integrates trust scoring based on past
+    promise fulfillment.
+
+20. Promise-Theory: Cooperative Exchange Routing  
+    Each node negotiates promises for message forwarding. Nodes exchange
+    commitments and mutually verify promise exchanges, leading to a
+    self-enforcing mesh of reliable routes.
+
+21. Promise-Theory: Reputation-Grounded Routing  
+    Nodes calculate routing decisions based on a reputation score derived
+    from historical promise fulfillment. High-reputation nodes are more likely
+    to be chosen for message forwarding, while low-reputation nodes are
+    penalized in future routing assignments.
+
+22. Market-Based: Incentivized Routing Auctions  
+    Nodes bid for message forwarding opportunities in realtime auctions.
+    Sample auctions allow nodes to offer competitive fees (or credits) for
+    taking on message routing tasks, ensuring efficient allocation of network
+    resources.
+
+23. Market-Based: Credit-Based Routing Exchange  
+    A credit system is implemented where nodes earn credits for successfully
+    forwarding messages. These credits can be traded or used to prioritize
+    packet delivery during network congestion, aligning supply and demand.
+
+24. Market-Based: Dynamic Routing Pricing  
+    Node forwarders set dynamic prices based on network load and available
+    capacity. Senders select routes based not only on speed but also on cost,
+    creating a market-driven optimization for message transit.
+
+25. Prediction-Market: Forecasted Route Efficiency  
+    Nodes use historical traffic and performance data to forecast the
+    efficiency of potential routes. These predictions are shared in a
+    prediction market where nodes vote on the most reliable paths.
+
+26. Prediction-Market: Expectation-Driven Routing  
+    Each node submits predicted delivery times and success rates for
+    various routes. Routes with the highest consensus of efficient delivery
+    expectations are automatically chosen for message forwarding.
+
+27. Prediction-Market: Consensus-Based Route Selection  
+    A decentralized market mechanism gathers predictions and betting pools
+    on route success. The route with the highest consensus via market-based
+    scoring is selected, rewarding nodes for accurate predictions and
+    efficient forwarding.

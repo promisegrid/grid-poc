@@ -1,8 +1,10 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add several gossip protocols.
+Add a few promise-theory-based protocols.
 
-Add some epidemic protocols.
+Add a few market-based protocols.
+
+Add a few prediction-market-based protocols.
 
 
 Sysmsg: 
