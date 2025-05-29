@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/sim1/routing.md
-```markdown
 # PromiseGrid Multi-Hop Routing Brainstorm
 
 Below are 15 alternative designs for multi-hop routing in PromiseGrid. Each 
@@ -101,5 +99,3 @@ novel strategies inspired by OSI/TCP-IP, Usenet, and UUCP mechanisms.
 These designs are intended as starting points, and further evaluation is needed 
 to assess their trade-offs in terms of scalability, robustness, and latency in a 
 real-world, multi-hop PromiseGrid deployment.
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/routing.md

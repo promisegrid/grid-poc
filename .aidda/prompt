@@ -1,7 +1,6 @@
-brainstorm routing
+brainstorm routing.md
 
-Brainstorm how PromiseGrid might do multi-hop routing -- need to
-somehow give routing clues to kernel from higher layers.  
+In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
 Consider combinations of the following ideas:
 
@@ -34,6 +33,8 @@ that are not based on the above ideas.  Examine the OSI model, the
 TCP/IP model, and the Usenet and UUCP models to see if there are any
 ideas that can be adapted from those models.  
 
+The routing.md document should contain at least 15 alternative
+designs, each with a brief description of the design and how it works.
 
 Sysmsg: 
   You are protocol designer and an expert Go programmer. Please make
@@ -45,7 +46,6 @@ Sysmsg:
   unless you are making other changes to the paragraph.  Lines must be
   wrapped at 70 characters.  
 In:
-  .aidda/response
   x/sim1/README.md
   x/sim1/wire/wire.go
   x/sim1/kernel/kernel.go
@@ -53,6 +53,8 @@ In:
   x/sim1/node2/node2.go
   x/sim1/node3/node3.go
   x/sim1/hello1/hello1.go
+Out:
+  x/sim1/routing.md
 
 .stop
 
