@@ -72,8 +72,8 @@ mechanisms.
 
 11. Store-and-Forward Delay Tolerant Networking  
     Nodes store messages temporarily when the destination is not immediately
-    reachable and forward them when a suitable route becomes available. This
-    is analogous to delay tolerant networking where intermediate nodes act
+    reachable and forward them when a suitable route becomes available.
+    This is analogous to delay tolerant networking where intermediate nodes act
     as caches, ensuring eventual message delivery.
 
 12. Hierarchical Routing with Proximity Awareness  
@@ -199,8 +199,8 @@ mechanisms.
 32. Hybrid Promise-Personal Currency Routing  
     Combining promise-based routing with personal currency tokens, nodes
     first exchange tokens as a commitment to forward messages. Failure to
-    complete the promise results in penalties measured in lost tokens. This
-    hybrid protocol reinforces accountability and encourages robust
+    complete the promise results in penalties measured in lost tokens.
+    This hybrid protocol reinforces accountability and encourages robust
     routing through mutually beneficial exchanges.
 
 33. Common Resource Protection via Quota-Based Routing  
@@ -226,3 +226,38 @@ mechanisms.
     fairness metric. Routing decisions take into account both past
     contributions and current load, promoting equitable resource usage and
     preventing any node from monopolizing the network.
+
+37. Cooperative Hub Rotation Routing  
+    In this protocol, nodes are required to take on routing roles on a
+    rotational basis. The network periodically elects new hubs based on
+    local consensus, discouraging any node from permanently accumulating
+    power or centrality. Hubs receive temporary token bonuses for their
+    service before rotating out in favor of other peers.
+
+38. Decentralized Trust-Based Routing with Dynamic
+    Accountability  
+    Nodes earn trust scores through decentralized peer reviews of their
+    performance. While higher scores may confer minor routing advantages,
+    the protocol favors balanced participation. Overcentralized nodes
+    face dynamic penalties that encourage distribution of routing tasks.
+
+39. Reputation-Weighted Distributed Routing  
+    This approach uses a reputation system that rewards nodes for balanced
+    participation. The algorithm factors in equal load distribution and
+    consistent performance, elevating nodes that avoid becoming a central
+    hub. Reputation scores influence routing decisions to deter emergent
+    centralization.
+
+40. Peer-Collaboration Incentive Routing  
+    Nodes periodically share performance metrics and resource usage
+    statistics. Routing decisions are based on a collaborative evaluation,
+    awarding credits to nodes that assist less-central peers and penalizing
+    those that become overloaded. This shifting reward system helps keep
+    the network topology widely distributed.
+
+41. Dynamic Forking for Load Decentralization  
+    If a node is overwhelmed with routing requests, it may offload part
+    of the workload to nearby neighbors. The protocol redistributes credits
+    evenly among participating nodes, incentivizing load delegation and
+    reducing the likelihood that any single node will evolve into a choke
+    point.

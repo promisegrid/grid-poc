@@ -1,6 +1,7 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add several protocols that focus on preventing tragedy of the commons.
+Add several protocols that focus on preventing emergent centralization
+by e.g. incentivizing decentralization.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
