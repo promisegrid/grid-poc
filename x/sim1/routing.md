@@ -407,3 +407,24 @@ conditions while maintaining simplicity in the kernel.
     model transactions with personal currencies, or request actions to be
     appended to another agent's work queue. As with other protocols, the
     message is cryptographically signed by its author to maintain integrity.
+
+54. Hypergraph-Based Multi-Hop Routing with CID
+    Dependencies  
+    In this protocol, each message carries the CID(s) of one or more
+    previous nodes or edges that serve as dependencies, along with the
+    CID(s) of one or more new nodes or edges being introduced into the
+    hypergraph. The hypergraph is structured as a directed acyclic graph
+    representing a set of worldlines.
+    
+    The routing challenge is to forward messages to the correct agent(s)
+    based on the CID references from earlier entries. Upon receiving a
+    message, an agent compares the referenced CIDs against its local state.
+    If a match is found—indicating that the agent is connected to a prior
+    node or edge—the message is processed and forwarded accordingly.
+    
+    Message propagation is facilitated by an implicit subscription model,
+    where agents express interest in specific CIDs. Secure message signing,
+    chaining, and verification ensure that only authenticated modifications
+    are accepted. This design enables an efficient construction of a network-
+    wide hypergraph of worldlines while preserving the acyclic properties
+    of the graph.

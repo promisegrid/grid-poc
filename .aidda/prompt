@@ -1,22 +1,12 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add a protocol in which the goal is to build a hypergraph of
-worldlines.  Each message is an addition of one or more nodes or edges
-to the hypergraph.  Worldlines can contain data or code, can describe
-transactions in personal currencies, and can be used to append
-actions to another agent's work queue -- whether the other agent
-accepts the appended worldline or not is up to the other agent.  Each
-message is signed its author.
-
-Add a protocol in which the goal is to build a scenario hypertree of
-past and future worldlines.  Each message is an addition of one or
-more nodes or edges to the hypertree, or is a bid or ask in a
-prediction-market-style method of adjusting the probability of an
-edge, or of adjusting the cost or benefit of a node.  Worldlines can
-contain data or code, can describe transactions in personal
-currencies, and can be used to append actions to another agent's work
-queue -- whether the other agent accepts the appended worldline or not
-is up to the other agent.  Each message is signed its author.  
+Add a protocol in which the goal is to build a hypergraph.  Each
+message contains the CID of one or more previous nodes or edges, and
+also contains the CID of one or more new nodes or edges that are
+added to the hypergraph.  The hypergraph is a directed acyclic graph 
+that represents a set of worldline.  The routing problem, then, is to
+forward the message to the correct agent(s) based on the CIDs of the
+previous nodes or edges.  
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
