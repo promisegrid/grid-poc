@@ -2,11 +2,11 @@ File: /home/stevegt/lab/grid-poc/x/sim1/routing.md
 ```markdown
 # PromiseGrid Multi-Hop Routing Brainstorm
 
-Below are alternative designs for multi-hop routing in PromiseGrid.
-Each alternative builds upon ideas from ARP, routing tables with hints,
-promises, CID-based routing, layered routing assemblies, pub/sub systems,
-and additional novel strategies inspired by OSI/TCP-IP, Usenet, and UUCP
-mechanisms.
+Below are alternative designs for multi-hop routing in
+PromiseGrid. Each alternative builds upon ideas from ARP, routing
+tables with hints, promises, CID-based routing, layered routing
+assemblies, pub/sub systems, and additional novel strategies inspired
+by OSI/TCP-IP, Usenet, and UUCP mechanisms.
 
 1. ARP-Inspired Dynamic Discovery  
    In this design, each node maintains an ARP-like table mapping peer
@@ -351,5 +351,53 @@ mechanisms.
     adjusts in real time. Local supply and demand fluctuations yield an
     adaptive pricing model, ensuring that only the best-informed nodes
     act as reliable routers.
+
+51. Floating-Exchange Personal Currency Protocol  
+    Agents operate with personal currencies and pay for message forwarding
+    and promise fulfillment via an open double-auction market. Each agent
+    uses a personal currency whose value against other currencies
+    fluctuates in real-time based on supply and demand.
+
+    Core features:
+    - Matching Engine: A system component that pairs buy and sell orders
+      in real time, ensuring efficient trade execution.
+    - Order Book: A public ledger of current bids and asks for routing
+      services and promise fulfillment.
+    - Double-Entry Accounting Journal: A ledger that records every credit
+      and debit transaction, ensuring accountability and transparency.
+    - Digital Signatures & Smart Contracts: Mechanisms to verify
+      transactions and enforce conditional forwarding promises.
+    - Dispute Resolution: A protocol for arbitration of conflicts using
+      peer consensus or automated smart contracts.
+    - Reputation & Trust Metrics: A system that tracks historical performance,
+      rewarding reliable nodes and penalizing nodes with unmet promises.
+    - Discovery Protocol: Techniques (gossip, DHT, or distributed
+      registries) for agents to locate potential routing partners.
+    - Payment Channels: Optional channels for off-chain microtransactions
+      to reduce settlement latency and fees.
+
+    Protocol Workflow:
+    1. Discovery: Agents publish their service advertisements along with
+       their currency denomination and current exchange rate information.
+    2. Promise Exchange: Nodes request promise services from peers,
+       attaching a bid in their personal currency. Interested nodes respond
+       by placing an ask on the order book.
+    3. Matching and Auction: The matching engine continuously matches bids
+       and asks via a real-time double auction, dynamically adjusting
+       personal currency exchange rates.
+    4. Execution of Promises: Once matched, nodes execute the agreed promise,
+       with smart contracts ensuring that the token or promise is only
+       redeemed upon successful message forwarding.
+    5. Settlement: The double-entry accounting journal records the credit
+       and debit transactions, adjusting each node's balance and updating
+       their reputation scores.
+    6. Dispute Handling: If a node fails to fulfill a promise, the dispute
+       is automatically triggered. Evidence, digital signatures, and
+       transaction logs are evaluated by a consensus of peers or an
+       automated arbitration module, with penalties applied as necessary.
+
+    This protocol leverages economic incentives to ensure secure,
+    efficient, and accountable multi-hop routing and promise fulfillment,
+    ushering in a marketplace-driven network ecosystem.
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/routing.md
