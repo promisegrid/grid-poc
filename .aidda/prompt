@@ -1,7 +1,9 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add several protocols that focus on preventing emergent centralization
-by e.g. incentivizing decentralization.
+Add a few protocols that use capability tokens for routing.
+
+Add several protocols that use promise theory's +promise and -promise
+notation in their description.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make

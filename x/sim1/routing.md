@@ -261,3 +261,15 @@ mechanisms.
     evenly among participating nodes, incentivizing load delegation and
     reducing the likelihood that any single node will evolve into a choke
     point.
+
+42. Capability Token Enhanced Source Routing  
+    In this protocol, nodes exchange routing messages secured by explicit
+    capability tokens. A sender attaches a token to each message as a grant
+    for intermediate hops to verify their authorization before forwarding.
+    This mechanism ensures that only nodes with valid tokens engage in the
+    multi-hop routing process.
+
+43. Promise-Capability Negotiation Routing  
+    Combining promise theory with capability tokens, nodes negotiate routing
+    commitments by exchanging promises statements that act as routing
+    capability tokens.  
