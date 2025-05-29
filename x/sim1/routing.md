@@ -310,7 +310,21 @@ mechanisms.
       R1-->>S: Completion Acknowledgement and Reputation Gain
     ```
 
-    This best-of-breed design not only ensures message integrity via
-    capability tokens but also aligns incentives through personal currency
-    and dynamic reputation exchange, rendering it robust and adaptive across
-    multi-hop networks.
+45. Ant Colony Inspired Routing  
+    In this protocol, nodes simulate virtual pheromone trails to mark
+    frequently successful paths. Over time, the accumulation of virtual
+    pheromones helps nodes converge on optimal routes, as repeated
+    traffic reinforces the trails that yield reliable delivery.
+
+46. Reactive Ant Routing with Pheromone Decay  
+    Nodes initially broadcast messages in a manner similar to ant
+    foraging. On successful message delivery, a virtual pheromone is
+    deposited along the route. This pheromone decays over time, so only
+    recently successful paths maintain strong attractiveness.
+
+47. Hybrid Ant-Promise Cooperative Routing  
+    Combining ant-inspired signaling with promise-based commitments,
+    nodes evaluate paths using both accumulated pheromone levels and
+    explicit routing promises. This hybrid approach reinforces reliable
+    message forwarding while dynamically adapting to changing network
+    conditions.

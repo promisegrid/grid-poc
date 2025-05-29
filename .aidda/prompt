@@ -1,9 +1,6 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add a description of a best-of-breed protocol that combines
-promise-like capability tokens, personal currencies, exchange rates
-for reputation, and pub/sub semantics.  Include a message sequence
-diagram.
+Add a few ant-routing protocols.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
