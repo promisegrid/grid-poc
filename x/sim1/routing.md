@@ -4,9 +4,9 @@ Below are alternative designs for multi-hop routing in
 PromiseGrid. Each alternative builds upon ideas from ARP, routing
 tables with hints, promises, CID-based routing, layered routing
 assemblies, pub/sub systems, and additional novel strategies inspired
-by OSI/TCP-IP, Usenet, UUCP, double-auction markets, and
-prediction markets. The goal is to create a flexible, decentralized,
-and efficient routing mechanism that can adapt to dynamic network
+by OSI/TCP-IP, Usenet, UUCP, double-auction markets, and prediction
+markets. The goal is to create a flexible, decentralized, and
+efficient routing mechanism that can adapt to dynamic network
 conditions while maintaining simplicity in the kernel.
 
 1. ARP-Inspired Dynamic Discovery  
@@ -287,7 +287,7 @@ conditions while maintaining simplicity in the kernel.
     scores, enabling nodes to evaluate routing priority on real-time
     pub/sub topics. This approach drives both accountability and
     efficiency.
-
+    
     Nodes negotiate forwarding commitments using capability tokens.
     A sender offers a token bundled with a tentative currency amount.
     As the message passes through routers, each hop validates the token,
@@ -358,7 +358,7 @@ conditions while maintaining simplicity in the kernel.
     and promise fulfillment via an open double-auction market. Each agent
     uses a personal currency whose value against other currencies
     fluctuates in real-time based on supply and demand.
-
+    
     Core features:
     - Matching Engine: A system component that pairs buy and sell orders
       in real time, ensuring efficient trade execution.
@@ -372,7 +372,7 @@ conditions while maintaining simplicity in the kernel.
       rewarding reliable nodes and penalizing nodes with unmet promises.
     - Discovery Protocol: Techniques (gossip, DHT, or distributed
       registries) for agents to locate potential routing partners.
-
+    
     Protocol Workflow:
     1. Discovery: Agents publish their service advertisements along with
        their currency denomination and current exchange rate information.
@@ -389,6 +389,21 @@ conditions while maintaining simplicity in the kernel.
        and debit transactions, adjusting each node's balance and updating
        their reputation scores.
 
-    This protocol leverages economic incentives to ensure secure,
-    efficient, and accountable multi-hop routing and promise fulfillment,
-    ushering in a marketplace-driven network ecosystem.
+52. Hypergraph of Worldlines Routing  
+    In this protocol, the goal is to build a hypergraph where each
+    message is an addition of one or more nodes or edges representing
+    worldlines. Worldlines may include data or code, capture transactions
+    in personal currencies, or append actions to an agent's work queue.
+    Whether the recipient accepts an appended worldline is at the discretion
+    of that agent. Every message is signed by its author to ensure
+    authenticity and non-repudiation.
+
+53. Scenario Hypertree of Worldlines Routing  
+    This protocol focuses on constructing a scenario hypertree composed
+    of past and future worldlines. Each message either adds nodes or edges
+    to the tree, or functions as a bid or ask in a prediction-market
+    mechanism that adjusts the probability of an edge, or the cost or
+    benefit of a node. Worldlines here can encapsulate data or code,
+    model transactions with personal currencies, or request actions to be
+    appended to another agent's work queue. As with other protocols, the
+    message is cryptographically signed by its author to maintain integrity.
