@@ -1,3 +1,24 @@
+write ./run.sh 
+
+Write a bash script named run.sh that runs the simulation per
+README.md.  Each node should be started in its own xterm.
+
+Sysmsg: 
+  You are a protocol designer and an expert Go programmer. Please make
+  the requested changes to the given code or documentation. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file. Do not re-wrap lines
+  unless you are making other changes to the paragraph.  Lines must be
+  wrapped at 70 characters.  
+In:
+  x/sim1/README.md
+Out:
+  x/sim1/run.sh
+
+.stop
+
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
 Add a protocol in which the goal is to build a hypergraph.  Each

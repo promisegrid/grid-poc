@@ -1,5 +1,3 @@
-File: /home/stevegt/lab/grid-poc/x/sim1/run.sh
-```sh
 #!/bin/bash
 # Run simulation nodes in separate xterms
 
@@ -13,5 +11,3 @@ xterm -hold -e "cd $(dirname $0)/node3; \
 go run node3.go -peer localhost:7272 -name agent3" &
 
 wait
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/run.sh
