@@ -297,6 +297,23 @@ conditions while maintaining simplicity in the kernel.
     the message provided the promise holds. On delivery, acknowledgements
     are routed back along the reverse path, updating the reputation metrics
     and settling currency balances in a decentralized market fashion.
+    
+    The following sequence diagram illustrates the interaction between a
+    sender, intermediate routers, and a destination in this protocol.
+
+    ```mermaid
+    sequenceDiagram
+      participant S as Sender
+      participant R1 as Router1
+      participant R2 as Router2
+      participant D as Destination
+      S->>R1: Send Message with Capability Token and Currency
+      R1->>R2: Forward Promise, Token, Currency Bid Attached
+      R2->>D: Deliver Message for Pub/Sub Event
+      D-->>R2: Acknowledge Delivery with Reputation Update
+      R2-->>R1: Confirm Forwarding, Adjust Currency Balance
+      R1-->>S: Completion Acknowledgement and Reputation Gain
+    ```
 
 45. Ant Colony Inspired Routing  
     In this protocol, nodes simulate virtual pheromone trails to mark
@@ -393,25 +410,104 @@ conditions while maintaining simplicity in the kernel.
     appended to another agent's work queue. As with other protocols, the
     message is cryptographically signed by its author to maintain integrity.
 
-54. Hypergraph-Based Multi-Hop Routing with CID
-    Dependencies  
+54. Hypergraph-Based Multi-Hop Routing with CID Dependencies  
     In this protocol, each message carries the CID(s) of one or more
     previous nodes or edges that serve as dependencies, along with the
     CID(s) of one or more new nodes or edges being introduced into the
     hypergraph. The hypergraph is structured as a directed acyclic graph
-    representing a set of worldlines.
-    
-    The routing challenge is to forward messages to the correct agent(s)
-    based on the CID references from earlier entries. Upon receiving a
-    message, an agent compares the referenced CIDs against its local state.
-    If a match is found—indicating that the agent is connected to a prior
-    node or edge—the message is processed and forwarded accordingly.
-    
-    Message propagation is facilitated by an implicit subscription model,
-    where agents express interest in specific CIDs. Secure message signing,
-    chaining, and verification ensure that only authenticated modifications
-    are accepted. This design enables an efficient construction of a network-
-    wide hypergraph of worldlines while preserving the acyclic properties
-    of the graph.
-```
+    representing a set of worldlines. The routing challenge is to forward
+    messages to the correct agent(s) based on the CID references from
+    earlier entries. Upon receiving a message, an agent compares the
+    referenced CIDs against its local state. If a match is found—indicating
+    that the agent is connected to a prior node or edge—the message is
+    processed and forwarded accordingly. Message propagation is facilitated
+    by an implicit subscription model, where agents express interest in
+    specific CIDs. Secure message signing, chaining, and verification ensure
+    that only authenticated modifications are accepted. This design
+    enables an efficient construction of a network-wide hypergraph of
+    worldlines while preserving the acyclic properties of the graph.
+
+55. Hypergraph Worldline CID Routing with Go Example  
+    Building on protocol 54, this protocol adds explicit support for
+    multi-hop routing where each message embeds the CID(s) of previous
+    nodes/edges and new additions to the hypergraph. In practice, an agent
+    receiving a message examines the previous CIDs. If one of the CIDs
+    matches a node in its connectivity map or local hypergraph fragment,
+    it processes the message and forwards it to the next eligible hop.
+    For example, consider three agents: A, B, and C. Agent A sends a
+    message with a previous CID that corresponds to agent B's record.
+    Agent B, upon validating the match, appends a new CID representing
+    an updated worldline and forwards the message to agent C. Agent C then
+    finalizes the update by recording the new worldline.
+
+    The following Go example demonstrates a simplified model of this
+    routing protocol. The code defines a Message structure that carries
+    previous and new CIDs, and nodes forward messages based on matching
+    CIDs in their connectivity map.
+
+    ```go
+    package main
+
+    import (
+        "fmt"
+    )
+
+    // Message represents a routing message in the hypergraph.
+    // It carries previous CIDs and new CIDs.
+    type Message struct {
+        PrevCIDs []string
+        NewCIDs  []string
+        Payload  string
+    }
+
+    // Node represents an agent in the network with a unique CID and
+    // a list of neighbor nodes.
+    type Node struct {
+        CID       string
+        Neighbors []*Node
+    }
+
+    // Forward checks each neighbor for a matching CID from the message.
+    // If a match is found, the message is forwarded to that neighbor.
+    func (n *Node) Forward(msg Message) {
+        for _, neighbor := range n.Neighbors {
+            for _, prev := range msg.PrevCIDs {
+                if neighbor.CID == prev {
+                    fmt.Printf("Node %s forwarding message: %s\n",
+                        n.CID, msg.Payload)
+                    neighbor.Receive(msg)
+                    break
+                }
+            }
+        }
+    }
+
+    // Receive processes an incoming message.
+    func (n *Node) Receive(msg Message) {
+        fmt.Printf("Node %s received message with new CIDs: %v\n",
+            n.CID, msg.NewCIDs)
+    }
+
+    // main demonstrates a multi-hop message exchange.
+    func main() {
+        // Create sample nodes A, B, and C.
+        nodeA := &Node{CID: "A"}
+        nodeB := &Node{CID: "B"}
+        nodeC := &Node{CID: "C"}
+
+        // Set up neighbors: A -> B, B -> C.
+        nodeA.Neighbors = []*Node{nodeB}
+        nodeB.Neighbors = []*Node{nodeC}
+
+        // Create a message where the previous CID matches node B.
+        msg := Message{
+            PrevCIDs: []string{"B"},
+            NewCIDs:  []string{"D"},
+            Payload:  "Hello from A to be routed through B",
+        }
+
+        // Start the multi-hop routing from node A.
+        nodeA.Forward(msg)
+    }
+    ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/routing.md

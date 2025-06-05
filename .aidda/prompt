@@ -2,11 +2,14 @@ In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
 Add a protocol in which the goal is to build a hypergraph.  Each
 message contains the CID of one or more previous nodes or edges, and
-also contains the CID of one or more new nodes or edges that are
-added to the hypergraph.  The hypergraph is a directed acyclic graph 
-that represents a set of worldline.  The routing problem, then, is to
+also contains the CID of one or more new nodes or edges that are added
+to the hypergraph.  The hypergraph is a directed acyclic graph that
+represents a set of worldline.  The routing method, then, is to
 forward the message to the correct agent(s) based on the CIDs of the
-previous nodes or edges.  
+previous nodes or edges.  Describe how this might work in practice,
+using one or more examples of multi-hop message exchanges between
+agents. Include an example of how the routing protocol might be
+implemented in Go.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
