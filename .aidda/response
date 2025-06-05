@@ -1,17 +1,107 @@
+<think>
+Okay, I need to write a bash script called run.sh that sets up a tmux session named "sim1" with three panes, each running a different node for the simulation. The user specified using the tmux -c flag instead of send-keys, so I should make sure each command is run directly in the pane with the correct working directory and command.
+
+First, I'll check if tmux is installed. That's a good practice to prevent errors. So I'll start the script with a check using command -v tmux and exit if it's not found.
+
+Next, creating the tmux session. The user wants the session named "sim1". Using tmux new-session with -d for detached mode. The -n can set the window name, but the panes are more important here. The -c flag should set the starting directory for each pane. For node1, the command is "go run node1.go -peer localhost:7272 -name agent1". So the initial session creation would be:
+
+tmux new-session -d -s sim1 -n sim -c node1 "go run node1.go ..."
+
+Wait, the -c flag in tmux new-session sets the start directory for the session's first window. Then, when splitting, each split-window can have its own -c for the directory. But the user wants each pane to run in their respective node directories (node1, node2, node3). So for each split, I need to specify -c nodeX.
+
+The first pane is created with new-session. Then split-window -h for horizontal splits. Each split should have -c node2 and node3. Also, each pane's command is the go run command for that node.
+
+Then, setting the terminal title for each pane. The tmux command for that is select-pane -T. So after creating each pane, I'll run tmux select-pane -t sim1:0.0 -T node1, and similarly for the others.
+
+The initial new-session creates the first pane. Then split-window -h creates the second pane, and another split-window -h for the third. But splitting horizontally again would split the existing pane, so maybe the layout needs adjustment. Using select-layout even-horizontal to arrange them properly.
+
+Wait, when you split horizontally multiple times, tmux might create a vertical split first, but using even-horizontal layout should arrange all three panes in a single row. Let me check the tmux man page. The select-layout command with even-horizontal arranges panes in a single row, equally sized. That should work.
+
+Putting it all together:
+
+1. Create session with first pane in node1, running node1.go.
+2. Split horizontally, change directory to node2, run node2.go.
+3. Split again, change directory to node3, run node3.go.
+4. Set titles for each pane.
+5. Adjust layout to even-horizontal.
+6. Attach to the session.
+
+Double-checking the tmux commands:
+
+- new-session -d -s sim1 -n sim -c node1 "command": correct for starting the first pane.
+- split-window -h -c node2 -t sim1 "command": correct for the second pane.
+- Another split-window -h -c node3 -t sim1 "command": but after the first split, the current pane is the second one, so splitting again would split that pane. Wait, maybe I need to target the original pane each time. Or perhaps using the -t parameter correctly.
+
+Wait, the -t in split-window specifies the target pane. If the first split is from pane 0.0, then the second split should also target pane 0.0 to create three panes in a row. Alternatively, maybe using the even-horizontal layout after creating all panes will arrange them correctly regardless of the order.
+
+Alternatively, after creating the first pane, split horizontally to create pane 0.1, then split pane 0.1 again to create 0.2. But the layout might not be optimal. Using select-layout even-horizontal should handle that.
+
+Also, each split-window command includes the -c flag for the directory and the command to run. The -t sim1 specifies the session, and the window (0 is default).
+
+After creating all panes, set the titles using select-pane -T for each pane index (0.0, 0.1, 0.2).
+
+Finally, attach to the session.
+
+Testing the script:
+
+- When run, it should create a tmux session with three panes, each in their respective directories, running the correct commands, with titles set.
+
+I need to ensure that the -c flag is used correctly in each tmux command. The man page says that new-session has a -c flag to set the working directory. Similarly, split-window also has a -c flag.
+
+Yes, according to the tmux man page, both new-session and split-window accept -c to set the working directory.
+
+So the script should be correct.
+</think>
+
 File: /home/stevegt/lab/grid-poc/x/sim1/run.sh
 ```sh
-#!/bin/bash
-# Run simulation nodes in separate xterms
+#!/usr/bin/env bash
 
-xterm -hold -e "cd $(dirname $0)/node1; \
-go run node1.go -peer localhost:7272 -name agent1" &
+# Check if tmux is installed
+if ! command -v tmux >/dev/null 2>&1; then
+    echo "Error: tmux is required but not installed." >&2
+    exit 1
+fi
 
-xterm -hold -e "cd $(dirname $0)/node2; \
-go run node2.go -port 7272 -name agent2" &
+# Create new tmux session with initial window for node1
+tmux new-session -d -s sim1 -c node1 -n nodes \
+    "go run node1.go -peer localhost:7272 -name agent1"
+tmux select-pane -T "node1"
 
-xterm -hold -e "cd $(dirname $0)/node3; \
-go run node3.go -peer localhost:7272 -name agent3" &
+# Split window horizontally for node2 with working directory
+tmux split-window -h -c node2 -t sim1 \
+    "go run node2.go -port 7272 -name agent2"
+tmux select-pane -T "node2"
 
-wait
+# Split window horizontally for node3 with working directory  
+tmux split-window -h -c node3 -t sim1 \
+    "go run node3.go -peer localhost:7272 -name agent3"
+tmux select-pane -T "node3"
+
+# Arrange panes evenly and attach session
+tmux select-layout -t sim1 even-horizontal
+tmux attach-session -t sim1
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim1/run.sh
+
+<references>
+[1] https://ryan.himmelwright.net/post/scripting-tmux-workspaces/
+[2] https://kgiann78.github.io/2020/12/29/organize-tmux-session-in-multiple-panels/
+[3] https://how-to.dev/how-to-create-tmux-session-with-a-script
+[4] https://www.ocf.berkeley.edu/~ckuehl/tmux/
+[5] https://dev.to/waylonwalker/tmux-slect-pane-7gp
+[6] https://www.carc.usc.edu/user-guides/hpc-systems/software/tmux
+[7] https://github.com/tmux/tmux/wiki/Advanced-Use
+[8] https://github.com/tmux/tmux/issues/2244
+[9] https://jeff.wintersinger.org/posts/2020/10/fixing-the-present-working-directory-in-tmux-sessions-to-refer-to-the-logical-rather-than-physical-working-directory/
+[10] https://zolmok.org/tmux-multiple-projects-sessions/
+[11] https://libtmux.git-pull.com/reference/servers.html
+[12] http://lessworsemorebetter.com/2016/03/12/replacing-default-path-in-tmux.html
+[13] https://www.baeldung.com/linux/tmux-session-starting-directory
+[14] https://tmuxcheatsheet.com
+[15] https://github.com/tmux/tmux/wiki/Getting-Started
+[16] https://gist.github.com/sdondley/b01cc5bb1169c8c83401e438a652b84e?permalink_comment_id=4595435
+[17] https://man.archlinux.org/man/tmux.1.en
+[18] https://libtmux.git-pull.com/api/panes.html
+[19] https://ittavern.com/create-tmux-layouts-using-bash-scripts/
+</references>
