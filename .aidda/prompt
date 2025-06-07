@@ -1,46 +1,19 @@
-write ./run.sh 
-
-Write a bash script named run.sh that runs the simulation per
-README.md.  The script should start a tmux session named "sim1" and run the
-simulation in three panes, one for each node.  The panes should be
-split horizontally, with the first pane running node1, the second pane
-running node2, and the third pane running node3.  
-
-Instead of using send-keys, the script should use the tmux -c flag to
-run the commands in each pane.  The script should also set the
-terminal title for each pane to the name of the node.  
-
-Double-check your flag usage by referring to the tmux man page.
-
-Sysmsg: 
-  You are a protocol designer and an expert Go programmer. Please make
-  the requested changes to the given code or documentation. Do not
-  quote or escape single backticks in the code -- Go uses backticks
-  for raw string literals.  Do not remove or alter comments unless
-  they are incorrect or misleading.  Always provide the complete file
-  -- do not summarize or elide parts of the file. Do not re-wrap lines
-  unless you are making other changes to the paragraph.  Lines must be
-  wrapped at 70 characters.  
-In:
-  x/sim1/README.md
-  x/sim1/run.sh
-Out:
-  x/sim1/run.sh
-
-.stop
-
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add a protocol in which the goal is to build a hypergraph.  Each
-message contains the CID of one or more previous nodes or edges, and
-also contains the CID of one or more new nodes or edges that are added
-to the hypergraph.  The hypergraph is a directed acyclic graph that
-represents a set of worldline.  The routing method, then, is to
-forward the message to the correct agent(s) based on the CIDs of the
-previous nodes or edges.  Describe how this might work in practice,
-using one or more examples of multi-hop message exchanges between
-agents. Include an example of how the routing protocol might be
-implemented in Go.
+Add a protocol in which the goal is to build a directed hypergraph.
+Each message contains the CID of one or more previous nodes,
+and also contains the CID of one or more new nodes that are
+added to the hypergraph.  The hypergraph is a directed acyclic graph
+that represents a set of worldlines.  
+
+The routing method is to forward the message to interested agents,
+where "interested" means that the agent has previously declared that
+it holds a copy of the CID of an ancestor of the nodes in the message,
+where "ancestor" means one of the CIDs in the message's routing
+information array, or one of their ancestors in the hypergraph.  
+
+Give an example of how this might work in practice, using an Alice,
+Bob, Carol, and Dave scenario.  
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make

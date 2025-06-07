@@ -513,3 +513,87 @@ conditions while maintaining simplicity in the kernel.
         nodeA.Forward(msg)
     }
     
+56. Hypergraph-Based CID Routing with Ancestral Interest Propagation  
+
+    This protocol implements a directed acyclic hypergraph (DAH)
+    where each message contains both ancestral CIDs (existing
+    hypernodes) and new CIDs (proposed hyperedges). The routing
+    mechanism uses ancestral relationships to determine forwarding
+    paths through a network of agents maintaining partial
+    hypergraph fragments[1][2].
+
+    **Protocol Mechanics**  
+    1. **Message Structure**:  
+       - `ancestors`: Array of CIDs representing existing hypernodes in the DAH  
+       - `additions`: Array of new CIDs being added as hyperedges/nodes  
+       - `payload`: Application-specific data with cryptographic signature  
+
+    2. **Routing Rules**:  
+       - Agents maintain a **CID interest registry** of hypernodes they store/forward  
+       - On receiving a message:  
+         a. Validate all `ancestors` exist in local DAH fragment  
+         b. Verify cryptographic signature on `additions` and `payload`  
+         c. Forward to agents whose interest registry contains any ancestor CID  
+         d. Add new CIDs to local interest registry if accepted  
+
+    3. **Cycle Prevention**:  
+        - each node contains the CID or previous node(s) in the DAH,
+          so cycles are not possible.
+
+    **Example Scenario: Alice → Bob → Carol → Dave**  
+    1. **Initial State**:  
+       - Alice creates CID1 (root node)  
+       - Bob, Carol, and Dave subscribe to empty CID (for lack of
+         anything better to do)
+
+    2. **Message 1 (Alice)**:  
+       ```json
+       {
+         "ancestors": [],
+         "additions": ["CID1"],
+         "payload": "Root worldline"
+       }
+       ```
+       - Alice sends
+       - Kernel routes to all agents interested in the empty CID
+       - Bob, Carol, and Dave receive the message
+       - Bob, Carol, and Dave unsubscribe to the empty CID
+       - Bob, Carol, and Dave subscribe to CID1
+
+    3. **Message 2 (Bob)**:  
+       ```json
+       {
+         "ancestors": ["CID1"],
+         "additions": ["CID2"],
+         "payload": "Child worldline"
+       }
+       ```
+       - Bob sends
+       - Kernel routes to agents interested in CID2 or its ancestors
+       - Carol and Dave receive the message
+
+    4. **Message 3 (Carol)**:  
+       ```json
+       {
+         "ancestors": ["CID2"],
+         "additions": ["CID3"],
+         "payload": "Grandchild worldline"
+       }
+       ```
+       - Carol sends
+       - Carol unsubscribes from CID2 and subscribes to CID3
+       - Kernel routes to agents interested in CID3 or its ancestors
+       - Dave receives the message
+
+    5. **Message 4 (Dave)**:  
+       ```json
+       {
+         "ancestors": ["CID2"],
+         "additions": ["CID4"],
+         "payload": "Great-grandchild worldline"
+       }
+       ```
+       - Dave sends
+       - Kernel routes to agents interested in CID2 or its ancestors
+       - Bob receives the message
+
