@@ -1,166 +1,105 @@
 <think>
-Okay, let me tackle this problem. The user wants to modify the routing.md file in their project to include a multi-hop routing protocol using a double-auction mechanism with personal currencies. They provided a bunch of search results that discuss various auction-based routing mechanisms, P2P systems, and related concepts.
+Okay, let me try to work through this. The user wants to add a double-auction mechanism to PromiseGrid's routing.md file. The goal is to fairly allocate resources and prevent spam using personal currencies, without any blockchain or crypto elements. All routing is local, with nodes pricing cancellation risk into their bids/asks. Abusive nodes see their currency value drop, reducing their network participation.
 
-First, I need to understand what the existing routing.md contains. The current file has a bunch of routing protocol ideas, numbered up to 76. The user wants to add a new section, specifically protocol 77, which integrates a double-auction system for fair resource allocation and spam prevention. They also want an example scenario with Alice, Bob, Carol, and Dave.
+Looking at the existing routing.md, there's a section on double auctions (item 58: Decentralized Double-Auction Routing Protocol). The user provided search results include several papers on double auctions in edge computing and resource allocation, which mention mechanisms for handling many-to-many assignments, network resource optimization, and truthfulness. The example scenario needs to involve Alice, Bob, Carol, and Dave.
 
-Looking at the search results, several papers discuss double auctions in edge computing, P2P networks, and resource allocation. For example, Chen et al. (2022) propose a double auction mechanism for MEC services considering spectrum and routing. Another paper by Thakur et al. uses blockchain for distributed double auctions in energy trade, promoting local transactions. These can inform the protocol design.
+First, I should outline how the double auction works in this context. Each node acts as both a buyer and seller, using personal currencies. When a message needs to be routed, nodes submit bids (to forward) and asks (to accept). The auction matches these, considering cancellation risk. Intermediate nodes adjust their spreads based on reliability. Abusive nodes lose value in their currency, making others less likely to accept their bids.
 
-The user's personalization note mentions using Go, avoiding dependencies, and keeping lines under 70 characters. The new protocol in routing.md should be concise and follow the existing structure. The example scenario needs to show how the auction works with personal currencies, probably involving bidding and settling payments through smart contracts.
+For the example scenario: Alice wants to send a message to Dave via Bob and Carol. Each node sets their ask price based on their current load and trust. Bob's ask is lower due to good reputation, Carol's is higher because of higher risk. The auction matches the lowest asks, ensuring the message is routed efficiently. If Carol fails to forward, her currency value drops, affecting future transactions.
 
-I'll start by drafting protocol 77. It should outline the double-auction process, personal currencies as the medium, local routing, and prevention of spam by requiring bids. The example scenario will illustrate Alice wanting to send a message via Bob and Carol, who participate in the auction. The settlement would use each participant's personal currency, tracked through smart contracts.
-
-I need to ensure that the code examples are in Go, using the appropriate syntax and line-wrapping. The example should show the message structure, bids, smart contract interactions, and settlement. Also, citations from the provided search results should be included where relevant, using the correct indices.
-
-Now, putting it all together, the new section in routing.md will be protocol 77, followed by the example scenario. The code snippets will demonstrate the auction process and smart contract handling. All lines must be wrapped at 70 characters, and the Markdown formatting should be consistent with the existing document.
+I need to integrate this into routing.md under a new protocol (maybe numbered 59). The example should show the steps of the auction, the currency adjustments, and the impact of failures. Also, ensure it's clear that nodes only interact with direct peers, maintaining local routing. Cite the relevant search results that support the mechanism's design, like [1] for network resource optimization and [3][4] for truthful mechanisms.
 </think>
 
 File: /home/stevegt/lab/grid-poc/x/sim1/routing.md
+```markdown
+
+59. Decentralized Double-Auction Routing Protocol (D2ARP)  
+    This protocol implements a peer-to-peer double auction mechanism where nodes bid using personal currencies to route messages while preventing spam through economic incentives. Intermediate nodes price cancellation risk into bid/ask spreads, creating self-regulating network participation.  
+
+    **Protocol Mechanics**  
+    1. **Order Book Structure**:  
+       - Each node maintains localized bid/ask books for direct peers  
+       - Asks represent minimum compensation to forward (in sender's currency)  
+       - Bids specify maximum willingness to pay for next-hop routing  
+
+    2. **Risk-Adjusted Pricing**:  
+       ```go
+       type AuctionOrder struct {
+           NodeID     string // Peer identifier
+           Currency   string // Personal currency ticker
+           BidPrice   float64 // Max payment willing to offer
+           AskPrice   float64 // Min compensation required 
+           RiskFactor float64 // 0.0-1.0 based on reliability history
+       }
+       ```
+
+    3. **Matching Algorithm**:  
+       a. Sender broadcasts route request with max hop count  
+       b. Intermediate nodes submit sealed asks considering:  
+          - Current queue depth  
+          - Historical fulfillment rate  
+          - Currency exchange reputation  
+       c. Path selection uses Vickrey-Clarke-Groves (VCG) mechanism to ensure truthfulness[1][3]  
+
+    4. **Settlement & Reputation**:  
+       - Successful forwards increase node's currency value  
+       - Failed promises trigger automatic currency devaluation:  
+         ```go
+         func adjustReputation(node *Node, success bool) {
+             if success {
+                 node.CurrencyValue *= 1.05 // 5% appreciation
+             } else {
+                 node.CurrencyValue *= 0.80 // 20% depreciation
+             }
+         }
+         ```
+
+    **Example Scenario: Alice → Bob → Carol → Dave**  
+    1. **Initial State**:  
+       | Node  | Currency Value | Ask Price Base | Risk Factor |  
+       |-------|----------------|----------------|-------------|  
+       | Alice | 1.0 ALC        | N/A            | 0.10        |  
+       | Bob   | 1.2 BOB        | 0.8 ALC        | 0.15        |  
+       | Carol | 0.7 CRL        | 1.1 BOB        | 0.30        |  
+       | Dave  | 1.5 DAV        | 0.9 CRL        | 0.05        |  
+
+    2. **Auction Execution**:  
+       a. Alice broadcasts route to Dave with max bid 2.0 ALC  
+       b. Bob calculates risk-adjusted ask:  
+          0.8 ALC * (1 + 0.15 risk) = 0.92 ALC  
+       c. Carol computes cross-currency ask:  
+          1.1 BOB * (BOB/ALC rate 1.2) = 1.32 ALC  
+          1.32 ALC * (1 + 0.30 risk) = 1.72 ALC  
+       d. Dave's ask converts to 0.9 CRL * (CRL/ALC rate 0.583) = 0.52 ALC  
+
+    3. **Path Selection**:  
+       | Hop  | Cumulative Cost | Risk-Adjusted Cost |  
+       |------|-----------------|--------------------|  
+       | Bob  | 0.92 ALC        | 0.92 * 1.15 = 1.06 |  
+       | Carol| 1.72 ALC        | 1.72 * 1.30 = 2.24 |  
+       | Dave | 0.52 ALC        | 0.52 * 1.05 = 0.55 |  
+
+       System selects Bob → Dave path (total 1.06 + 0.55 = 1.61 ALC)  
+
+    4. **Outcome**:  
+       - Alice pays 1.61 ALC split between Bob (0.92) and Dave (0.69)  
+       - Bob successfully forwards → BOB appreciates to 1.26  
+       - Alternate route through Carol rejected due to high risk premium  
+
+    5. **Failure Case**:  
+       If Bob fails to forward:  
+       - BOB devalues 20% → 1.0 BOB/ALC rate  
+       - Future asks increase by 15-20% to compensate risk  
+       - Network automatically routes through lower-risk nodes  
+
+    This mechanism aligns economic incentives with reliable message forwarding while maintaining local-only interactions between peers[3][4]. The VCG-based matching prevents market manipulation and ensures participants reveal true costs[1][5].
 ```
-77. Decentralized Double-Auction Routing Protocol (D2ARP)
-    This protocol implements a peer-to-peer double auction mechanism where
-    nodes bid using personal currencies to route messages while preventing spam
-    through economic incentives. Key features:
-    
-    - **Local auction markets**: Each node maintains an order book of bids/asks
-      from direct peers only [1][2]
-    - **Multi-hop execution**: Messages carry chained smart contracts that
-      settle payments atomically across hops [3][4]
-    - **Spam prevention**: Minimum bid requirements proportional to hop count
-      and message size [5][6]
-    
-    Protocol Workflow:
-    1. Sender publishes message with max bid in personal currency
-    2. Intermediate nodes submit asks considering:
-       - Current load
-       - Path reliability
-       - Exchange rates between currencies [7][8]
-    3. Matching engine selects lowest-cost path meeting QoS constraints
-    4. Smart contracts lock collateral until delivery confirmation [9][10]
-    
-    Example Alice->Dave via Bob->Carol:
-    ```go
-    // Message structure with auction parameters
-    type AuctionMessage struct {
-        ID        CID
-        Sender    Address
-        Recipient Address 
-        MaxBid    map[Currency]float64 // Alice's ABC tokens
-        Hops      []AuctionContract
-    }
-
-    // Intermediate node bid
-    func (b *Bob) SubmitAsk(msg AuctionMessage) {
-        askPrice := calculateCost(msg.Size, b.Load) 
-        conversionRate := getExchangeRate("ABC", "BOB")
-        convertedAsk := askPrice * conversionRate
-        if convertedAsk <= msg.MaxBid["ABC"] {
-            msg.Hops = append(msg.Hops, AuctionContract{
-                Node:    b.Address,
-                Ask:     convertedAsk,
-                Currency: "BOB",
-                Nonce:   generateNonce(),
-            })
-            forwardToNextHop(msg)
-        }
-    }
-
-    // Smart contract settlement
-    func settlePayments(hops []AuctionContract) {
-        for _, contract := range hops {
-            transferTokens(
-                contract.Node,
-                contract.Currency, 
-                contract.Ask,
-                contract.Nonce
-            )
-        }
-    }
-    ```
-    This design enables: 
-    - Localized price discovery without global coordination [11][12]
-    - Resistance to spam through cryptographic payment enforcement [13][14]
-    - Automatic load balancing via market incentives [15][16]
-``` 
 EOF_/home/stevegt/lab/grid-poc/x/sim1/routing.md
 
 <references>
 [1] http://www.fang.ece.ufl.edu/mypaper/earlyaccess/chen2022end.pdf
-[2] https://arxiv.org/pdf/2202.11213.pdf
-[3] https://www.cse.iitd.ac.in/~mahanti/papers/auction.pdf
-[4] https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=a3ba0344913c82fb87582724e82f9744be16a97b
-[5] https://www.outlookmoney.com/banking/p2p-currency-exchange-platforms-how-they-work-and-what-to-consider
-[6] https://publications.scss.tcd.ie/tech-reports/reports.08/TCD-CS-2008-48.pdf
-[7] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[8] https://i.cs.hku.hk/~cwu/papers/Wu-tpds08.pdf
-[9] https://publications.scss.tcd.ie/tech-reports/reports.08/TCD-CS-2008-48.pdf
-[10] https://patents.google.com/patent/US20060075027A1/en
-[11] http://www.johnbreslin.com/files/publications/20180924_efea2018.pdf
-[12] https://www.remitbee.com/blog/exploring-peer-to-peer-currency-exchange-how-it-works-and-its-benefits
-[13] https://searchinform.com/cybersecurity/cyber-threats/fraud/type/auction-fraud/
-[14] https://eprint.iacr.org/2024/1750.pdf
-[15] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[16] https://cora.ucc.ie/bitstream/handle/10468/7677/EFEA_conf_submitted.pdf?sequence=1&isAllowed=y
-[17] https://www.roboticsproceedings.org/rss01/p45.pdf
-[18] https://openreview.net/forum?id=5qiTTAQEZL
-[19] https://iqua.ece.toronto.edu/papers/zp-tmc13.pdf
-[20] https://github.com/DickensJuma/p2p-auction/
-[21] https://dl.acm.org/doi/pdf/10.1145/301136.301179
-[22] http://www.cs.umd.edu/~gasarch/COURSES/209/F13/auction.pdf
-[23] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[24] https://dl.acm.org/doi/10.1145/544741.544776
-[25] https://www.investopedia.com/articles/forex/030215/understand-peertopeer-foreign-currency-exchange.asp
-[26] https://www.remitbee.com/blog/exploring-peer-to-peer-currency-exchange-how-it-works-and-its-benefits
-[27] https://docs.solo.io/gloo-mesh-enterprise/main/traffic_management/concepts/multi-cluster/
-[28] https://publications.scss.tcd.ie/tech-reports/reports.08/TCD-CS-2008-48.pdf
-[29] http://www.johnbreslin.com/files/publications/20180924_efea2018.pdf
-[30] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[31] https://www.westernunion.com/blog/en/what-is-a-peer-to-peer-wire-transfer/
-[32] https://wormhole.com/docs/build/transfers/connect/features/
-[33] https://www.cs.nmsu.edu/~roopa/auroch-final.pdf
-[34] https://hrcak.srce.hr/file/347055
-[35] http://www.johnbreslin.com/files/publications/20210202_ijep2021.pdf
-[36] https://www.ee.columbia.edu/~tbma/StudyArea/PaperStudy/p07/source.pdf
-[37] https://ethresear.ch/t/builder-bidding-behaviors-in-epbs/20129
-[38] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[39] https://cora.ucc.ie/bitstream/handle/10468/7677/EFEA_conf_submitted.pdf?sequence=1&isAllowed=y
-[40] https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=51127f1bdd307450882bbc26db427a193873b1f3
-[41] https://www.cse.iitd.ac.in/~mahanti/papers/auction.pdf
-[42] https://i.cs.hku.hk/~cwu/papers/Wu-tpds08.pdf
-[43] https://iqua.ece.toronto.edu/papers/zp-tmc13.pdf
-[44] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[45] https://globals.ieice.org/en_transactions/information/10.1587/transinf.E96.D.2704/_p
-[46] https://dl.acm.org/doi/10.1109/LCOMM.2009.082021
-[47] https://docs.promodel.com/pmacad/documentation/RoutingRules.html
-[48] https://ercim-news.ercim.eu/peermart-decentralized-auctions-for-bandwidth-trading-on-demand
-[49] https://www.theclearinghouse.org/payment-systems/Articles/2022/05/Tokenization_DDA_05-02-2022
-[50] https://www.federalreserve.gov/econres/notes/feds-notes/tokens-and-accounts-in-the-context-of-digital-currencies-122320.html
-[51] https://github.com/IOUnet/iou2
-[52] https://www.ussc.gov/sites/default/files/pdf/training/annual-national-training-seminar/2018/Emerging_Tech_Bitcoin_Crypto.pdf
-[53] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[54] https://docs.stripe.com/api/tokens/create_bank_account
-[55] http://conferences.sigcomm.org/imc/2004/papers/p121-karagiannis.pdf
-[56] https://bitcoin.org/bitcoin.pdf
-[57] http://www.fang.ece.ufl.edu/mypaper/earlyaccess/chen2022end.pdf
-[58] https://ojs.aaai.org/index.php/AAAI/article/view/28845/29607
-[59] https://hawksem.com/blog/prevent-spam-submissions/
-[60] https://www.crn.com/news/security/225701708/ftc-cracks-down-on-micropayment-credit-card-scam
-[61] https://kairos.io/docs/installation/p2p/
-[62] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[63] https://www.pubnub.com/blog/auction-technology/
-[64] https://publications.scss.tcd.ie/tech-reports/reports.08/TCD-CS-2008-48.pdf
-[65] https://www.investopedia.com/terms/f/floatingexchangerate.asp
-[66] https://www.imf.org/external/pubs/ft/fandd/2008/03/pdf/basics.pdf
-[67] https://corporatefinanceinstitute.com/resources/economics/floating-exchange-rate/
-[68] https://www.westernunion.com/blog/en/us/floating-exchange-rate/
-[69] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[70] https://docs.promodel.com/pmacad/documentation/RoutingRules.html
-[71] https://www.promodel.com/onlinehelp/promodel/80/C-05%20-%20Routing%20Rule%20Dialog%20Box.htm
-[72] https://www.uscurrencyauctions.com
-[73] https://www.auction.com/lp/learn-more/bank-owned/post-auction/
-[74] https://www.cs.nmsu.edu/~roopa/auroch-final.pdf
-[75] https://publications.scss.tcd.ie/tech-reports/reports.08/TCD-CS-2008-48.pdf
-[76] http://www.johnbreslin.com/files/publications/20210202_ijep2021.pdf
-[77] https://iqua.ece.toronto.edu/papers/zp-tmc13.pdf
-[78] https://itexamanswers.net/question/what-is-the-purpose-of-using-the-multi-exit-discriminator-attribute-on-multiple-bgp-routers-in-an-as
-[79] https://wise.com/us/blog/choose-local-currency-at-foreign-atm
+[2] https://arxiv.org/pdf/2309.01920
+[3] https://arxiv.org/html/2412.11465v1
+[4] https://eprint.iacr.org/2024/1750.pdf
+[5] https://www.scitepress.org/Papers/2021/106158/106158.pdf
 </references>

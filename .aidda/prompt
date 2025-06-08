@@ -1,11 +1,18 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
 Add a protocol in which the goal is to fairly allocate resources and
-prevent spam using a double-auction mechanism. Personal currencies are
-the unit of exchange.  
+prevent spam using a double-auction mechanism. 
+
+Personal currencies are the unit of exchange.  This is not a
+crypto-currency design; do not use blockchain, smart contracts, or
+other crypto concepts.
 
 All routing is local:  Agents send messages to only their direct
-peers, by address or ID.  Peers may be local or remote.
+peers, by address or ID.  Peers may be local or remote.  
+
+Intermediate agents price cancellation risk into their bid/ask spread.
+Abusive agents will see their personal currency value drop, reducing
+their ability to participate in the network.  
 
 See x/matching/matching.md for background.
 
