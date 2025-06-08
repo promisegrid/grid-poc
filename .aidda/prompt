@@ -1,18 +1,13 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-XXX prevent spam: subscribe is an ask, publish is a bid
+Add a protocol in which the goal is to fairly allocate resources and
+prevent spam using a double-auction mechanism. Personal currencies are
+the unit of exchange.  
 
-XXX no center: kernel is an agent, any agent can route, any agent can host agents
-XXX no center: kernel is just a library called 'grid', not 'kernel'
-XXX no center: subscribe(), publish(), etc. are message generators
+All routing is local:  Agents send messages to only their direct
+peers, by address or ID.  Peers may be local or remote.
 
-Add a protocol in which the goal is to build a message thread tree.
-Each message contains the hash of one or more previous messages
-(message threads can merge).
-
-The routing method is to forward the message to interested agents,
-where "interested" means that the agent has previously declared that
-it holds a copy of an ancestor of the message.
+See x/matching/matching.md for background.
 
 Give an example of how this might work in practice, using an Alice,
 Bob, Carol, and Dave scenario.  
@@ -28,10 +23,15 @@ Sysmsg:
   wrapped at 70 characters.  
 In:
   x/sim1/routing.md
+  x/matching/matching.md
 Out:
   x/sim1/routing.md
 
 .stop
+
+XXX no center: kernel is an agent, any agent can route, any agent can host agents
+XXX no center: kernel is just a library called 'grid', not 'kernel'
+XXX no center: subscribe(), publish(), etc. are message generators
 
 Make the needed changes to the code.
 

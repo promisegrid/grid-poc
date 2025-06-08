@@ -690,3 +690,23 @@ conditions while maintaining simplicity in the kernel.
        - CID5 generated  
        - Routed to CID1 and CID2 subscribers (Alice/Bob/Dave)
 
+58. Decentralized Double-Auction Routing Protocol (D2ARP)
+    This protocol implements a peer-to-peer double auction mechanism where
+    nodes bid using personal currencies to route messages while preventing spam
+    through economic incentives. Key features:
+    
+    - **Local auction markets**: Each node maintains an order book of bids/asks
+      from direct peers only 
+    - **Multi-hop execution**: Messages carry chained smart contracts that
+      settle payments atomically across hops [3][4]
+    - **Spam prevention**: Minimum bid requirements proportional to hop count
+      and message size [5][6]
+    
+    Protocol Workflow:
+    1. Sender publishes message with max bid in personal currency
+    2. Intermediate nodes submit asks considering:
+       - Current load
+       - Path reliability
+       - Exchange rates between currencies [7][8]
+    3. Matching engine selects lowest-cost path meeting QoS constraints
+    4. Smart contracts lock collateral until delivery confirmation [9][10]
