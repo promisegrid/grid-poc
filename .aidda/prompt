@@ -1,16 +1,18 @@
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 
-Add a protocol in which the goal is to build a directed hypergraph.
-Each message contains the CID of one or more previous nodes,
-and also contains the CID of one or more new nodes that are
-added to the hypergraph.  The hypergraph is a directed acyclic graph
-that represents a set of worldlines.  
+XXX prevent spam: subscribe is an ask, publish is a bid
+
+XXX no center: kernel is an agent, any agent can route, any agent can host agents
+XXX no center: kernel is just a library called 'grid', not 'kernel'
+XXX no center: subscribe(), publish(), etc. are message generators
+
+Add a protocol in which the goal is to build a message thread tree.
+Each message contains the hash of one or more previous messages
+(message threads can merge).
 
 The routing method is to forward the message to interested agents,
 where "interested" means that the agent has previously declared that
-it holds a copy of the CID of an ancestor of the nodes in the message,
-where "ancestor" means one of the CIDs in the message's routing
-information array, or one of their ancestors in the hypergraph.  
+it holds a copy of an ancestor of the message.
 
 Give an example of how this might work in practice, using an Alice,
 Bob, Carol, and Dave scenario.  

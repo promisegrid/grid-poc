@@ -597,3 +597,96 @@ conditions while maintaining simplicity in the kernel.
        - Kernel routes to agents interested in CID2 or its ancestors
        - Bob receives the message
 
+57. Threaded Message Routing via Ancestral Subscription  
+
+    This protocol enables decentralized message threading through
+    CID-based ancestor tracking and dynamic interest declarations[1].
+
+    **Protocol Overview**  
+    - Each message contains:  
+      - `parent_hashes`: One or more CID hashes of previous messages  
+      - `content`: Message payload with cryptographic signature  
+
+    **Routing Mechanism**  
+    1. **Interest Declaration**: Agents proactively announce CIDs they want using "iWant" promises  
+    2. **Kernel Forwarding Logic**:  
+       - On receiving message M with parent hashes P₁,P₂,...Pn
+       - Forward M to any agent that has declared interest in any Pn
+    3. **Thread Merging**: Messages can reference multiple parent hashes, creating merged conversation threads  
+
+    **Example Scenario**  
+    ```mermaid
+    graph LR
+        A[Alice: CID1] --> B[Bob: CID2]
+        B --> C[Carol: CID3]
+        B --> D[Dave: CID4]
+    ```
+
+    1. **Initial State**  
+       - All agents declare interest in "root" CID (empty hash list)  
+       ```json
+       {
+         "parent_hashes": [],
+         "content": "Root",
+         "signature": "AgentSig"
+       }
+       ```
+
+    2. **Alice Sends Message**  
+       ```json
+       {
+         "parent_hashes": [],
+         "content": "Init thread",
+         "signature": "AliceSig"
+       }
+       ```
+       - CID1 generated, forwarded to all root subscribers  
+       - Bob/Carol/Dave subscribe to CID1
+       - Bob/Carol/Dave unsubscribe from empty list
+
+    3. **Bob Replies to CID1**  
+       ```json
+       {
+         "parent_hashes": ["CID1"],
+         "content": "Reply to Alice",
+         "signature": "BobSig"
+       }
+       ```
+       - CID2 generated  
+       - Routed to CID1 and ancestor subscribers (Alice/Carol/Dave)  
+       - Bob unsubscribes from CID1 and subscribes to CID2
+       - Carol unsubscribes from CID1 and subscribes to CID2
+
+    4. **Carol Replies to CID2**  
+       ```json
+       {
+         "parent_hashes": ["CID2"],
+         "content": "Reply to Bob",
+         "signature": "CarolSig"
+       }
+       ```
+       - CID3 generated
+       - Routed to CID2 and ancestor subscribers (Alice/Bob/Dave)
+
+    5. **Dave Replies to Alice (CID1)**  
+       ```json
+       {
+         "parent_hashes": ["CID1"],
+         "content": "Reply to Alice",
+         "signature": "DaveSig"
+       }
+       ```
+       - CID4 generated  
+       - Routed to CID1 and ancestor subscribers (Alice)
+
+    4. **Carol Replies to Both Alice and Bob** 
+       ```json
+       {
+         "parent_hashes": ["CID1", "CID2"],
+         "content": "Merge discussion",
+         "signature": "CarolSig"
+       }
+       ```
+       - CID5 generated  
+       - Routed to CID1 and CID2 subscribers (Alice/Bob/Dave)
+

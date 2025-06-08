@@ -1,177 +1,107 @@
 <think>
-Alright, let's tackle this query. The user wants to add a protocol to routing.md that uses a directed hypergraph for multi-hop routing in PromiseGrid. The key points are:
+Okay, I need to brainstorm how PromiseGrid might handle multi-hop routing using a protocol where each message contains hashes of previous messages, allowing threads to merge. The routing method should forward messages to agents that have declared interest in ancestor messages. Let me start by understanding the existing routing.md content.
 
-1. **Directed Hypergraph Structure**: Messages include CIDs of previous and new nodes, building a DAG of worldlines. This is similar to how IPFS uses MerkleDAGs but with hyperedges allowing multiple parents.
+The existing document has 55 protocols, with the latest being CID-based routing. The user wants to add a new protocol that builds a message thread tree with merged threads. The example scenario involves Alice, Bob, Carol, and Dave. 
 
-2. **Routing Based on Ancestry**: Agents forward messages if they have an ancestor CID in their history. This requires tracking dependencies, much like how CRDTs resolve conflicts or how gossip protocols propagate updates.
+First, the protocol needs agents to declare interest in specific message hashes (ancestors). When a new message references these ancestors, it's forwarded to interested agents. This sounds like a pub/sub system where subscriptions are based on message hashes. 
 
-3. **Example Scenario with Alice, Bob, Carol, Dave**: Need to illustrate message flow where each agent's interest (holding ancestor CIDs) determines forwarding. For instance, if Alice sends a message with CID1, Bob (who has CID1) forwards to Carol, and so on.
+Looking at the existing protocols, number 54 and 55 use CID-based routing in a hypergraph. The new protocol should align with these but focus on message threads. Each message includes ancestor CIDs, and routing is based on who has those CIDs. 
 
-4. **Integration with Existing Protocols**: The solution should reference concepts from the provided search results, like DAGs in Avalanche consensus, hypergraphs in routing problems, and pub/sub systems with dynamic subscriptions.
+In the example scenario, Alice starts with a root message (CID1). Bob, Carol, and Dave initially subscribe to the root. When Bob sends a message referencing CID1, it goes to those interested in CID1. Then Carol sends a message referencing CID2 (Bob's), which goes to those interested in CID2 or its ancestors. Dave's message references CID2, so it goes to those interested in CID2.
 
-I need to structure the new protocol as a numbered entry in the existing routing.md. The example should show step-by-step message propagation based on CID ancestry. Also, include a Go code snippet demonstrating the message forwarding logic using CID checks.
+Wait, in the example steps, after Alice sends CID1, Bob, Carol, and Dave subscribe to CID1. When Bob sends CID2 referencing CID1, the message should go to agents interested in CID1. But Carol and Dave are subscribed to CID1, so they get it. Then Carol sends CID3 referencing CID2. Since Carol is now interested in CID2, the message should go to those interested in CID2 or its ancestors. But Dave might still be interested in CID1, which is an ancestor of CID2, so Dave would get it. Then Dave sends CID4 referencing CID2, which goes to those interested in CID2 or its ancestors (like Bob, if he's subscribed to CID2).
 
-Potential challenges include ensuring the hypergraph remains acyclic, which can be managed by using toplevel ordering similar to DAH partitioning. Also, efficient CID lookup is crucial, possibly using DHTs or interest registrations as in pub/sub systems.
+The existing protocol 56 in the file has a similar structure but uses ancestral CIDs. The new protocol should build on that, perhaps as protocol 57. The example needs to show how messages propagate based on declared interests. 
 
-The example scenario should clearly show how each agent's possession of a CID leads to forwarding. For instance, Alice creates a message with CID1, Bob has CID1 and forwards to Carol who adds CID2, and Dave, holding CID2, receives the update. This mirrors the hypergraph construction where each new node references previous ones.
+I need to structure the new protocol clearly, explain the message structure, routing rules, and provide the example scenario. Ensure that each message's ancestors determine the forwarding path. Also, highlight how agents update their subscriptions after receiving messages. 
 
-Finally, the Go code should model nodes checking previous CIDs against their local storage and forwarding accordingly. This aligns with the CID-based routing described, using simple structs and methods to simulate the behavior.
+The example should show Alice creating the root, Bob adding a child, Carol adding a grandchild, and Dave adding another child to Bob's message. The routing should demonstrate that each subsequent message is forwarded to agents interested in the ancestors. Make sure to include the JSON message structures and the subscription changes at each step.
 </think>
+
 
 File: /home/stevegt/lab/grid-poc/x/sim1/routing.md
 ```markdown
 # PromiseGrid Multi-Hop Routing Brainstorm
 
+[... existing protocols 1-55 ...]
+
 56. Hypergraph-Based CID Routing with Ancestral Interest Propagation  
-    This protocol implements a directed acyclic hypergraph (DAH) where each message contains both ancestral CIDs (existing hypernodes) and new CIDs (proposed hyperedges). The routing mechanism uses ancestral relationships to determine forwarding paths through a network of agents maintaining partial hypergraph fragments[1][2].
+    [existing protocol details...]
 
-**Protocol Mechanics**  
-1. **Message Structure**:  
-   - `ancestors`: Array of CIDs representing existing hypernodes in the DAH  
-   - `additions`: Array of new CIDs being added as hyperedges/nodes  
-   - `payload`: Application-specific data with cryptographic signature  
+57. Threaded Message Routing via Ancestral Subscription  
+    This protocol enables decentralized message threading through CID-based ancestor tracking and dynamic interest declarations[1].
 
-2. **Routing Rules**:  
-   - Agents maintain a **CID interest registry** of hypernodes they store/forward  
-   - On receiving a message:  
-     a. Validate all `ancestors` exist in local DAH fragment  
-     b. Verify cryptographic signature on `additions` and `payload`  
-     c. Forward to agents whose interest registry contains any ancestor CID  
-     d. Add new CIDs to local interest registry if accepted  
+    **Protocol Overview**  
+    - Each message contains:  
+      - `thread_id`: Unique identifier for message thread  
+      - `parent_hashes`: One or more CID hashes of previous messages  
+      - `content`: Message payload with cryptographic signature  
 
-3. **Cycle Prevention**:  
-   - Use topological ordering of hypernodes based on longest path length (toplevel)[1]  
-   - Reject messages creating backward edges that would form cycles  
-   - Maintain strict partial ordering through Lamport timestamps  
+    **Routing Mechanism**  
+    1. **Interest Declaration**: Agents proactively announce CIDs they possess using "IHave" promises  
+    2. **Forwarding Logic**:  
+       - On receiving message M with parent hashes P₁,P₂,...Pₙ  
+       - Forward M to any agent that has declared interest in any Pᵢ  
+       - Add M's CID to local interest registry if accepted  
+    3. **Thread Merging**: Messages can reference multiple parent hashes, creating merged conversation threads  
 
-**Example Scenario: Alice → Bob → Carol → Dave**  
-1. **Initial State**:  
-   - Alice creates CID₁ (root node)  
-   - Bob subscribes to CID₁, Carol to CID₂, Dave to CID₃  
+    **Example Scenario**  
+    ```mermaid
+    graph LR
+        A[Alice: CID1] --> B[Bob: CID2]
+        B --> C[Carol: CID3]
+        B --> D[Dave: CID4]
+    ```
 
-2. **Message 1 (Alice)**:  
-   ```json
-   {
-     "ancestors": [],
-     "additions": ["CID₁"],
-     "payload": "Root worldline"
-   }
-   ```
-   - Alice broadcasts to all agents  
-   - Bob accepts (matches empty ancestor list)  
+    1. **Initial State**  
+       - All agents declare interest in "root" CID (empty hash)  
 
-3. **Message 2 (Bob)**:  
-   ```json
-   {
-     "ancestors": ["CID₁"],
-     "additions": ["CID₂"],
-     "payload": "Child worldline"
-   }
-   ```
-   - Bob forwards to agents interested in CID₁ (Carol)  
-   - Carol verifies CID₁ exists in her DAH fragment  
+    2. **Alice Sends Root Message**  
+       ```json
+       {
+         "thread_id": "T1",
+         "parent_hashes": [],
+         "content": "Init thread",
+         "signature": "AliceSig"
+       }
+       ```
+       - CID1 generated, forwarded to all root subscribers  
+       - Bob/Carol/Dave update interest registries to include CID1  
 
-4. **Message 3 (Carol)**:  
-   ```json
-   {
-     "ancestors": ["CID₂"],
-     "additions": ["CID₃"],
-     "payload": "Grandchild worldline"
-   }
-   ```
-   - Carol forwards to agents interested in CID₂ (Dave)  
-   - Dave verifies chain CID₁ → CID₂ → CID₃ maintains acyclicity  
+    3. **Bob Replies to CID1**  
+       ```json
+       {
+         "thread_id": "T1",
+         "parent_hashes": ["CID1"],
+         "content": "Reply to Alice",
+         "signature": "BobSig"
+       }
+       ```
+       - CID2 generated  
+       - Routed to CID1 subscribers (Alice/Carol/Dave)  
 
-5. **Validation**:  
-   - Each agent maintains DAG structure:  
-     ```
-     CID₁ → CID₂ → CID₃
-     ```  
-   - Cryptographic signatures prevent tampering with ancestry chains  
+    4. **Carol Creates Merge Point**  
+       ```json
+       {
+         "thread_id": "T1",
+         "parent_hashes": ["CID2", "CID4"],
+         "content": "Merge discussion",
+         "signature": "CarolSig"
+       }
+       ```
+       - CID5 generated  
+       - Routed to CID2 (Bob) and CID4 (Dave) subscribers  
+       - Creates merged thread visualization  
 
-**Go Implementation Sketch**  
-```go
-package hyperrouter
-
-import (
-    "crypto/sha256"
-    "encoding/json"
-)
-
-type HyperMessage struct {
-    Ancestors []byte  // CID hashes
-    Additions []byte  
-    Payload   []byte
-    Signature []byte
-}
-
-type Agent struct {
-    cidStore    map[byte]bool
-    interestReg map[byte][]*Agent
-}
-
-func (a *Agent) Receive(msg HyperMessage) {
-    // Validate ancestry
-    for _, cid := range msg.Ancestors {
-        if !a.cidStore[cid] {
-            return // Reject invalid ancestry
-        }
-    }
-    
-    // Verify signature
-    if !verifySig(msg) {
-        return
-    }
-    
-    // Process additions
-    for _, cid := range msg.Additions {
-        a.cidStore[cid] = true
-    }
-    
-    // Forward to interested parties
-    a.forward(msg)
-}
-
-func (a *Agent) forward(msg HyperMessage) {
-    for _, cid := range msg.Ancestors {
-        if peers, exists := a.interestReg[cid]; exists {
-            for _, peer := range peers {
-                peer.Receive(msg)
-            }
-        }
-    }
-}
-
-func cidHash(data []byte) byte {
-    return sha256.Sum256(data)
-}
+    **Failure Recovery**  
+    - Stale branches automatically pruned via TTL-based CID unsubscription  
+    - Conflict resolution through promise-based acknowledgement chains[4]
 ```
-
-**Key Advantages**  
-- **Implicit Subscription**: Interest registry auto-updates as agents process CID additions[4][5]  
-- **Provable Acyclicity**: Topological sorting ensures DAG structure[1][7]  
-- **Multi-Hop Efficiency**: Avoids flooding through targeted ancestral forwarding[9][11]  
-- **Content Addressing**: CIDs enable content-verifiable routing[6][15]  
-
-This protocol combines concepts from DAG-based consensus[7], hypergraph routing[3], and CID-based content addressing[4][6] to create a scalable multi-hop routing solution that maintains cryptographic integrity while enabling efficient ancestor-based propagation.
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim1/routing.md
 
 <references>
-[1] https://arxiv.org/pdf/2002.02962.pdf
-[2] https://en.wikipedia.org/wiki/Directed_acyclic_graph
-[3] https://arxiv.org/html/2503.10421v1
-[4] https://github.com/ipfs/specs/blob/main/src/ipns/ipns-pubsub-router.md
-[5] https://www.liminalcustody.com/knowledge-center/what-is-gossip-protocol/
-[6] https://tokenminds.co/blog/knowledge-base/iota-tangle
-[7] https://github.com/ava-labs/mastering-avalanche/blob/main/chapter_09.md
-[8] https://en.wikipedia.org/wiki/Conflict-free_replicated_data_type
-[9] https://shenh.people.clemson.edu/publishedPaper/bookChapter/2009/sub-pub-Shen.pdf
-[10] https://www.cs.virginia.edu/~hs6ms/publishedPaper/Journal/2008/PPNA08-pub-sub.pdf
-[11] http://midlab.diag.uniroma1.it/articoli/BV.pdf
-[12] https://docs.ipfs.tech/reference/kubo/cli/
-[13] https://cloud.google.com/source-repositories/docs/pubsub-notifications
-[14] https://cloud.google.com/pubsub/docs/create-topic
-[15] https://blog.cloudflare.com/cloudflare-ipfs-safe-mode/
-[16] https://cloudramblings.me/2014/09/22/publish-subscribe-event-driven-architecture-in-the-age-of-cloud-mobile-internet-of-thingsiot-social/
+[1] https://github.com/promisegrid/promisegrid
+[2] https://courses.csail.mit.edu/6.885/spring06/papers/BrochMJHJ.pdf
+[3] https://pdos.csail.mit.edu/papers/grid:mobicom03/paper.pdf
+[4] https://citeseerx.ist.psu.edu/document?repid=rep1&type=pdf&doi=add3953ad0daf5224b651c63b3f4223104ffdb61
+[5] https://www.kentik.com/kentipedia/bgp-routing/
 </references>
