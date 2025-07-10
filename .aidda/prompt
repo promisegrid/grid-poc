@@ -1,7 +1,8 @@
-In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
+draft sim2
 
-Add a protocol in which the goal is to fairly allocate resources and
-prevent spam using a double-auction mechanism. 
+In sim2, write a simulation of a protocol in which the goal is to
+fairly allocate resources and prevent spam using a double-auction
+mechanism. 
 
 Personal currencies are the unit of exchange.  This is not a
 crypto-currency design; do not use blockchain, smart contracts, or
@@ -14,10 +15,18 @@ Intermediate agents price cancellation risk into their bid/ask spread.
 Abusive agents will see their personal currency value drop, reducing
 their ability to participate in the network.  
 
-See x/matching/matching.md for background.
+See x/matching/matching.md and x/sim1/routing.md for background.
 
-Give an example of how this might work in practice, using an Alice,
-Bob, Carol, and Dave scenario.  
+The simulation must include a scenario with four agents: Alice, Bob,
+Carol, and Dave. Alice, Bob, and Carol are peers, and Bob, Carol, and
+Dave are peers.  Alice and Dave cannot communicate directly, but they
+can communicate through Bob and Carol.  Each agent has a personal
+currency that they use to bid and ask for resources.  Each
+communication, each message, must be either a bid or an ask, and must
+include a personal currency symbol and amount.  
+
+The agents communicate directly -- there is no kernel or other central
+authority.  
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -32,9 +41,15 @@ In:
   x/sim1/routing.md
   x/matching/matching.md
 Out:
-  x/sim1/routing.md
+  x/sim2/sim2.go
+  x/sim2/sim2_test.go
 
 .stop
+
+In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
+
+Add a protocol in which the goal is to fairly allocate resources and
+prevent spam using a double-auction mechanism. 
 
 XXX no center: kernel is an agent, any agent can route, any agent can host agents
 XXX no center: kernel is just a library called 'grid', not 'kernel'
