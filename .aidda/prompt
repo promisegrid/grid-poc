@@ -1,4 +1,4 @@
-write sim2
+update design to use double-entry accounting 
 
 Ensure all agents start with a zero balance.  These being personal
 currencies, each agent is their own central bank, and can create
@@ -8,15 +8,18 @@ balance sheet as needed; i.e. debit assets and credit liabilities
 when they create currency, and debit liabilities and credit assets
 when they destroy currency.  This is a key feature of the system.
 
-Remove the settlement code for now -- Alice does not pay Dave
-directly.  We instead maintain the liabilities and assets in the
-agents' balance sheets.  
+Please research how double-entry accounting and central bank balance
+sheets work, and change the code to maintain balanced debits and
+credits and ensure that the balance sheet is always balanced.
+Ensure that the code is written in a way that allows for easy testing
+of the balance sheet, so that we can verify that the balance sheet is
+always balanced.  
 
-Add output print statements showing the agent's balance sheet
-after an agent sends or receives a message.  The balance sheet should
-show the agent's assets, liabilities, and net worth.  The net worth
-should be the sum of the agent's assets minus the sum of the agent's
-liabilities.  
+Please research how liabilities work when a trader submits a BID
+order; the bid creates a liability, which must be offset by an asset.
+In design.md, suggest what the offsetting asset should be.
+
+Use the conversation in /tmp/response as a guide.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -31,9 +34,9 @@ In:
   x/sim2/sim2.go
   x/sim2/sim2_test.go
   x/sim2/design.md
+  /tmp/response
 Out:
-  x/sim2/sim2.go
-  x/sim2/sim2_test.go
+  x/sim2/design.md
 
 .stop
 
