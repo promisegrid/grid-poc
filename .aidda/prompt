@@ -2,7 +2,13 @@ write sim2
 
 Update the code based on the example given in design.md.  
 
-The response to a bid should be a CONFIRM message, not an ask. 
+The response to a bid should be a CONFIRM message, not an ask.  A
+CONFIRM uses the bid currency, not the confirmer's currency.  CONFIRM
+messages are not simply forwarded but are processed by the receiver,
+in turn generating a CONFIRM message to the next agent in the chain.
+The CONFIRM message is a delivery of an earlier promise to execute the
+given function, and in turn invokes the bidder's promise to owe the
+bidder's bid currency to the confirmer if the function is executed.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
