@@ -29,7 +29,7 @@ type Message struct {
 // Agent represents a simulation participant.
 type Agent struct {
 	ID          string
-	Currency    string  // personal currency (e.g. "ALICE")
+	Currency    string // personal currency (e.g. "ALICE")
 	Balance     float64
 	Peers       []*Agent
 	IsSeller    bool // Only Dave is the seller.
@@ -88,7 +88,7 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 				From:    a.ID,
 				History: []string{a.ID},
 			}
-			fmt.Printf("%s received BID from %s, responds with CONFIRM (%.2f%s)\n",
+			fmt.Printf("%s received BID from %s, responds with CONFIRM (%.2f %s)\n",
 				a.ID, sender.ID, confirmMsg.Amount, confirmMsg.Symbol)
 			a.SendConfirmMessage(confirmMsg)
 			return
@@ -106,7 +106,7 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 				OrigBid: msg.Amount, // Preserve the upstream bid.
 			}
 			fmt.Printf("%s (intermediary) received BID from %s, arbitraging to "+
-				"new BID: %.2f%s\n", a.ID, sender.ID, newBid.Amount,
+				"new BID: %.2f %s\n", a.ID, sender.ID, newBid.Amount,
 				newBid.Symbol)
 			a.SendBidMessage(newBid)
 			return
@@ -121,14 +121,14 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 			if !tradeExecuted {
 				// For this simulation, the buyer pays the confirm amount.
 				fmt.Printf("%s (buyer) received CONFIRM from %s with price "+
-					"%.2f%s, trade executed!\n", a.ID, sender.ID, msg.Amount,
+					"%.2f %s, trade executed!\n", a.ID, sender.ID, msg.Amount,
 					msg.Symbol)
 				a.Balance -= msg.Amount
 				// Settle trade with the seller.
 				seller := findSeller(allAgents)
 				if seller != nil {
 					seller.Balance += msg.Amount
-					fmt.Printf("Trade settled: %s pays %.2f%s to %s\n",
+					fmt.Printf("Trade settled: %s pays %.2f %s to %s\n",
 						a.ID, msg.Amount, msg.Symbol, seller.ID)
 				} else {
 					fmt.Printf("Seller not found in the simulation.\n")
@@ -149,7 +149,7 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 			History: []string{a.ID},
 		}
 		fmt.Printf("%s processed CONFIRM message from %s, generating new "+
-			"CONFIRM with price %.2f%s\n", a.ID, sender.ID, newConfirm.Amount,
+			"CONFIRM with price %.2f %s\n", a.ID, sender.ID, newConfirm.Amount,
 			newConfirm.Symbol)
 		a.SendConfirmMessage(newConfirm)
 	} else {
@@ -163,13 +163,13 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 // confirmation.
 func (a *Agent) ReceiveFinalConfirm(msg Message) {
 	if !tradeExecuted {
-		fmt.Printf("%s (buyer) received final CONFIRM with price %.2f%s, "+
+		fmt.Printf("%s (buyer) received final CONFIRM with price %.2f %s, "+
 			"trade executed!\n", a.ID, msg.Amount, msg.Symbol)
 		a.Balance -= msg.Amount
 		seller := findSeller(allAgents)
 		if seller != nil {
 			seller.Balance += msg.Amount
-			fmt.Printf("Trade settled: %s pays %.2f%s to %s\n",
+			fmt.Printf("Trade settled: %s pays %.2f %s to %s\n",
 				a.ID, msg.Amount, msg.Symbol, seller.ID)
 		} else {
 			fmt.Printf("Seller not found in the simulation.\n")
@@ -203,6 +203,9 @@ func findSeller(agents []*Agent) *Agent {
 // Scenario: Alice, Bob, and Carol form a BID chain and Bob, Carol, and Dave form
 // the corresponding chain for forwarding. Alice and Dave cannot communicate
 // directly.
+// This simulation reflects the design example where Alice initiates a BID of
+// 10 ALICE, Bob arbitrages to 9 BOB, Carol arbitrages to 8 CAROL, and Dave, the
+// seller, accepts the bid.
 func RunSimulation() (alice, bob, carol, dave *Agent) {
 	tradeExecuted = false
 	alice = &Agent{ID: "Alice", Balance: 100.0, IsBuyer: true,
@@ -238,7 +241,7 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 	// Alice initiates the auction by sending a BID message with her currency.
 	bidMsg := Message{
 		Type:    "BID",
-		Amount:  50.0,
+		Amount:  10.0,
 		Symbol:  alice.Currency,
 		From:    alice.ID,
 		History: []string{},

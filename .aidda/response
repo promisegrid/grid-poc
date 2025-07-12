@@ -205,6 +205,9 @@ func findSeller(agents []*Agent) *Agent {
 // Scenario: Alice, Bob, and Carol form a BID chain and Bob, Carol, and Dave form
 // the corresponding chain for forwarding. Alice and Dave cannot communicate
 // directly.
+// This simulation reflects the design example where Alice initiates a BID of
+// 10 ALICE, Bob arbitrages to 9 BOB, Carol arbitrages to 8 CAROL, and Dave, the
+// seller, accepts the bid.
 func RunSimulation() (alice, bob, carol, dave *Agent) {
 	tradeExecuted = false
 	alice = &Agent{ID: "Alice", Balance: 100.0, IsBuyer: true,
@@ -240,7 +243,7 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 	// Alice initiates the auction by sending a BID message with her currency.
 	bidMsg := Message{
 		Type:    "BID",
-		Amount:  50.0,
+		Amount:  10.0,
 		Symbol:  alice.Currency,
 		From:    alice.ID,
 		History: []string{},
@@ -276,18 +279,18 @@ package main
 import "testing"
 
 // TestSimulationTrade verifies that a trade occurs during the simulation.
-// With arbitrage enabled, intermediaries modify the BID such that a BID of 50
-// becomes 49 before reaching the seller, and then 48 for the last hop.
-// The seller responds with a CONFIRM using the received bid amount (48).
+// With arbitrage enabled, intermediaries modify the BID such that a BID of 10
+// becomes 9 before reaching the seller, and then 8 for the last hop.
+// The seller responds with a CONFIRM using the received bid amount (8).
 // Intermediaries then propagate confirmation using the original upstream bid:
-// Carol sends CONFIRM with 49 (from Bob's original bid) to Bob, and Bob sends
-// CONFIRM with 50 (from Alice's bid) to Alice. Therefore, we expect the buyer
-// (Alice) to pay 50 and the seller (Dave) to receive that amount.
+// Carol sends CONFIRM with 9 (from Bob's original bid) to Bob, and Bob sends
+// CONFIRM with 10 (from Alice's bid) to Alice. Therefore, we expect the buyer
+// (Alice) to pay 10 and the seller (Dave) to receive that amount.
 func TestSimulationTrade(t *testing.T) {
 	alice, _, _, dave := RunSimulation()
-	// With arbitrage, the final trade executes at a CONFIRM price of 50.
-	expectedBuyerBalance := 100.0 - 50.0
-	expectedSellerBalance := 100.0 + 50.0
+	// With arbitrage, the final trade executes at a CONFIRM price of 10.
+	expectedBuyerBalance := 100.0 - 10.0
+	expectedSellerBalance := 100.0 + 10.0
 
 	if alice.Balance != expectedBuyerBalance {
 		t.Errorf("Expected Alice balance to be %.2f, got %.2f",
@@ -300,87 +303,3 @@ func TestSimulationTrade(t *testing.T) {
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim2/sim2_test.go
-
-File: /home/stevegt/lab/grid-poc/x/sim2/design.md
-```markdown
-# Sim2 Design Document: Double-Auction Routing Simulation
-
-This document describes the design and protocol for Sim2, a
-simulation of a decentralized, double-auction based routing mechanism
-for PromiseGrid. The goal is to fairly allocate resources and prevent
-spam using a double-auction market. In this protocol, agents exchange
-bids and asks using personal currencies, and every message carries a
-currency symbol and amount.
-
-## Protocol Overview
-
-Sim2 employs a peer-to-peer message passing system in which all
-communication is local. Agents send messages directly to their
-neighbors as defined by their peer connections. In our simulation the
-agents are Alice, Bob, Carol, and Dave, with the following network:
-- Alice, Bob, and Carol are direct peers.
-- Bob, Carol, and Dave are direct peers.
-- Alice and Dave cannot communicate directly but route messages via
-  intermediate peers.
-
-Each message represents either a bid or an ask. The buyer (Alice)
-initiates a BID, and the seller (Dave) responds with a CONFIRM. 
-
-## Personal Currencies and Economic Incentives
-
-Every agent has its own personal currency: "ALICE", "BOB", "CAROL", and
-"DAVE". These currencies are used in bid and ask messages. An agent’s
-balance is adjusted when a trade is executed. 
-
-Agents trade each others' currencies as a means of valuing relative
-trustworthiness; for example, if Alice trusts Bob, she may buy some of
-Bob's currency to use in future transactions.  Unrustworthy or abusive
-behavior would cause other agents to sell that agent's currency,
-reducing its value.
-
-Intermediate agents don't forward messages; they instead use
-arbitrage. They create their own bid or ask orders based on received
-messages, effectively acting as market makers or arbitrageurs. This
-allows them to profit from the difference between the bid and ask
-prices, incentivizing their participation in the network.
-
-Here's an example of how this works in practice:
-- Alice sends BID message (50.00 ALICE) to Bob
-- Bob (intermediary) received BID from Alice, arbitraging to new BID: 49.00
-  BOB
-- Bob sends BID message (49.00 BOB) to Carol
-- Carol (intermediary) received BID from Bob, arbitraging to new BID: 48.00
-  CAROL
-- Carol sends BID message (48.00 CAROL) to Dave
-- Dave received BID from Carol, responds with CONFIRM (48.00 CAROL)
-- Carol received CONFIRM from Dave, which triggers her sending a CONFIRM
-  to Bob (49.00 BOB)
-- Bob receives CONFIRM from Carol and sends a final CONFIRM to Alice (50.00
-  ALICE)
-
-## Simulation Details
-
-The simulation is implemented in Go and encapsulated in a single file,
-sim2.go, with testing in sim2_test.go. Key design aspects include:
-
-- **Peer-to-Peer Exchange:** There is no central authority. Instead,
-  messages propagate through a network of direct connections.
-
-## Implementation Considerations
-
-The design emphasizes minimalism and dependency-free code that can be
-deployed even on resource-constrained devices such as IoT platforms.
-The simulation uses in-memory data structures and simple string slicing
-for routing. Message histories prevent loops, and the forwarding
-mechanism ensures that each agent processes a message only once.
-
-## Conclusion
-
-Sim2 demonstrates a market-based approach to decentralized routing using
-a double-auction mechanism. It shows how economic principles like
-price discovery and auction matching can be applied to networking to
-achieve fair resource allocation and spam prevention. This design is
-intended to serve as a proof-of-concept for integrating economic models
-into multi-hop, peer-to-peer communication protocols in PromiseGrid.
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim2/design.md
