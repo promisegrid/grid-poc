@@ -28,6 +28,10 @@ include a personal currency symbol and amount.
 The agents communicate directly -- there is no kernel or other central
 authority.  
 
+The personal currency symbols should be "ALICE", "BOB", 
+"CAROL", and "DAVE".  The test cases should include the currency
+symbol in any printed output.  
+
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
   the requested changes to the given code or documentation. Do not
@@ -40,11 +44,19 @@ Sysmsg:
 In:
   x/sim1/routing.md
   x/matching/matching.md
+  x/sim2/sim2.go
+  x/sim2/sim2_test.go
 Out:
   x/sim2/sim2.go
   x/sim2/sim2_test.go
 
 .stop
+
+Agnets need to be incentivised to forward messages.  The way this
+works is, for example, if Alice wants to send a message to
+Dave, she sends a message to Bob with the message and a bid in her
+personal currency.  Bob receives the message, checks if he can
+
 
 In routing.md, brainstorm how PromiseGrid might do multi-hop routing.
 

@@ -13,7 +13,7 @@ import (
 type Message struct {
 	Type    string   // "BID" or "ASK"
 	Amount  float64  // bid or ask amount
-	Symbol  string   // personal currency symbol (e.g. "$")
+	Symbol  string   // personal currency symbol (e.g. "ALICE")
 	From    string   // sender agent ID
 	History []string // list of agent IDs that have handled the message
 }
@@ -21,16 +21,20 @@ type Message struct {
 // Agent represents a simulation participant.
 type Agent struct {
 	ID       string
+	Currency string  // personal currency (e.g. "ALICE")
 	Balance  float64
 	Peers    []*Agent
-	IsSeller bool // In our simulation, only one agent (Dave) is considered a
-	// resource provider (seller).
-	IsBuyer  bool // Only one agent (Alice) is the buyer.
+	IsSeller bool // Only Dave is the seller.
+	IsBuyer  bool // Only Alice is the buyer.
 }
 
 // SendMessage sends a message to all peers, skipping those already in the
-// message history to avoid loops.
+// message history to avoid loops. If the message's symbol is empty, it uses
+// the sender's personal currency.
 func (a *Agent) SendMessage(msg Message) {
+	if msg.Symbol == "" {
+		msg.Symbol = a.Currency
+	}
 	// Append self to history.
 	msg.History = append(msg.History, a.ID)
 	for _, peer := range a.Peers {
@@ -45,8 +49,9 @@ func (a *Agent) SendMessage(msg Message) {
 }
 
 // ReceiveMessage processes an incoming message based on type and role.
-// Sellers respond to BID messages by issuing an ASK; buyers accept acceptable
-// ASK messages. Intermediate agents simply forward messages.
+// Sellers respond to BID messages by issuing an ASK using their own currency;
+// buyers accept acceptable ASK messages. Intermediate agents simply forward
+// messages.
 func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 	// Avoid reprocessing if already in history.
 	if contains(msg.History, a.ID) {
@@ -64,7 +69,7 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 		askMsg := Message{
 			Type:    "ASK",
 			Amount:  askPrice,
-			Symbol:  msg.Symbol,
+			Symbol:  a.Currency,
 			From:    a.ID,
 			History: []string{},
 		}
@@ -74,17 +79,15 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 		return
 	}
 
-	// Buyer behavior: on receiving an ASK, if the price is acceptable, execute
-	// the trade.
+	// Buyer behavior: on receiving an ASK, if the price is acceptable,
+	// execute the trade.
 	if msg.Type == "ASK" && a.IsBuyer {
-		// For simplicity, buyer accepts the ASK if the price is less than or equal
-		// to 50.
+		// Buyer accepts the ASK if the price is less than or equal to 50.
 		if msg.Amount <= 50.0 {
-			fmt.Printf("%s (buyer) received ASK from %s with price %.2f%s, trade executed!\n",
-				a.ID, msg.From, msg.Amount, msg.Symbol)
+			fmt.Printf("%s (buyer) received ASK from %s with price %.2f%s, "+
+				"trade executed!\n", a.ID, msg.From, msg.Amount, msg.Symbol)
 			a.Balance -= msg.Amount
-			// Find the seller in the network; for this simulation, we assume that
-			// the seller is Dave. If a direct peer is found, credit his balance.
+			// Find the seller in the network; assume the seller is Dave.
 			seller := findAgentByID(a.Peers, msg.From)
 			if seller != nil {
 				seller.Balance += msg.Amount
@@ -95,8 +98,8 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 			}
 			return
 		}
-		fmt.Printf("%s (buyer) received high ASK price %.2f%s from %s, rejecting trade\n",
-			a.ID, msg.Amount, msg.Symbol, msg.From)
+		fmt.Printf("%s (buyer) received high ASK price %.2f%s from %s, "+
+			"rejecting trade\n", a.ID, msg.Amount, msg.Symbol, msg.From)
 		return
 	}
 
@@ -128,14 +131,16 @@ func findAgentByID(agents []*Agent, id string) *Agent {
 
 // RunSimulation initializes the four agents and simulates a double-auction
 // message pass using personal currencies across a multi-hop network.
-// The scenario: Alice, Bob, and Carol are peers; Bob, Carol, and Dave are peers.
-// Alice and Dave cannot communicate directly. Each message is relayed locally.
+// Scenario: Alice, Bob, and Carol are peers; Bob, Carol, and Dave are peers.
+// Alice and Dave cannot communicate directly.
 func RunSimulation() (alice, bob, carol, dave *Agent) {
-	// Create agents with an initial balance of 100.
-	alice = &Agent{ID: "Alice", Balance: 100.0, IsBuyer: true}
-	bob = &Agent{ID: "Bob", Balance: 100.0}
-	carol = &Agent{ID: "Carol", Balance: 100.0}
-	dave = &Agent{ID: "Dave", Balance: 100.0, IsSeller: true}
+	// Create agents with an initial balance of 100 and assign personal currency.
+	alice = &Agent{ID: "Alice", Balance: 100.0, IsBuyer: true,
+		Currency: "ALICE"}
+	bob = &Agent{ID: "Bob", Balance: 100.0, Currency: "BOB"}
+	carol = &Agent{ID: "Carol", Balance: 100.0, Currency: "CAROL"}
+	dave = &Agent{ID: "Dave", Balance: 100.0, IsSeller: true,
+		Currency: "DAVE"}
 
 	// Set up peer connections:
 	// Alice, Bob, and Carol are mutually connected.
@@ -145,11 +150,11 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 	carol.Peers = []*Agent{alice, bob, dave}
 	dave.Peers = []*Agent{bob, carol}
 
-	// Alice initiates the auction by sending a BID message.
+	// Alice initiates the auction by sending a BID message with her currency.
 	bidMsg := Message{
 		Type:    "BID",
 		Amount:  50.0,
-		Symbol:  "$",
+		Symbol:  alice.Currency,
 		From:    alice.ID,
 		History: []string{},
 	}
@@ -161,11 +166,11 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 func simulateAuction() {
 	alice, bob, carol, dave := RunSimulation()
 	fmt.Println("\nFinal Balances:")
-	// Trim any trailing zeros for nicer display.
-	fmt.Printf("Alice: %s\n", fmt.Sprintf("%.2f$", alice.Balance))
-	fmt.Printf("Bob: %s\n", fmt.Sprintf("%.2f$", bob.Balance))
-	fmt.Printf("Carol: %s\n", fmt.Sprintf("%.2f$", carol.Balance))
-	fmt.Printf("Dave: %s\n", fmt.Sprintf("%.2f$", dave.Balance))
+	// Display each agent's balance along with their personal currency.
+	fmt.Printf("Alice: %.2f %s\n", alice.Balance, alice.Currency)
+	fmt.Printf("Bob: %.2f %s\n", bob.Balance, bob.Currency)
+	fmt.Printf("Carol: %.2f %s\n", carol.Balance, carol.Currency)
+	fmt.Printf("Dave: %.2f %s\n", dave.Balance, dave.Currency)
 }
 
 func main() {
