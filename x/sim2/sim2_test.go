@@ -8,20 +8,24 @@ import "testing"
 // The seller responds with a CONFIRM using the received bid amount (8).
 // Intermediaries then propagate confirmation using the original upstream bid:
 // Carol sends CONFIRM with 9 (from Bob's original bid) to Bob, and Bob sends
-// CONFIRM with 10 (from Alice's bid) to Alice. Therefore, we expect the buyer
-// (Alice) to pay 10 and the seller (Dave) to receive that amount.
+// CONFIRM with 10 (from Alice's bid) to Alice. Therefore, after the trade,
+// we expect the buyer (Alice) to have a liability entry for 10 ALICE and the
+// seller (Dave) to have an asset entry for 10 DAVE.
 func TestSimulationTrade(t *testing.T) {
 	alice, _, _, dave := RunSimulation()
-	// With arbitrage, the final trade executes at a CONFIRM price of 10.
-	expectedBuyerBalance := 100.0 - 10.0
-	expectedSellerBalance := 100.0 + 10.0
+	// With arbitrage, the final trade executes at a confirm price of 10.
+	expectedBuyerLiability := 10.0
+	expectedSellerAsset := 10.0
 
-	if alice.Balance != expectedBuyerBalance {
-		t.Errorf("Expected Alice balance to be %.2f, got %.2f",
-			expectedBuyerBalance, alice.Balance)
+	buyerLiability := alice.Liabilities[alice.Currency]
+	sellerAsset := dave.Assets[dave.Currency]
+
+	if buyerLiability != expectedBuyerLiability {
+		t.Errorf("Expected Alice liability in %s to be %.2f, got %.2f",
+			alice.Currency, expectedBuyerLiability, buyerLiability)
 	}
-	if dave.Balance != expectedSellerBalance {
-		t.Errorf("Expected Dave balance to be %.2f, got %.2f",
-			expectedSellerBalance, dave.Balance)
+	if sellerAsset != expectedSellerAsset {
+		t.Errorf("Expected Dave asset in %s to be %.2f, got %.2f",
+			dave.Currency, expectedSellerAsset, sellerAsset)
 	}
 }

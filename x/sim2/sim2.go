@@ -5,11 +5,14 @@ import (
 	"strings"
 )
 
+// simulateArbitrage enables intermediaries to modify the bid.
 var simulateArbitrage = true
+
+// tradeExecuted prevents multiple trades from executing.
 var tradeExecuted bool = false
 
 // allAgents holds the list of all agents in the simulation for global
-// lookup during settlement.
+// lookup during ledger updates.
 var allAgents []*Agent
 
 // Message represents a bid or confirm message in the simulation.
@@ -31,12 +34,37 @@ type Agent struct {
 	ID          string
 	Currency    string // personal currency (e.g. "ALICE")
 	Balance     float64
+	Assets      map[string]float64   // assets ledger by currency
+	Liabilities map[string]float64   // liabilities ledger by currency
 	Peers       []*Agent
 	IsSeller    bool // Only Dave is the seller.
 	IsBuyer     bool // Only Alice is the buyer.
 	NextHop     *Agent
 	PrevHop     *Agent
 	upstreamBid float64 // bid amount received from upstream
+}
+
+// PrintBalanceSheet prints the agent's current balance sheet: assets,
+// liabilities, and net worth (assets minus liabilities).
+func (a *Agent) PrintBalanceSheet() {
+	totalAssets := 0.0
+	totalLiabilities := 0.0
+
+	assetsStr := ""
+	for curr, amt := range a.Assets {
+		assetsStr += fmt.Sprintf("%s: %.2f  ", curr, amt)
+		totalAssets += amt
+	}
+
+	liabStr := ""
+	for curr, amt := range a.Liabilities {
+		liabStr += fmt.Sprintf("%s: %.2f  ", curr, amt)
+		totalLiabilities += amt
+	}
+
+	netWorth := totalAssets - totalLiabilities
+	fmt.Printf("Balance Sheet for %s -> Assets: [%s] Liabilities: [%s] "+
+		"Net Worth: %.2f\n", a.ID, assetsStr, liabStr, netWorth)
 }
 
 // SendBidMessage sends a BID message to the next agent in the chain.
@@ -48,6 +76,7 @@ func (a *Agent) SendBidMessage(msg Message) {
 	msg.History = append(msg.History, a.ID)
 	fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
 		a.ID, msg.Type, msg.Amount, msg.Symbol, a.NextHop.ID)
+	a.PrintBalanceSheet()
 	a.NextHop.ReceiveMessage(msg, a)
 }
 
@@ -63,15 +92,16 @@ func (a *Agent) SendConfirmMessage(msg Message) {
 	msg.History = append(msg.History, a.ID)
 	fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
 		a.ID, msg.Type, msg.Amount, msg.Symbol, a.PrevHop.ID)
+	a.PrintBalanceSheet()
 	a.PrevHop.ReceiveMessage(msg, a)
 }
 
-// ReceiveMessage processes an incoming message based on its type and the role
-// of the agent. For BID messages, intermediaries arbitrage by subtracting 1
-// from the incoming bid and storing the upstream bid for later use in CONFIRM.
-// The seller responds to a BID with a CONFIRM using the exact bid amount.
-// CONFIRM messages are forwarded backward along the chain with intermediaries
-// replacing the bid amount with the upstream bid value.
+// ReceiveMessage processes an incoming message based on its type and the role of
+// the agent. For BID messages, intermediaries arbitrage by subtracting 1 from the
+// incoming bid and storing the upstream bid for later use in CONFIRM. The seller
+// responds to a BID with a CONFIRM using the exact bid amount. CONFIRM messages are
+// forwarded backward along the chain with intermediaries replacing the bid amount with
+// the upstream bid value.
 func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 	// Prevent processing the same message more than once.
 	if contains(msg.History, a.ID) {
@@ -90,6 +120,7 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 			}
 			fmt.Printf("%s received BID from %s, responds with CONFIRM (%.2f %s)\n",
 				a.ID, sender.ID, confirmMsg.Amount, confirmMsg.Symbol)
+			a.PrintBalanceSheet()
 			a.SendConfirmMessage(confirmMsg)
 			return
 		} else if !a.IsBuyer && simulateArbitrage {
@@ -108,49 +139,36 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 			fmt.Printf("%s (intermediary) received BID from %s, arbitraging to "+
 				"new BID: %.2f %s\n", a.ID, sender.ID, newBid.Amount,
 				newBid.Symbol)
+			a.PrintBalanceSheet()
 			a.SendBidMessage(newBid)
 			return
 		}
 		// If buyer or not eligible, simply forward the BID.
 		fmt.Printf("%s received BID message from %s, forwarding...\n",
 			a.ID, sender.ID)
+		a.PrintBalanceSheet()
 		a.SendBidMessage(msg)
 	} else if msg.Type == "CONFIRM" {
 		if a.IsBuyer {
-			// Buyer processes the final CONFIRM and settles the trade.
-			if !tradeExecuted {
-				// For this simulation, the buyer pays the confirm amount.
-				fmt.Printf("%s (buyer) received CONFIRM from %s with price "+
-					"%.2f %s, trade executed!\n", a.ID, sender.ID, msg.Amount,
-					msg.Symbol)
-				a.Balance -= msg.Amount
-				// Settle trade with the seller.
-				seller := findSeller(allAgents)
-				if seller != nil {
-					seller.Balance += msg.Amount
-					fmt.Printf("Trade settled: %s pays %.2f %s to %s\n",
-						a.ID, msg.Amount, msg.Symbol, seller.ID)
-				} else {
-					fmt.Printf("Seller not found in the simulation.\n")
-				}
-				tradeExecuted = true
-			}
+			// Buyer processes the final CONFIRM.
+			a.ReceiveFinalConfirm(msg)
 			return
 		}
 		// Intermediate agent: generate a new CONFIRM using the stored upstream
 		// bid amount and the currency of the previous hop.
 		newConfirm := Message{
-			Type:   "CONFIRM",
-			Amount: a.upstreamBid,
+			Type:    "CONFIRM",
+			Amount:  a.upstreamBid,
 			// The confirm uses the upstream agent's currency.
-			Symbol: a.PrevHop.Currency,
-			From:   msg.From,
+			Symbol:  a.PrevHop.Currency,
+			From:    msg.From,
 			// Start history with current agent for the backward journey.
 			History: []string{a.ID},
 		}
 		fmt.Printf("%s processed CONFIRM message from %s, generating new "+
 			"CONFIRM with price %.2f %s\n", a.ID, sender.ID, newConfirm.Amount,
 			newConfirm.Symbol)
+		a.PrintBalanceSheet()
 		a.SendConfirmMessage(newConfirm)
 	} else {
 		fmt.Printf("%s received unknown message type %s from %s\n",
@@ -159,18 +177,25 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 }
 
 // ReceiveFinalConfirm is called by the buyer when no previous agent exists.
-// It finalizes the trade; in this simulation, the buyer processes the final
-// confirmation.
+// It finalizes the trade by updating the agents' balance sheets using double-entry
+// accounting. The buyer records a liability in their own currency, while the seller
+// records an asset in their own currency.
 func (a *Agent) ReceiveFinalConfirm(msg Message) {
 	if !tradeExecuted {
-		fmt.Printf("%s (buyer) received final CONFIRM with price %.2f %s, "+
-			"trade executed!\n", a.ID, msg.Amount, msg.Symbol)
-		a.Balance -= msg.Amount
+		fmt.Printf("%s (buyer) received final CONFIRM with price %.2f %s, trade "+
+			"executed!\n", a.ID, msg.Amount, msg.Symbol)
+		// Find the seller in the simulation.
 		seller := findSeller(allAgents)
 		if seller != nil {
-			seller.Balance += msg.Amount
-			fmt.Printf("Trade settled: %s pays %.2f %s to %s\n",
-				a.ID, msg.Amount, msg.Symbol, seller.ID)
+			// Buyer creates a liability in their own currency.
+			a.Liabilities[a.Currency] += msg.Amount
+			// Seller recognizes an asset in their own currency.
+			seller.Assets[seller.Currency] += msg.Amount
+			fmt.Printf("Trade ledger updated: %s records liability of %.2f %s, "+
+				"%s records asset of %.2f %s\n", a.ID, msg.Amount,
+				a.Currency, seller.ID, msg.Amount, seller.Currency)
+			a.PrintBalanceSheet()
+			seller.PrintBalanceSheet()
 		} else {
 			fmt.Printf("Seller not found in the simulation.\n")
 		}
@@ -208,12 +233,36 @@ func findSeller(agents []*Agent) *Agent {
 // seller, accepts the bid.
 func RunSimulation() (alice, bob, carol, dave *Agent) {
 	tradeExecuted = false
-	alice = &Agent{ID: "Alice", Balance: 100.0, IsBuyer: true,
-		Currency: "ALICE"}
-	bob = &Agent{ID: "Bob", Balance: 100.0, Currency: "BOB"}
-	carol = &Agent{ID: "Carol", Balance: 100.0, Currency: "CAROL"}
-	dave = &Agent{ID: "Dave", Balance: 100.0, IsSeller: true,
-		Currency: "DAVE"}
+	alice = &Agent{
+		ID:          "Alice",
+		Balance:     0.0,
+		IsBuyer:     true,
+		Currency:    "ALICE",
+		Assets:      make(map[string]float64),
+		Liabilities: make(map[string]float64),
+	}
+	bob = &Agent{
+		ID:          "Bob",
+		Balance:     0.0,
+		Currency:    "BOB",
+		Assets:      make(map[string]float64),
+		Liabilities: make(map[string]float64),
+	}
+	carol = &Agent{
+		ID:          "Carol",
+		Balance:     0.0,
+		Currency:    "CAROL",
+		Assets:      make(map[string]float64),
+		Liabilities: make(map[string]float64),
+	}
+	dave = &Agent{
+		ID:          "Dave",
+		Balance:     0.0,
+		IsSeller:    true,
+		Currency:    "DAVE",
+		Assets:      make(map[string]float64),
+		Liabilities: make(map[string]float64),
+	}
 
 	// Set up peer connections (full mesh for potential lookups).
 	alice.Peers = []*Agent{bob, carol}
@@ -250,15 +299,15 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 	return alice, bob, carol, dave
 }
 
-// simulateAuction runs the simulation and prints final agent balances.
+// simulateAuction runs the simulation and prints final agent ledger
+// balance sheets.
 func simulateAuction() {
 	alice, bob, carol, dave := RunSimulation()
-	fmt.Println("\nFinal Balances:")
-	// Display each agent's balance along with their personal currency.
-	fmt.Printf("Alice: %.2f %s\n", alice.Balance, alice.Currency)
-	fmt.Printf("Bob: %.2f %s\n", bob.Balance, bob.Currency)
-	fmt.Printf("Carol: %.2f %s\n", carol.Balance, carol.Currency)
-	fmt.Printf("Dave: %.2f %s\n", dave.Balance, dave.Currency)
+	fmt.Println("\nFinal Ledger Balance Sheets:")
+	alice.PrintBalanceSheet()
+	bob.PrintBalanceSheet()
+	carol.PrintBalanceSheet()
+	dave.PrintBalanceSheet()
 }
 
 func main() {
