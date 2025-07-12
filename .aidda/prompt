@@ -32,6 +32,9 @@ The personal currency symbols should be "ALICE", "BOB",
 "CAROL", and "DAVE".  The test cases should include the currency
 symbol in any printed output.  
 
+Write design.md describing all of the above as well as any other relevant
+details.  
+
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
   the requested changes to the given code or documentation. Do not
@@ -49,6 +52,7 @@ In:
 Out:
   x/sim2/sim2.go
   x/sim2/sim2_test.go
+  x/sim2/design.md
 
 .stop
 

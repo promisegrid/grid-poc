@@ -208,3 +208,74 @@ func TestSimulationTrade(t *testing.T) {
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim2/sim2_test.go
+
+File: /home/stevegt/lab/grid-poc/x/sim2/design.md
+```markdown
+# Sim2 Design Document: Double-Auction Routing Simulation
+
+This document describes the design and protocol for Sim2, a
+simulation of a decentralized, double-auction based routing mechanism
+for PromiseGrid. The goal is to fairly allocate resources and prevent
+spam using a double-auction market. In this protocol, agents exchange
+bids and asks using personal currencies, and every message carries a
+currency symbol and amount.
+
+## Protocol Overview
+
+Sim2 employs a peer-to-peer message passing system in which all
+communication is local. Agents send messages directly to their
+neighbors as defined by their peer connections. In our simulation the
+agents are Alice, Bob, Carol, and Dave, with the following network:
+- Alice, Bob, and Carol are direct peers.
+- Bob, Carol, and Dave are direct peers.
+- Alice and Dave cannot communicate directly but route messages via
+  intermediate peers.
+
+Each message represents either a bid or an ask. The buyer (Alice)
+initiates a BID, and the seller (Dave) responds with an ASK. The ASK
+price is set lower than the BID by a fixed margin to simulate a double-
+auction mechanism, promoting fair pricing and discouraging spam.
+
+## Personal Currencies and Economic Incentives
+
+Every agent has its own personal currency: "ALICE", "BOB", "CAROL", and
+"DAVE". These currencies are used in bid and ask messages. An agent’s
+balance is adjusted when a trade is executed. Abusive behavior would
+reduce an agent's currency value, while reliable routing increases it.
+Intermediate agents forward messages and add cancellation risk into
+their bid/ask spreads.
+
+## Simulation Details
+
+The simulation is implemented in Go and encapsulated in a single file,
+sim2.go, with testing in sim2_test.go. Key design aspects include:
+- **Local Routing:** Agents forward messages only to peers that have not
+  seen the message.
+- **Double-Auction Mechanism:** Buyers and sellers negotiate prices via
+  bids and asks. In our scenario, Alice (buyer) will accept any ASK at a
+  price not exceeding a threshold.
+- **Peer-to-Peer Exchange:** There is no central authority. Instead,
+  messages propagate through a network of direct connections.
+- **Trade Settlement:** When a buyer accepts an ask, the buyer’s balance
+  is decreased, and the seller’s is increased by the ask price.
+- **Role Specialization:** In our simulation, only Alice acts as a
+  buyer and only Dave as a seller.
+
+## Implementation Considerations
+
+The design emphasizes minimalism and dependency-free code that can be
+deployed even on resource-constrained devices such as IoT platforms.
+The simulation uses in-memory data structures and simple string slicing
+for routing. Message histories prevent loops, and the forwarding
+mechanism ensures that each agent processes a message only once.
+
+## Conclusion
+
+Sim2 demonstrates a market-based approach to decentralized routing using
+a double-auction mechanism. It shows how economic principles like
+price discovery and auction matching can be applied to networking to
+achieve fair resource allocation and spam prevention. This design is
+intended to serve as a proof-of-concept for integrating economic models
+into multi-hop, peer-to-peer communication protocols in PromiseGrid.
+```
+EOF_/home/stevegt/lab/grid-poc/x/sim2/design.md
