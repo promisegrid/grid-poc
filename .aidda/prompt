@@ -2,7 +2,7 @@ write sim2
 
 Update the code based on the example given in design.md.  
 
-The response to a bid should be a CONFIRM message, not an ask.
+The response to a bid should be a CONFIRM message, not an ask. 
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -20,10 +20,11 @@ In:
 Out:
   x/sim2/sim2.go
   x/sim2/sim2_test.go
+  x/sim2/design.md
 
 .stop
 
-Agnets need to be incentivised to forward messages.  The way this
+Agents need to be incentivised to forward messages.  The way this
 works is, for example, if Alice wants to send a message to
 Dave, she sends a message to Bob with the message and a bid in her
 personal currency.  Bob receives the message, checks if he can

@@ -8,12 +8,12 @@ import (
 var simulateArbitrage = true
 var tradeExecuted bool = false
 
-// Message represents a bid or ask message in the simulation.
-// Every message must be either a bid or an ask and include a personal
+// Message represents a bid, confirm, or ask message in the simulation.
+// Every message must be either a BID or a CONFIRM and include a personal
 // currency symbol and an amount.
 type Message struct {
-	Type    string   // "BID" or "ASK"
-	Amount  float64  // bid or ask amount
+	Type    string   // "BID" or "CONFIRM"
+	Amount  float64  // bid or confirm amount
 	Symbol  string   // personal currency symbol (e.g. "ALICE")
 	From    string   // sender agent ID
 	History []string // list of agent IDs that have handled the message
@@ -50,12 +50,13 @@ func (a *Agent) SendMessage(msg Message) {
 }
 
 // ReceiveMessage processes an incoming message based on type and role.
-// Sellers respond to BID messages by issuing an ASK using their own currency;
-// buyers accept acceptable ASK messages. Intermediate agents, which in a real
-// network would perform arbitrage (i.e. they would not merely forward messages
-// but create their own orders to profit from price differences), modify the BID
-// by reducing its amount by 1 and changing the currency to their own before
-// forwarding.
+// Sellers respond to BID messages by issuing a CONFIRM using their own
+// currency and the computed price (bid amount minus 5).
+// Buyers accept acceptable CONFIRM messages. Intermediate agents, which in a
+// real network would perform arbitrage (i.e. they would not merely forward
+// messages but create their own orders to profit from price differences),
+// modify the BID by reducing its amount by 1 and changing the currency to their
+// own before forwarding. CONFIRM messages are simply forwarded.
 func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 	if contains(msg.History, a.ID) {
 		return
@@ -63,20 +64,20 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 	msg.History = append(msg.History, a.ID)
 	if msg.Type == "BID" {
 		if a.IsSeller {
-			askPrice := msg.Amount - 5.0
-			if askPrice < 0 {
-				askPrice = 0
+			confirmPrice := msg.Amount - 5.0
+			if confirmPrice < 0 {
+				confirmPrice = 0
 			}
-			askMsg := Message{
-				Type:    "ASK",
-				Amount:  askPrice,
+			confirmMsg := Message{
+				Type:    "CONFIRM",
+				Amount:  confirmPrice,
 				Symbol:  a.Currency,
 				From:    a.ID,
 				History: []string{},
 			}
-			fmt.Printf("%s received BID from %s, responds with ASK (%.2f%s)\n",
-				a.ID, msg.From, askMsg.Amount, askMsg.Symbol)
-			a.SendMessage(askMsg)
+			fmt.Printf("%s received BID from %s, responds with CONFIRM (%.2f%s)\n",
+				a.ID, msg.From, confirmMsg.Amount, confirmMsg.Symbol)
+			a.SendMessage(confirmMsg)
 			return
 		} else if !a.IsBuyer && simulateArbitrage {
 			newBid := Message{
@@ -95,10 +96,10 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 		fmt.Printf("%s received BID message from %s, forwarding...\n",
 			a.ID, sender.ID)
 		a.SendMessage(msg)
-	} else if msg.Type == "ASK" {
+	} else if msg.Type == "CONFIRM" {
 		if a.IsBuyer {
 			if !tradeExecuted && msg.Amount <= 50.0 {
-				fmt.Printf("%s (buyer) received ASK from %s with price %.2f%s, "+
+				fmt.Printf("%s (buyer) received CONFIRM from %s with price %.2f%s, "+
 					"trade executed!\n", a.ID, msg.From, msg.Amount,
 					msg.Symbol)
 				a.Balance -= msg.Amount
@@ -113,12 +114,12 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 				}
 				tradeExecuted = true
 			} else if !tradeExecuted && msg.Amount > 50.0 {
-				fmt.Printf("%s (buyer) received high ASK price %.2f%s from %s, "+
+				fmt.Printf("%s (buyer) received high CONFIRM price %.2f%s from %s, "+
 					"rejecting trade\n", a.ID, msg.Amount, msg.Symbol, msg.From)
 			}
 			return
 		}
-		fmt.Printf("%s received ASK message from %s, forwarding...\n",
+		fmt.Printf("%s received CONFIRM message from %s, forwarding...\n",
 			a.ID, sender.ID)
 		a.SendMessage(msg)
 	} else {
