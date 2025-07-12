@@ -10,6 +10,32 @@ The CONFIRM message is a delivery of an earlier promise to execute the
 given function, and in turn invokes the bidder's promise to owe the
 bidder's bid currency to the confirmer if the function is executed.
 
+This is wrong:
+
+Alice sends BID message (50.00 ALICE) to Bob
+Bob (intermediary) received BID from Alice, arbitraging to new BID: 49.00BOB
+Bob sends BID message (49.00 BOB) to Carol
+Carol (intermediary) received BID from Bob, arbitraging to new BID: 48.00CAROL
+Carol sends BID message (48.00 CAROL) to Dave
+Dave received BID from Carol, responds with CONFIRM (43.00CAROL)
+Dave sends CONFIRM message (43.00 CAROL) to Bob
+
+It should be:
+
+Alice sends BID message (50.00 ALICE) to Bob
+Bob (intermediary) received BID from Alice, arbitraging to new BID: 49.00 BOB
+Bob sends BID message (49.00 BOB) to Carol
+Carol (intermediary) received BID from Bob, arbitraging to new BID: 48.00 CAROL
+Carol sends BID message (48.00 CAROL) to Dave
+Dave received BID from Carol, responds with CONFIRM (48.00 CAROL)
+Carol received CONFIRM from Dave, which triggers her sending a CONFIRM to Bob (49.00 BOB)
+
+Please see the example in x/sim2/design.md for the correct sequence of
+messages.  The BID message is sent to the next agent in the chain, and
+the CONFIRM message is sent back to the previous agent in the chain.
+Please rewrite the code to reflect this design, including matching the
+currency amounts given in the example.
+
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
   the requested changes to the given code or documentation. Do not

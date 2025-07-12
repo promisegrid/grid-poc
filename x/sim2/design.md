@@ -19,7 +19,7 @@ agents are Alice, Bob, Carol, and Dave, with the following network:
   intermediate peers.
 
 Each message represents either a bid or an ask. The buyer (Alice)
-initiates a BID, and the seller (Dave) responds with an ASK. 
+initiates a BID, and the seller (Dave) responds with a CONFIRM. 
 
 ## Personal Currencies and Economic Incentives
 
@@ -34,12 +34,12 @@ behavior would cause other agents to sell that agent's currency,
 reducing its value.
 
 Intermediate agents don't forward messages; they instead use
-arbitrage. They create their own mid or ask orders based on received
+arbitrage. They create their own bid or ask orders based on received
 messages, effectively acting as market makers or arbitrageurs. This
 allows them to profit from the difference between the bid and ask
 prices, incentivizing their participation in the network.
 
-Here's and example of how this works in practice:
+Here's an example of how this works in practice:
 - Alice, Bob, Carol, and Dave all start with zero balances in all
   currencies.
 - Alice wants to pay 10 ALICE for the results of a function call that

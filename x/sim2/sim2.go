@@ -12,141 +12,169 @@ var tradeExecuted bool = false
 // lookup during settlement.
 var allAgents []*Agent
 
-// Message represents a bid, confirm, or ask message in the simulation.
+// Message represents a bid or confirm message in the simulation.
 // Every message must be either a BID or a CONFIRM and include a personal
-// currency symbol and an amount.
+// currency symbol and an amount. OrigBid carries the bid amount received
+// from the upstream agent and is used by intermediaries when generating
+// confirm messages.
 type Message struct {
 	Type    string   // "BID" or "CONFIRM"
 	Amount  float64  // bid or confirm amount
 	Symbol  string   // personal currency symbol (e.g. "ALICE")
 	From    string   // sender agent ID
 	History []string // list of agent IDs that have handled the message
+	OrigBid float64  // original bid amount received from upstream (if any)
 }
 
 // Agent represents a simulation participant.
 type Agent struct {
-	ID       string
-	Currency string  // personal currency (e.g. "ALICE")
-	Balance  float64
-	Peers    []*Agent
-	IsSeller bool // Only Dave is the seller.
-	IsBuyer  bool // Only Alice is the buyer.
+	ID          string
+	Currency    string  // personal currency (e.g. "ALICE")
+	Balance     float64
+	Peers       []*Agent
+	IsSeller    bool // Only Dave is the seller.
+	IsBuyer     bool // Only Alice is the buyer.
+	NextHop     *Agent
+	PrevHop     *Agent
+	upstreamBid float64 // bid amount received from upstream
 }
 
-// SendMessage sends a message to all peers, skipping those already in the
-// message history to avoid loops. If the message's symbol is empty, it uses
-// the sender's personal currency.
-func (a *Agent) SendMessage(msg Message) {
-	if msg.Symbol == "" {
-		msg.Symbol = a.Currency
+// SendBidMessage sends a BID message to the next agent in the chain.
+func (a *Agent) SendBidMessage(msg Message) {
+	if a.NextHop == nil {
+		return
 	}
-	// Append self to history.
+	// Append own ID to history.
 	msg.History = append(msg.History, a.ID)
-	for _, peer := range a.Peers {
-		// Avoid sending to peers already in the history.
-		if contains(msg.History, peer.ID) {
-			continue
-		}
-		fmt.Printf("%s sends %s message (%.2f %s) to %s\n", a.ID, msg.Type,
-			msg.Amount, msg.Symbol, peer.ID)
-		peer.ReceiveMessage(msg, a)
-	}
+	fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
+		a.ID, msg.Type, msg.Amount, msg.Symbol, a.NextHop.ID)
+	a.NextHop.ReceiveMessage(msg, a)
 }
 
-// ReceiveMessage processes an incoming message based on type and role.
-// Sellers respond to BID messages by issuing a CONFIRM using the bid's
-// currency and the computed price (bid amount minus 5).
-// Buyers accept acceptable CONFIRM messages. Intermediate agents process
-// CONFIRM messages by generating a new CONFIRM that preserves the original
-// seller's identity so that final settlement occurs between buyer and seller.
+// SendConfirmMessage sends a CONFIRM message to the previous agent in the
+// chain; if there is no previous agent (i.e. the buyer), it processes the
+// final confirmation.
+func (a *Agent) SendConfirmMessage(msg Message) {
+	if a.PrevHop == nil {
+		a.ReceiveFinalConfirm(msg)
+		return
+	}
+	// Append own ID to history.
+	msg.History = append(msg.History, a.ID)
+	fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
+		a.ID, msg.Type, msg.Amount, msg.Symbol, a.PrevHop.ID)
+	a.PrevHop.ReceiveMessage(msg, a)
+}
+
+// ReceiveMessage processes an incoming message based on its type and the role
+// of the agent. For BID messages, intermediaries arbitrage by subtracting 1
+// from the incoming bid and storing the upstream bid for later use in CONFIRM.
+// The seller responds to a BID with a CONFIRM using the exact bid amount.
+// CONFIRM messages are forwarded backward along the chain with intermediaries
+// replacing the bid amount with the upstream bid value.
 func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
+	// Prevent processing the same message more than once.
 	if contains(msg.History, a.ID) {
 		return
 	}
-	msg.History = append(msg.History, a.ID)
 	if msg.Type == "BID" {
+		// For a BID message, if this agent is the seller, respond with CONFIRM.
 		if a.IsSeller {
-			confirmPrice := msg.Amount - 5.0
-			if confirmPrice < 0 {
-				confirmPrice = 0
-			}
+			// Seller uses the bid's amount (using the bid currency).
 			confirmMsg := Message{
 				Type:    "CONFIRM",
-				Amount:  confirmPrice,
-				// Use the bid's currency for the confirm message.
-				Symbol: msg.Symbol,
-				From:   a.ID,
-				// Start history with the seller's ID.
+				Amount:  msg.Amount,
+				Symbol:  msg.Symbol, // Use the bid's currency symbol.
+				From:    a.ID,
 				History: []string{a.ID},
 			}
 			fmt.Printf("%s received BID from %s, responds with CONFIRM (%.2f%s)\n",
-				a.ID, msg.From, confirmMsg.Amount, confirmMsg.Symbol)
-			a.SendMessage(confirmMsg)
+				a.ID, sender.ID, confirmMsg.Amount, confirmMsg.Symbol)
+			a.SendConfirmMessage(confirmMsg)
 			return
 		} else if !a.IsBuyer && simulateArbitrage {
+			// Intermediate agent: store the upstream bid amount.
+			a.upstreamBid = msg.Amount
+			// Arbitrage: subtract 1 from the incoming bid.
+			newBidAmount := msg.Amount - 1
 			newBid := Message{
 				Type:    "BID",
-				Amount:  msg.Amount - 1,
-				// Intermediary uses its own currency for its bid.
-				Symbol:  a.Currency,
+				Amount:  newBidAmount,
+				Symbol:  a.Currency, // Use own currency for new BID.
 				From:    a.ID,
 				History: append([]string{}, msg.History...),
+				OrigBid: msg.Amount, // Preserve the upstream bid.
 			}
 			fmt.Printf("%s (intermediary) received BID from %s, arbitraging to "+
-				"new BID: %.2f%s\n", a.ID, msg.From, newBid.Amount,
+				"new BID: %.2f%s\n", a.ID, sender.ID, newBid.Amount,
 				newBid.Symbol)
-			a.SendMessage(newBid)
+			a.SendBidMessage(newBid)
 			return
 		}
+		// If buyer or not eligible, simply forward the BID.
 		fmt.Printf("%s received BID message from %s, forwarding...\n",
 			a.ID, sender.ID)
-		a.SendMessage(msg)
+		a.SendBidMessage(msg)
 	} else if msg.Type == "CONFIRM" {
 		if a.IsBuyer {
-			if !tradeExecuted && msg.Amount <= 50.0 {
+			// Buyer processes the final CONFIRM and settles the trade.
+			if !tradeExecuted {
+				// For this simulation, the buyer pays the confirm amount.
 				fmt.Printf("%s (buyer) received CONFIRM from %s with price "+
-					"%.2f%s, trade executed!\n", a.ID, msg.From, msg.Amount,
+					"%.2f%s, trade executed!\n", a.ID, sender.ID, msg.Amount,
 					msg.Symbol)
 				a.Balance -= msg.Amount
-				// Settle trade using original seller from msg.History.
-				if len(msg.History) > 0 {
-					seller := findAgentByID(allAgents, msg.History[0])
-					if seller != nil {
-						seller.Balance += msg.Amount
-						fmt.Printf("Trade settled: %s pays %.2f%s to %s\n",
-							a.ID, msg.Amount, msg.Symbol, seller.ID)
-					} else {
-						fmt.Printf("Seller %s not found in the simulation.\n",
-							msg.History[0])
-					}
+				// Settle trade with the seller.
+				seller := findSeller(allAgents)
+				if seller != nil {
+					seller.Balance += msg.Amount
+					fmt.Printf("Trade settled: %s pays %.2f%s to %s\n",
+						a.ID, msg.Amount, msg.Symbol, seller.ID)
 				} else {
-					fmt.Printf("No seller information in CONFIRM message.\n")
+					fmt.Printf("Seller not found in the simulation.\n")
 				}
 				tradeExecuted = true
-			} else if !tradeExecuted && msg.Amount > 50.0 {
-				fmt.Printf("%s (buyer) received high CONFIRM price %.2f%s from %s, "+
-					"rejecting trade\n", a.ID, msg.Amount, msg.Symbol, msg.From)
 			}
 			return
 		}
-		// Intermediate agents process CONFIRM messages by generating a new
-		// CONFIRM that preserves the original seller's identity.
+		// Intermediate agent: generate a new CONFIRM using the stored upstream
+		// bid amount and the currency of the previous hop.
 		newConfirm := Message{
-			Type:    "CONFIRM",
-			Amount:  msg.Amount,
-			// Retain the original bid currency.
-			Symbol: msg.Symbol,
-			// Preserve original seller ID from the message.
-			From: msg.From,
-			History: append(msg.History, a.ID),
+			Type:   "CONFIRM",
+			Amount: a.upstreamBid,
+			// The confirm uses the upstream agent's currency.
+			Symbol: a.PrevHop.Currency,
+			From:   msg.From,
+			// Start history with current agent for the backward journey.
+			History: []string{a.ID},
 		}
 		fmt.Printf("%s processed CONFIRM message from %s, generating new "+
 			"CONFIRM with price %.2f%s\n", a.ID, sender.ID, newConfirm.Amount,
 			newConfirm.Symbol)
-		a.SendMessage(newConfirm)
+		a.SendConfirmMessage(newConfirm)
 	} else {
 		fmt.Printf("%s received unknown message type %s from %s\n",
 			a.ID, msg.Type, sender.ID)
+	}
+}
+
+// ReceiveFinalConfirm is called by the buyer when no previous agent exists.
+// It finalizes the trade; in this simulation, the buyer processes the final
+// confirmation.
+func (a *Agent) ReceiveFinalConfirm(msg Message) {
+	if !tradeExecuted {
+		fmt.Printf("%s (buyer) received final CONFIRM with price %.2f%s, "+
+			"trade executed!\n", a.ID, msg.Amount, msg.Symbol)
+		a.Balance -= msg.Amount
+		seller := findSeller(allAgents)
+		if seller != nil {
+			seller.Balance += msg.Amount
+			fmt.Printf("Trade settled: %s pays %.2f%s to %s\n",
+				a.ID, msg.Amount, msg.Symbol, seller.ID)
+		} else {
+			fmt.Printf("Seller not found in the simulation.\n")
+		}
+		tradeExecuted = true
 	}
 }
 
@@ -160,10 +188,10 @@ func contains(slice []string, s string) bool {
 	return false
 }
 
-// findAgentByID returns the first agent in agents with a matching ID.
-func findAgentByID(agents []*Agent, id string) *Agent {
+// findSeller returns the first agent in agents who is marked as the seller.
+func findSeller(agents []*Agent) *Agent {
 	for _, agent := range agents {
-		if agent.ID == id {
+		if agent.IsSeller {
 			return agent
 		}
 	}
@@ -172,8 +200,9 @@ func findAgentByID(agents []*Agent, id string) *Agent {
 
 // RunSimulation initializes the four agents and simulates a double-auction
 // message pass using personal currencies across a multi-hop network.
-// Scenario: Alice, Bob, and Carol are peers; Bob, Carol, and Dave are peers.
-// Alice and Dave cannot communicate directly.
+// Scenario: Alice, Bob, and Carol form a BID chain and Bob, Carol, and Dave form
+// the corresponding chain for forwarding. Alice and Dave cannot communicate
+// directly.
 func RunSimulation() (alice, bob, carol, dave *Agent) {
 	tradeExecuted = false
 	alice = &Agent{ID: "Alice", Balance: 100.0, IsBuyer: true,
@@ -183,13 +212,25 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 	dave = &Agent{ID: "Dave", Balance: 100.0, IsSeller: true,
 		Currency: "DAVE"}
 
-	// Set up peer connections:
-	// Alice, Bob, and Carol are mutually connected.
-	// Bob, Carol, and Dave are mutually connected.
+	// Set up peer connections (full mesh for potential lookups).
 	alice.Peers = []*Agent{bob, carol}
 	bob.Peers = []*Agent{alice, carol, dave}
 	carol.Peers = []*Agent{alice, bob, dave}
 	dave.Peers = []*Agent{bob, carol}
+
+	// Define the chain order using NextHop and PrevHop.
+	// Chain: Alice -> Bob -> Carol -> Dave.
+	alice.NextHop = bob
+	alice.PrevHop = nil
+
+	bob.NextHop = carol
+	bob.PrevHop = alice
+
+	carol.NextHop = dave
+	carol.PrevHop = bob
+
+	dave.NextHop = nil
+	dave.PrevHop = carol
 
 	// Initialize global agent list.
 	allAgents = []*Agent{alice, bob, carol, dave}
@@ -202,7 +243,7 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 		From:    alice.ID,
 		History: []string{},
 	}
-	alice.SendMessage(bidMsg)
+	alice.SendBidMessage(bidMsg)
 	return alice, bob, carol, dave
 }
 
