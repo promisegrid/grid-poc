@@ -1,39 +1,8 @@
-draft sim2
+write sim2
 
-In sim2, write a simulation of a protocol in which the goal is to
-fairly allocate resources and prevent spam using a double-auction
-mechanism. 
+Update the code based on the example given in design.md.  
 
-Personal currencies are the unit of exchange.  This is not a
-crypto-currency design; do not use blockchain, smart contracts, or
-other crypto concepts.
-
-All routing is local:  Agents send messages to only their direct
-peers, by address or ID.  Peers may be local or remote.  
-
-Intermediate agents price cancellation risk into their bid/ask spread.
-Abusive agents will see their personal currency value drop, reducing
-their ability to participate in the network.  
-
-See x/matching/matching.md and x/sim1/routing.md for background.
-
-The simulation must include a scenario with four agents: Alice, Bob,
-Carol, and Dave. Alice, Bob, and Carol are peers, and Bob, Carol, and
-Dave are peers.  Alice and Dave cannot communicate directly, but they
-can communicate through Bob and Carol.  Each agent has a personal
-currency that they use to bid and ask for resources.  Each
-communication, each message, must be either a bid or an ask, and must
-include a personal currency symbol and amount.  
-
-The agents communicate directly -- there is no kernel or other central
-authority.  
-
-The personal currency symbols should be "ALICE", "BOB", 
-"CAROL", and "DAVE".  The test cases should include the currency
-symbol in any printed output.  
-
-Write design.md describing all of the above as well as any other relevant
-details.  
+The response to a bid should be a CONFIRM message, not an ask.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -45,14 +14,12 @@ Sysmsg:
   unless you are making other changes to the paragraph.  Lines must be
   wrapped at 70 characters.  
 In:
-  x/sim1/routing.md
-  x/matching/matching.md
-  x/sim2/sim2.go
-  x/sim2/sim2_test.go
-Out:
   x/sim2/sim2.go
   x/sim2/sim2_test.go
   x/sim2/design.md
+Out:
+  x/sim2/sim2.go
+  x/sim2/sim2_test.go
 
 .stop
 

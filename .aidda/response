@@ -7,6 +7,9 @@ import (
 	"strings"
 )
 
+var simulateArbitrage = true
+var tradeExecuted bool = false
+
 // Message represents a bid or ask message in the simulation.
 // Every message must be either a bid or an ask and include a personal
 // currency symbol and an amount.
@@ -42,71 +45,88 @@ func (a *Agent) SendMessage(msg Message) {
 		if contains(msg.History, peer.ID) {
 			continue
 		}
-		fmt.Printf("%s sends %s message (%.2f%s) to %s\n",
-			a.ID, msg.Type, msg.Amount, msg.Symbol, peer.ID)
+		fmt.Printf("%s sends %s message (%.2f%s) to %s\n", a.ID, msg.Type,
+			msg.Amount, msg.Symbol, peer.ID)
 		peer.ReceiveMessage(msg, a)
 	}
 }
 
 // ReceiveMessage processes an incoming message based on type and role.
 // Sellers respond to BID messages by issuing an ASK using their own currency;
-// buyers accept acceptable ASK messages. Intermediate agents simply forward
-// messages.
+// buyers accept acceptable ASK messages. Intermediate agents, which in a real
+// network would perform arbitrage (i.e. they would not merely forward messages
+// but create their own orders to profit from price differences), modify the BID
+// by reducing its amount by 1 and changing the currency to their own before
+// forwarding.
 func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
-	// Avoid reprocessing if already in history.
 	if contains(msg.History, a.ID) {
 		return
 	}
 	msg.History = append(msg.History, a.ID)
-
-	// Seller behavior: on receiving a BID, respond with an ASK.
-	if msg.Type == "BID" && a.IsSeller {
-		// For this simulation, seller sets ask price lower than bid by 5.
-		askPrice := msg.Amount - 5.0
-		if askPrice < 0 {
-			askPrice = 0
+	if msg.Type == "BID" {
+		if a.IsSeller {
+			askPrice := msg.Amount - 5.0
+			if askPrice < 0 {
+				askPrice = 0
+			}
+			askMsg := Message{
+				Type:    "ASK",
+				Amount:  askPrice,
+				Symbol:  a.Currency,
+				From:    a.ID,
+				History: []string{},
+			}
+			fmt.Printf("%s received BID from %s, responds with ASK (%.2f%s)\n",
+				a.ID, msg.From, askMsg.Amount, askMsg.Symbol)
+			a.SendMessage(askMsg)
+			return
+		} else if !a.IsBuyer && simulateArbitrage {
+			newBid := Message{
+				Type:    "BID",
+				Amount:  msg.Amount - 1,
+				Symbol:  a.Currency,
+				From:    a.ID,
+				History: append([]string{}, msg.History...),
+			}
+			fmt.Printf("%s (intermediary) received BID from %s, arbitraging to "+
+				"new BID: %.2f%s\n", a.ID, msg.From, newBid.Amount,
+				newBid.Symbol)
+			a.SendMessage(newBid)
+			return
 		}
-		askMsg := Message{
-			Type:    "ASK",
-			Amount:  askPrice,
-			Symbol:  a.Currency,
-			From:    a.ID,
-			History: []string{},
-		}
-		fmt.Printf("%s received BID from %s, responds with ASK (%.2f%s)\n",
-			a.ID, msg.From, askMsg.Amount, askMsg.Symbol)
-		a.SendMessage(askMsg)
-		return
-	}
-
-	// Buyer behavior: on receiving an ASK, if the price is acceptable,
-	// execute the trade.
-	if msg.Type == "ASK" && a.IsBuyer {
-		// Buyer accepts the ASK if the price is less than or equal to 50.
-		if msg.Amount <= 50.0 {
-			fmt.Printf("%s (buyer) received ASK from %s with price %.2f%s, "+
-				"trade executed!\n", a.ID, msg.From, msg.Amount, msg.Symbol)
-			a.Balance -= msg.Amount
-			// Find the seller in the network; assume the seller is Dave.
-			seller := findAgentByID(a.Peers, msg.From)
-			if seller != nil {
-				seller.Balance += msg.Amount
-				fmt.Printf("Trade settled: %s pays %.2f%s to %s\n",
-					a.ID, msg.Amount, msg.Symbol, seller.ID)
-			} else {
-				fmt.Printf("Seller %s not found among direct peers.\n", msg.From)
+		fmt.Printf("%s received BID message from %s, forwarding...\n",
+			a.ID, sender.ID)
+		a.SendMessage(msg)
+	} else if msg.Type == "ASK" {
+		if a.IsBuyer {
+			if !tradeExecuted && msg.Amount <= 50.0 {
+				fmt.Printf("%s (buyer) received ASK from %s with price %.2f%s, "+
+					"trade executed!\n", a.ID, msg.From, msg.Amount,
+					msg.Symbol)
+				a.Balance -= msg.Amount
+				seller := findAgentByID(a.Peers, msg.From)
+				if seller != nil {
+					seller.Balance += msg.Amount
+					fmt.Printf("Trade settled: %s pays %.2f%s to %s\n",
+						a.ID, msg.Amount, msg.Symbol, seller.ID)
+				} else {
+					fmt.Printf("Seller %s not found among direct peers.\n",
+						msg.From)
+				}
+				tradeExecuted = true
+			} else if !tradeExecuted && msg.Amount > 50.0 {
+				fmt.Printf("%s (buyer) received high ASK price %.2f%s from %s, "+
+					"rejecting trade\n", a.ID, msg.Amount, msg.Symbol, msg.From)
 			}
 			return
 		}
-		fmt.Printf("%s (buyer) received high ASK price %.2f%s from %s, "+
-			"rejecting trade\n", a.ID, msg.Amount, msg.Symbol, msg.From)
-		return
+		fmt.Printf("%s received ASK message from %s, forwarding...\n",
+			a.ID, sender.ID)
+		a.SendMessage(msg)
+	} else {
+		fmt.Printf("%s received unknown message type %s from %s\n",
+			a.ID, msg.Type, sender.ID)
 	}
-
-	// Intermediate agent: forward the message along the network.
-	fmt.Printf("%s received %s message from %s, forwarding...\n",
-		a.ID, msg.Type, sender.ID)
-	a.SendMessage(msg)
 }
 
 // contains returns true if s is in the slice.
@@ -134,7 +154,7 @@ func findAgentByID(agents []*Agent, id string) *Agent {
 // Scenario: Alice, Bob, and Carol are peers; Bob, Carol, and Dave are peers.
 // Alice and Dave cannot communicate directly.
 func RunSimulation() (alice, bob, carol, dave *Agent) {
-	// Create agents with an initial balance of 100 and assign personal currency.
+	tradeExecuted = false
 	alice = &Agent{ID: "Alice", Balance: 100.0, IsBuyer: true,
 		Currency: "ALICE"}
 	bob = &Agent{ID: "Bob", Balance: 100.0, Currency: "BOB"}
@@ -189,13 +209,15 @@ package main
 import "testing"
 
 // TestSimulationTrade verifies that a trade occurs during the simulation.
-// We expect the buyer (Alice) to pay the ask price (assumed to be 5 less than
-// the bid of 50) and the seller (Dave) to receive that amount.
+// With arbitrage enabled, intermediaries modify the BID such that a BID of 50
+// becomes 49 before reaching the seller. The seller then responds with an ASK
+// price of 44 (i.e. 49 - 5). Therefore, we expect the buyer (Alice) to pay 44
+// and the seller (Dave) to receive that amount.
 func TestSimulationTrade(t *testing.T) {
 	alice, _, _, dave := RunSimulation()
-	// In our simulation, Dave (seller) responds with an ASK price of 45.
-	expectedBuyerBalance := 100.0 - 45.0
-	expectedSellerBalance := 100.0 + 45.0
+	// With arbitrage, the trade executes at an ASK price of 44.
+	expectedBuyerBalance := 100.0 - 44.0
+	expectedSellerBalance := 100.0 + 44.0
 
 	if alice.Balance != expectedBuyerBalance {
 		t.Errorf("Expected Alice balance to be %.2f, got %.2f",
@@ -208,74 +230,3 @@ func TestSimulationTrade(t *testing.T) {
 }
 ```
 EOF_/home/stevegt/lab/grid-poc/x/sim2/sim2_test.go
-
-File: /home/stevegt/lab/grid-poc/x/sim2/design.md
-```markdown
-# Sim2 Design Document: Double-Auction Routing Simulation
-
-This document describes the design and protocol for Sim2, a
-simulation of a decentralized, double-auction based routing mechanism
-for PromiseGrid. The goal is to fairly allocate resources and prevent
-spam using a double-auction market. In this protocol, agents exchange
-bids and asks using personal currencies, and every message carries a
-currency symbol and amount.
-
-## Protocol Overview
-
-Sim2 employs a peer-to-peer message passing system in which all
-communication is local. Agents send messages directly to their
-neighbors as defined by their peer connections. In our simulation the
-agents are Alice, Bob, Carol, and Dave, with the following network:
-- Alice, Bob, and Carol are direct peers.
-- Bob, Carol, and Dave are direct peers.
-- Alice and Dave cannot communicate directly but route messages via
-  intermediate peers.
-
-Each message represents either a bid or an ask. The buyer (Alice)
-initiates a BID, and the seller (Dave) responds with an ASK. The ASK
-price is set lower than the BID by a fixed margin to simulate a double-
-auction mechanism, promoting fair pricing and discouraging spam.
-
-## Personal Currencies and Economic Incentives
-
-Every agent has its own personal currency: "ALICE", "BOB", "CAROL", and
-"DAVE". These currencies are used in bid and ask messages. An agent’s
-balance is adjusted when a trade is executed. Abusive behavior would
-reduce an agent's currency value, while reliable routing increases it.
-Intermediate agents forward messages and add cancellation risk into
-their bid/ask spreads.
-
-## Simulation Details
-
-The simulation is implemented in Go and encapsulated in a single file,
-sim2.go, with testing in sim2_test.go. Key design aspects include:
-- **Local Routing:** Agents forward messages only to peers that have not
-  seen the message.
-- **Double-Auction Mechanism:** Buyers and sellers negotiate prices via
-  bids and asks. In our scenario, Alice (buyer) will accept any ASK at a
-  price not exceeding a threshold.
-- **Peer-to-Peer Exchange:** There is no central authority. Instead,
-  messages propagate through a network of direct connections.
-- **Trade Settlement:** When a buyer accepts an ask, the buyer’s balance
-  is decreased, and the seller’s is increased by the ask price.
-- **Role Specialization:** In our simulation, only Alice acts as a
-  buyer and only Dave as a seller.
-
-## Implementation Considerations
-
-The design emphasizes minimalism and dependency-free code that can be
-deployed even on resource-constrained devices such as IoT platforms.
-The simulation uses in-memory data structures and simple string slicing
-for routing. Message histories prevent loops, and the forwarding
-mechanism ensures that each agent processes a message only once.
-
-## Conclusion
-
-Sim2 demonstrates a market-based approach to decentralized routing using
-a double-auction mechanism. It shows how economic principles like
-price discovery and auction matching can be applied to networking to
-achieve fair resource allocation and spam prevention. This design is
-intended to serve as a proof-of-concept for integrating economic models
-into multi-hop, peer-to-peer communication protocols in PromiseGrid.
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim2/design.md
