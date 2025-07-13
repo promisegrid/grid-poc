@@ -1,5 +1,5 @@
 <think>
-We are updating the simulation to use double-entry accounting as described in the research. The key changes are:
+We are updating the design to use double-entry accounting as described in the research. The key changes are:
 
 1. Each agent maintains assets and liabilities ledgers (maps of currency to amount).
 2. When an agent sends a BID, it creates a liability in its own currency and an asset in the currency of the next hop? However, note that in the current design, the BID message is transformed by intermediaries. We need to record the accounting entries at the time of trade execution (when the confirm is processed by the buyer).
@@ -719,22 +719,23 @@ achieve fair resource allocation and spam prevention. The accounting model ensur
 EOF_/home/stevegt/lab/grid-poc/x/sim2/design.md
 
 <references>
-[1] https://www.freshbooks.com/hub/accounting/double-entry-bookkeeping
-[2] https://www.investopedia.com/ask/answers/022615/what-double-entry-bookkeeping-and-how-does-it-work-general-ledger.asp
-[3] https://www.coursera.org/articles/double-entry-accounting
-[4] https://www.investopedia.com/terms/g/generalledger.asp
-[5] https://www.nerdwallet.com/article/small-business/double-entry-accounting
-[6] https://en.wikipedia.org/wiki/Double-entry_bookkeeping
+[1] https://www.dummies.com/article/business-careers-money/business/accounting/bookkeeping/the-basics-of-double-entry-bookkeeping-189256/
+[2] https://career.rady.ucsd.edu/blog/2022/11/22/the-accounting-equation-explained/
+[3] https://www.nerdwallet.com/article/small-business/double-entry-accounting
+[4] https://www.wallstreetprep.com/knowledge/accounting-equation/
+[5] https://www.freshbooks.com/hub/accounting/double-entry-bookkeeping
+[6] https://www.investopedia.com/terms/a/accounting-equation.asp
 [7] https://www.investopedia.com/terms/d/double-entry.asp
-[8] https://www.fylehq.com/blog/double-entry-accounting
-[9] https://www.economics.utoronto.ca/jfloyd/modules/monc.html
-[10] https://www.youtube.com/watch?v=utsqYaYvQjc
-[11] https://www.economicshelp.org/blog/667/money/banks-and-the-creation-of-money/
-[12] https://compliancealliance.com/news-events/entry/demystifying-the-federal-reserves-balance-sheet/
-[13] https://profstevekeen.substack.com/p/how-to-make-money
-[14] https://www.federalreserve.gov/monetarypolicy/bst_fedsbalancesheet.htm
-[15] https://www.bundesbank.de/resource/blob/654284/df66c4444d065a7f519e2ab0c476df58/m/2017-04-money-creation-process-data.pdf
-[16] https://www.investopedia.com/articles/economics/10/understanding-the-fed-balance-sheet.asp
-[17] https://smallbusiness.chron.com/can-offset-asset-against-liability-72424.html
-[18] https://www.studocu.com/en-gb/messages/question/10936774/how-domestic-securities-comes-to-central-bank-through-double-entries
+[8] https://www.lendingtree.com/business/assets-liabilities-equity/
+[9] https://www.coursera.org/articles/double-entry-accounting
+[10] https://www.ecb.europa.eu/pub/pdf/scpops/ecbop153.pdf
+[11] https://www.bis.org/ifc/publ/ifcb52_07.pdf
+[12] https://www.federalreserve.gov/aboutthefed/files/bstfinaccountingmanual.pdf
+[13] https://en.wikipedia.org/wiki/Double-entry_bookkeeping
+[14] https://www.elibrary.imf.org/display/book/9781513563602/mod01.xml
+[15] https://www.bis.org/publ/bppdf/bispap71_annex1.pdf
+[16] https://www.federalreserve.gov/monetarypolicy/openmarket.htm
+[17] https://www.federalreserve.gov/monetarypolicy/bst_openmarketops.htm
+[18] https://www.federalreserve.gov/aboutthefed/chapter-4-system-open-market-account.htm
+[19] https://docs.oracle.com/cd/E16582_01/doc.91/e15131/procg_po_commitments.htm
 </references>

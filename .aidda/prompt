@@ -19,7 +19,11 @@ Please research how liabilities work when a trader submits a BID
 order; the bid creates a liability, which must be offset by an asset.
 In design.md, suggest what the offsetting asset should be.
 
-Use the conversation in /tmp/response as a guide.
+Please research how the Federal Reserve reflects an open, unfilled bid
+order on their balance sheet when they conduct open market operations
+to purchase a security.  
+
+Update think.md with your reasoning process.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -33,9 +37,10 @@ Sysmsg:
 In:
   x/sim2/sim2.go
   x/sim2/sim2_test.go
+  x/sim2/think.md
   x/sim2/design.md
-  /tmp/response
 Out:
+  x/sim2/think.md
   x/sim2/design.md
 
 .stop
