@@ -1,23 +1,16 @@
-discussion tree: is a request also a promise?
-
-We need a message format that can be used to send messages
-between agents and the kernel.  The message format should
-be simple, efficient, and easy to parse.  It should also
-be flexible enough to allow for future extensions and
-modifications.  The message format should be able to
-represent the following types of messages:
+discussion: is a request also a promise?
 
 Update the discussion in x/sim3/is-a-request-also-a-promise.md by
 considering cases where the request includes an offer of compensation
 as in a BID order.
 
-Also, we're using Mark Burgess' Promise Theory definition of
-"promise", where a promise is a voluntary commitment to do something
-in the future; promises can be broken, but we need to track the
-fulfillment status of promises.  In this definition, a promise in not
-an irrevocable commitment or obligation, but rather a commitment that
-can be broken or modified.  Update the discussion to reflect this
-understanding of promises.  
+Also, update the discussion to use Mark Burgess' Promise Theory
+definition of "promise", where a promise is a voluntary commitment to
+do something in the future; promises can be broken, but we need to
+track the fulfillment status of promises.  In this definition, a
+promise is not an irrevocable commitment or obligation, but rather a
+commitment that can be broken or modified.  
+
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -29,7 +22,6 @@ Sysmsg:
   unless you are making other changes to the paragraph.  Lines must be
   wrapped at 70 characters.  
 In:
-  x/sim3/background.md
   x/sim3/is-a-request-also-a-promise.md
 Out:
   x/sim3/is-a-request-also-a-promise.md
