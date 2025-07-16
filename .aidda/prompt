@@ -1,3 +1,53 @@
+discussion tree: is a request also a promise?
+
+We need a message format that can be used to send messages
+between agents and the kernel.  The message format should
+be simple, efficient, and easy to parse.  It should also
+be flexible enough to allow for future extensions and
+modifications.  The message format should be able to
+represent the following types of messages:
+
+- Promises: A promise is an assertion by an agent that it will
+  perform a certain action or provide a certain resource in the
+  future.  The promise should include the agent's ID, the action or
+  resource being promised, and any conditions or constraints on the
+  promise.
+
+- Requests: A request is a message sent by an agent to another agent
+  or the kernel, asking for a certain action or resource to be
+  performed or provided.  The request should include the agent's ID,
+  the action or resource being requested, and any conditions or
+  constraints on the request.
+
+BUT, is a request actually a promise also?  Create a tree of
+discussion threads, with each thread representing a different viewpoint
+on this question.  Each thread should include the viewpoint, a
+summary of the reasoning behind the viewpoint, and any relevant
+references or examples.  The tree should be structured such that
+each thread branches off from the main question, and each branch
+represents a different viewpoint.  The tree should be easy to read
+and understand, with clear headings and subheadings for each thread.
+
+
+Sysmsg: 
+  You are a protocol designer and an expert Go programmer. Please make
+  the requested changes to the given code or documentation. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file. Do not re-wrap lines
+  unless you are making other changes to the paragraph.  Lines must be
+  wrapped at 70 characters.  
+In:
+  x/sim3/background.md
+Out:
+  x/sim3/is-a-request-also-a-promise.md
+
+
+.stop
+
+  x/sim3/message-format.md
+
 update design to use double-entry accounting 
 
 Ensure all agents start with a zero balance.  These being personal
