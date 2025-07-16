@@ -1,15 +1,19 @@
-discussion: is a request also a promise?
+GA: is a request also a promise?
 
-Update the discussion in x/sim3/is-a-request-also-a-promise.md by
-considering cases where the request includes an offer of compensation
-as in a BID order.
+Write fitness criteria for evaluating answers to the question "Is a
+request also a promise?".  An example answer is in the file
+x/sim3/is-a-request-also-a-promise/dna/is-a-request-also-a-promise.md
 
-Also, update the discussion to use Mark Burgess' Promise Theory
-definition of "promise", where a promise is a voluntary commitment to
-do something in the future; promises can be broken, but we need to
-track the fulfillment status of promises.  In this definition, a
-promise is not an irrevocable commitment or obligation, but rather a
-commitment that can be broken or modified.  
+The fitness criteria should be in the form of a list of bullet points,
+each with a weight in the range 1-100.  Each bullet point should be in
+the following format:
+
+- {weight} {description}
+
+
+The fitness criteria should also include these requirements:
+- consider cases where the request includes an offer of compensation as in a BID order
+- use Mark Burgess' Promise Theory definition of "promise", where a promise is a voluntary commitment to do something in the future; promises can be broken, but we need to track the fulfillment status of promises.  In this definition, a promise is not an irrevocable commitment or obligation, but rather a commitment that can be broken or modified.  
 
 
 Sysmsg: 
@@ -22,9 +26,9 @@ Sysmsg:
   unless you are making other changes to the paragraph.  Lines must be
   wrapped at 70 characters.  
 In:
-  x/sim3/is-a-request-also-a-promise.md
+  x/sim3/is-a-request-also-a-promise/dna/is-a-request-also-a-promise.md
 Out:
-  x/sim3/is-a-request-also-a-promise.md
+  x/sim3/is-a-request-also-a-promise/fitness.md
 
 
 .stop
