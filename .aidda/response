@@ -1,147 +1,413 @@
 <think>
-We are creating fitness criteria for evaluating answers to the question "Is a request also a promise?"
- The criteria must be in bullet points with weights (1-100) and consider:
-   - Cases where the request includes an offer of compensation (like in a BID order)
-   - Use Mark Burgess' Promise Theory definition: a promise is a voluntary commitment to do something in the future; can be broken, but we track fulfillment status.
+We are tasked with updating two Go files to implement double-entry accounting and ensure all agents start with zero balances.
 
- The example answer provided in the file is a detailed report. Our fitness criteria should evaluate how well any answer addresses the question in light of the above.
+ The changes required:
+ 1. Implement double-entry accounting for agents.
+    - Each agent is their own central bank and can create currency.
+    - Use double-entry accounting: debit assets and credit liabilities when creating currency.
+    - Debit liabilities and credit assets when destroying currency.
+ 2. Ensure all agents start with zero balance.
+ 3. Update the test to check balances after the trade.
 
- We are to output the fitness criteria in the specified format.
+ We'll modify:
+   sim3.go: Agent struct to have separate asset and liability ledgers.
+   sim3_test.go: Verify the final ledger balances.
 
- Let's think step by step:
+ Steps for sim3.go:
+   - Change Agent struct:
+        type Agent struct {
+            ...
+            Assets      map[string]float64   // Assets ledger by currency
+            Liabilities map[string]float64   // Liabilities ledger by currency
+        }
+   - Initialize Assets and Liabilities as empty maps in NewAgent.
+   - In trade execution:
+        Buyer: 
+            Liabilities[buyerCurrency] += amount (credit liability)
+        Seller:
+            Assets[sellerCurrency] += amount (debit asset)
 
- 1. The question is about whether a request is also a promise. We need to evaluate how well the answer addresses this.
+ Steps for sim3_test.go:
+   - Update TestSimulationTrade to check:
+        Alice's liabilities[ALICE] = 10
+        Dave's assets[DAVE] = 10
 
- 2. We must consider the definition from Promise Theory: a promise is a voluntary commitment. Therefore, the criteria should check if the answer correctly uses this definition.
+ We must write complete files with line wrapping at 70 characters.
 
- 3. The answer should address scenarios including when a request includes an offer of compensation (like a BID). For example, in a purchase order (which is a request) that includes an offer to pay, does that turn the request into a promise?
-
- 4. The criteria should cover:
-    - Understanding of Promise Theory concepts (autonomy, voluntary commitment, assessment of promises)
-    - Distinction between request and promise
-    - Cases where a request might become a promise (e.g., when compensation is offered and accepted, forming a contract)
-    - How the answer deals with the possibility of broken promises and tracking fulfillment
-    - The role of context (e.g., in a multi-agent system, how the agents interpret requests and promises)
-
- 5. We are to assign weights to each criterion (1-100) based on importance.
-
- Proposed criteria:
-
- - 100: Correctly defines a promise according to Promise Theory (voluntary commitment made by an agent about its own future behavior, without obligation on others) and distinguishes it from a request (which is an attempt to influence another agent). [This is fundamental]
-
- - 90: Explains that a request is not inherently a promise because a request is directed at another agent and does not constitute a commitment by the requester (unless the requester makes additional promises). [Core distinction]
-
- - 85: Addresses cases where a request includes an offer of compensation (like in a BID order). The answer should explain that the offer of compensation is a promise (by the requester to provide compensation under certain conditions) and that the request itself remains distinct. However, when the recipient accepts the request (and the offer), a contract is formed which may include mutual promises. [Specific requirement of the query]
-
- - 80: Discusses that a request can become a promise only if the requester voluntarily commits to something (e.g., by making an offer of compensation, the requester is making a promise to pay). Without such a commitment, the request is not a promise. [Clarification]
-
- - 75: Explains how the fulfillment status of promises (including those that might be embedded in requests) should be tracked, per Promise Theory. [Tracking requirement]
-
- - 70: Considers the autonomy of agents: a promise is made by an agent about its own behavior, while a request is an attempt to influence another agent's behavior. [Autonomy principle]
-
- - 65: Analyzes the scenario where a request might lead to a promise by the recipient (e.g., if the recipient accepts, they may make a promise to perform), but the request itself is not that promise. [Causality]
-
- - 60: Uses examples from real-world systems (like purchase orders, bids, etc.) to illustrate the concepts. [Illustration]
-
- - 55: Discusses the implications for multi-agent systems, including how requests and promises affect trust and reputation. [Broader context]
-
- - 50: Addresses the possibility of broken promises and how that differs from unfulfilled requests. [Consequences]
-
-  Note: We are to output in the exact format: bullet points, each starting with a dash, then the weight, then the description.
-
-  We are not including any other text, just the list.
-
-  Let's write the criteria accordingly.
+ Note: The test expects the trade to execute at 10 (despite arbitrage).
 </think>
-- 100 Correctly applies Promise Theory's core tenets: distinguishes requests as impositions (attempts to influence others) from promises as voluntary commitments about one's own future behavior[1][3][9]
-- 95 Explicitly addresses compensation-offer scenarios: analyzes how BID-type requests contain embedded promises (e.g., compensation offers become promissory commitments) while maintaining request/promise distinction[24][46][48]
-- 90 Maintains autonomy principle: never frames requests as binding obligations, preserving agents' freedom to accept/reject requests without commitment[1][3][19]
-- 85 Explains contextual transformation: details specific conditions where requests morph into promises (e.g., compensation acceptance creates collateralized commitments)[20][46][52]
-- 80 Incorporates assessment mechanisms: specifies how promise-tracking applies to request-embedded commitments (e.g., compensation promise fulfillment status)[5][35][57]
-- 75 Distinguishes directionality: shows requests initiate negotiation (bidirectional) vs. promises establish unilateral commitments[1][6][35]
-- 70 Uses Burgess' "voluntary cooperation" framework: positions requests as influence attempts and promises as self-commitments[1][3][41]
-- 65 Addresses economic dimensions: analyzes compensation offers as value-transfer promises within request structures[3][24][46]
-- 60 Contrasts failure consequences: differentiates reputation impacts of broken promises vs. rejected/unfulfilled requests[2][10][35]
-- 55 Demonstrates protocol implementation: suggests message structures distinguishing requests, embedded promises, and pure promises[28][30][32]
-- 50 Examines authority dynamics: explains why requests can't delegate promise-making authority under autonomy principle[1][3][19]
+File: /home/stevegt/lab/grid-poc/x/sim3/sim3_test.go
+```go
+package main
 
-### Criteria Rationale
-The weighted criteria prioritize Promise Theory fundamentals (100) and compensation scenarios (95) as core requirements. Mid-tier weights address implementation mechanics like assessment (80) and protocol design (55), while lower weights cover specialized aspects like economic dimensions (65). All criteria enforce Burgess' key principles: promises are voluntary self-commitments, while requests are non-binding impositions. The structure ensures answers must:
-- Reject blanket equivalence of requests/promises
-- Explain compensation scenarios as hybrid cases
-- Preserve agent autonomy as non-negotiable
-- Provide actionable tracking mechanisms
-- Reflect real-world implementations
+import "testing"
 
-This framework evaluates both conceptual accuracy and practical applicability per query requirements.
+// TestSimulationTrade verifies that a trade occurs during the simulation.
+// With arbitrage enabled, intermediaries modify the BID such that a BID of 10
+// becomes 9 before reaching the seller, and then 8 for the last hop.
+// The seller responds with a CONFIRM using the received bid amount (8).
+// Intermediaries then propagate confirmation using the original upstream bid:
+// Carol sends CONFIRM with 9 (from Bob's original bid) to Bob, and Bob sends
+// CONFIRM with 10 (from Alice's bid) to Alice. Therefore, after the trade,
+// we expect the buyer (Alice) to have a liability entry for 10 ALICE and the
+// seller (Dave) to have an asset entry for 10 DAVE.
+func TestSimulationTrade(t *testing.T) {
+    alice, _, _, dave := RunSimulation()
+    // With arbitrage, the final trade executes at a confirm price of 10.
+    expectedBuyerLiability := 10.0
+    expectedSellerAsset := 10.0
+
+    // Check buyer's liability in their own currency
+    buyerLiability := alice.Liabilities[alice.Currency]
+    if buyerLiability != expectedBuyerLiability {
+        t.Errorf("Expected Alice liability in %s to be %.2f, got %.2f",
+            alice.Currency, expectedBuyerLiability, buyerLiability)
+    }
+
+    // Check seller's asset in their own currency
+    sellerAsset := dave.Assets[dave.Currency]
+    if sellerAsset != expectedSellerAsset {
+        t.Errorf("Expected Dave asset in %s to be %.2f, got %.2f",
+            dave.Currency, expectedSellerAsset, sellerAsset)
+    }
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/sim3/sim3_test.go
+
+File: /home/stevegt/lab/grid-poc/x/sim3/sim3.go
+```go
+package main
+
+import (
+    "fmt"
+    "strings"
+)
+
+// simulateArbitrage enables intermediaries to modify the bid.
+var simulateArbitrage = true
+
+// tradeExecuted prevents multiple trades from executing.
+var tradeExecuted bool = false
+
+// allAgents holds the list of all agents in the simulation for global
+// lookup during ledger updates.
+var allAgents []*Agent
+
+// Message represents a bid or confirm message in the simulation.
+// Every message must be either a BID or a CONFIRM and include a personal
+// currency symbol and an amount. OrigBid carries the bid amount received
+// from the upstream agent and is used by intermediaries when generating
+// confirm messages.
+type Message struct {
+    Type    string   // "BID" or "CONFIRM"
+    Amount  float64  // bid or confirm amount
+    Symbol  string   // personal currency symbol (e.g. "ALICE")
+    From    string   // sender agent ID
+    History []string // list of agent IDs that have handled the message
+    OrigBid float64  // original bid amount received from upstream (if any)
+}
+
+// Agent represents a simulation participant.
+type Agent struct {
+    ID          string
+    Currency    string // personal currency (e.g. "ALICE")
+    Assets      map[string]float64   // assets ledger by currency
+    Liabilities map[string]float64   // liabilities ledger by currency
+    Peers       []*Agent
+    IsSeller    bool // Only Dave is the seller.
+    IsBuyer     bool // Only Alice is the buyer.
+    NextHop     *Agent
+    PrevHop     *Agent
+    upstreamBid float64 // bid amount received from upstream
+}
+
+// PrintBalanceSheet prints the agent's current balance sheet: assets,
+// liabilities, and net worth (assets minus liabilities).
+func (a *Agent) PrintBalanceSheet() {
+    totalAssets := 0.0
+    totalLiabilities := 0.0
+
+    assetsStr := ""
+    for curr, amt := range a.Assets {
+        assetsStr += fmt.Sprintf("%s: %.2f  ", curr, amt)
+        totalAssets += amt
+    }
+
+    liabStr := ""
+    for curr, amt := range a.Liabilities {
+        liabStr += fmt.Sprintf("%s: %.2f  ", curr, amt)
+        totalLiabilities += amt
+    }
+
+    netWorth := totalAssets - totalLiabilities
+    fmt.Printf("Balance Sheet for %s -> Assets: [%s] Liabilities: [%s] "+
+        "Net Worth: %.2f\n", a.ID, assetsStr, liabStr, netWorth)
+}
+
+// SendBidMessage sends a BID message to the next agent in the chain.
+func (a *Agent) SendBidMessage(msg Message) {
+    if a.NextHop == nil {
+        return
+    }
+    // Append own ID to history.
+    msg.History = append(msg.History, a.ID)
+    fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
+        a.ID, msg.Type, msg.Amount, msg.Symbol, a.NextHop.ID)
+    a.PrintBalanceSheet()
+    a.NextHop.ReceiveMessage(msg, a)
+}
+
+// SendConfirmMessage sends a CONFIRM message to the previous agent in the
+// chain; if there is no previous agent (i.e. the buyer), it processes the
+// final confirmation.
+func (a *Agent) SendConfirmMessage(msg Message) {
+    if a.PrevHop == nil {
+        a.ReceiveFinalConfirm(msg)
+        return
+    }
+    // Append own ID to history.
+    msg.History = append(msg.History, a.ID)
+    fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
+        a.ID, msg.Type, msg.Amount, msg.Symbol, a.PrevHop.ID)
+    a.PrintBalanceSheet()
+    a.PrevHop.ReceiveMessage(msg, a)
+}
+
+// ReceiveMessage processes an incoming message based on its type and the role of
+// the agent. For BID messages, intermediaries arbitrage by subtracting 1 from the
+// incoming bid and storing the upstream bid for later use in CONFIRM. The seller
+// responds to a BID with a CONFIRM using the exact bid amount. CONFIRM messages are
+// forwarded backward along the chain with intermediaries replacing the bid amount with
+// the upstream bid value.
+func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
+    // Prevent processing the same message more than once.
+    if contains(msg.History, a.ID) {
+        return
+    }
+    if msg.Type == "BID" {
+        // For a BID message, if this agent is the seller, respond with CONFIRM.
+        if a.IsSeller {
+            // Seller uses the bid's amount (using the bid currency).
+            confirmMsg := Message{
+                Type:    "CONFIRM",
+                Amount:  msg.Amount,
+                Symbol:  msg.Symbol, // Use the bid's currency symbol.
+                From:    a.ID,
+                History: []string{a.ID},
+            }
+            fmt.Printf("%s received BID from %s, responds with CONFIRM (%.2f %s)\n",
+                a.ID, sender.ID, confirmMsg.Amount, confirmMsg.Symbol)
+            a.PrintBalanceSheet()
+            a.SendConfirmMessage(confirmMsg)
+            return
+        } else if !a.IsBuyer && simulateArbitrage {
+            // Intermediate agent: store the upstream bid amount.
+            a.upstreamBid = msg.Amount
+            // Arbitrage: subtract 1 from the incoming bid.
+            newBidAmount := msg.Amount - 1
+            newBid := Message{
+                Type:    "BID",
+                Amount:  newBidAmount,
+                Symbol:  a.Currency, // Use own currency for new BID.
+                From:    a.ID,
+                History: append([]string{}, msg.History...),
+                OrigBid: msg.Amount, // Preserve the upstream bid.
+            }
+            fmt.Printf("%s (intermediary) received BID from %s, arbitraging to "+
+                "new BID: %.2f %s\n", a.ID, sender.ID, newBid.Amount,
+                newBid.Symbol)
+            a.PrintBalanceSheet()
+            a.SendBidMessage(newBid)
+            return
+        }
+        // If buyer or not eligible, simply forward the BID.
+        fmt.Printf("%s received BID message from %s, forwarding...\n",
+            a.ID, sender.ID)
+        a.PrintBalanceSheet()
+        a.SendBidMessage(msg)
+    } else if msg.Type == "CONFIRM" {
+        if a.IsBuyer {
+            // Buyer processes the final CONFIRM.
+            a.ReceiveFinalConfirm(msg)
+            return
+        }
+        // Intermediate agent: generate a new CONFIRM using the stored upstream
+        // bid amount and the currency of the previous hop.
+        newConfirm := Message{
+            Type:    "CONFIRM",
+            Amount:  a.upstreamBid,
+            // The confirm uses the upstream agent's currency.
+            Symbol:  a.PrevHop.Currency,
+            From:    msg.From,
+            // Start history with current agent for the backward journey.
+            History: []string{a.ID},
+        }
+        fmt.Printf("%s processed CONFIRM message from %s, generating new "+
+            "CONFIRM with price %.2f %s\n", a.ID, sender.ID, newConfirm.Amount,
+            newConfirm.Symbol)
+        a.PrintBalanceSheet()
+        a.SendConfirmMessage(newConfirm)
+    } else {
+        fmt.Printf("%s received unknown message type %s from %s\n",
+            a.ID, msg.Type, sender.ID)
+    }
+}
+
+// ReceiveFinalConfirm is called by the buyer when no previous agent exists.
+// It finalizes the trade by updating the agents' balance sheets using double-entry
+// accounting. The buyer records a liability in their own currency, while the seller
+// records an asset in their own currency.
+func (a *Agent) ReceiveFinalConfirm(msg Message) {
+    if !tradeExecuted {
+        fmt.Printf("%s (buyer) received final CONFIRM with price %.2f %s, trade "+
+            "executed!\n", a.ID, msg.Amount, msg.Symbol)
+        // Find the seller in the simulation.
+        seller := findSeller(allAgents)
+        if seller != nil {
+            // Buyer creates a liability in their own currency.
+            a.Liabilities[a.Currency] += msg.Amount
+            // Seller recognizes an asset in their own currency.
+            seller.Assets[seller.Currency] += msg.Amount
+            fmt.Printf("Trade ledger updated: %s records liability of %.2f %s, "+
+                "%s records asset of %.2f %s\n", a.ID, msg.Amount,
+                a.Currency, seller.ID, msg.Amount, seller.Currency)
+            a.PrintBalanceSheet()
+            seller.PrintBalanceSheet()
+        } else {
+            fmt.Printf("Seller not found in the simulation.\n")
+        }
+        tradeExecuted = true
+    }
+}
+
+// contains returns true if s is in the slice.
+func contains(slice []string, s string) bool {
+    for _, v := range slice {
+        if v == s {
+            return true
+        }
+    }
+    return false
+}
+
+// findSeller returns the first agent in agents who is marked as the seller.
+func findSeller(agents []*Agent) *Agent {
+    for _, agent := range agents {
+        if agent.IsSeller {
+            return agent
+        }
+    }
+    return nil
+}
+
+// RunSimulation initializes the four agents and simulates a double-auction
+// message pass using personal currencies across a multi-hop network.
+// Scenario: Alice, Bob, and Carol form a BID chain and Bob, Carol, and Dave form
+// the corresponding chain for forwarding. Alice and Dave cannot communicate
+// directly.
+// This simulation reflects the design example where Alice initiates a BID of
+// 10 ALICE, Bob arbitrages to 9 BOB, Carol arbitrages to 8 CAROL, and Dave, the
+// seller, accepts the bid.
+func RunSimulation() (alice, bob, carol, dave *Agent) {
+    tradeExecuted = false
+    alice = &Agent{
+        ID:          "Alice",
+        IsBuyer:     true,
+        Currency:    "ALICE",
+        Assets:      make(map[string]float64),
+        Liabilities: make(map[string]float64),
+    }
+    bob = &Agent{
+        ID:          "Bob",
+        Currency:    "BOB",
+        Assets:      make(map[string]float64),
+        Liabilities: make(map[string]float64),
+    }
+    carol = &Agent{
+        ID:          "Carol",
+        Currency:    "CAROL",
+        Assets:      make(map[string]float64),
+        Liabilities: make(map[string]float64),
+    }
+    dave = &Agent{
+        ID:          "Dave",
+        IsSeller:    true,
+        Currency:    "DAVE",
+        Assets:      make(map[string]float64),
+        Liabilities: make(map[string]float64),
+    }
+
+    // Set up peer connections (full mesh for potential lookups).
+    alice.Peers = []*Agent{bob, carol}
+    bob.Peers = []*Agent{alice, carol, dave}
+    carol.Peers = []*Agent{alice, bob, dave}
+    dave.Peers = []*Agent{bob, carol}
+
+    // Define the chain order using NextHop and PrevHop.
+    // Chain: Alice → Bob → Carol → Dave.
+    alice.NextHop = bob
+    alice.PrevHop = nil
+
+    bob.NextHop = carol
+    bob.PrevHop = alice
+
+    carol.NextHop = dave
+    carol.PrevHop = bob
+
+    dave.NextHop = nil
+    dave.PrevHop = carol
+
+    // Initialize global agent list.
+    allAgents = []*Agent{alice, bob, carol, dave}
+
+    // Alice initiates the auction by sending a BID message with her currency.
+    bidMsg := Message{
+        Type:    "BID",
+        Amount:  10.0,
+        Symbol:  alice.Currency,
+        From:    alice.ID,
+        History: []string{},
+    }
+    alice.SendBidMessage(bidMsg)
+    return alice, bob, carol, dave
+}
+
+// simulateAuction runs the simulation and prints final agent ledger
+// balance sheets.
+func simulateAuction() {
+    alice, bob, carol, dave := RunSimulation()
+    fmt.Println("\nFinal Ledger Balance Sheets:")
+    alice.PrintBalanceSheet()
+    bob.PrintBalanceSheet()
+    carol.PrintBalanceSheet()
+    dave.PrintBalanceSheet()
+}
+
+func main() {
+    fmt.Println(strings.Repeat("=", 70))
+    fmt.Println("Starting Auction Simulation")
+    fmt.Println(strings.Repeat("=", 70))
+    simulateAuction()
+}
+```
+EOF_/home/stevegt/lab/grid-poc/x/sim3/sim3.go
 
 <references>
-[1] https://en.wikipedia.org/wiki/Promise_theory
-[2] https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2023.1097239/full
-[3] http://markburgess.org/BookOfPromises.pdf
-[4] https://www.jesp.org/index.php/jesp/article/view/2598/420
-[5] https://papers.ssrn.com/sol3/Delivery.cfm/SSRN_ID3591152_code2178291.pdf?abstractid=3591152&mirid=1
-[6] https://plato.stanford.edu/entries/promises/
-[7] https://blog.agcurate.com/promise-theory-and-how-we-use-our-promise-as-our-driving-force/
-[8] https://markburgess.org/promises.html
-[9] https://en.wikipedia.org/wiki/Promise_theory
-[10] https://pmc.ncbi.nlm.nih.gov/articles/PMC10025327/
-[11] http://markburgess.org/BookOfPromises.pdf
-[12] https://www.jesp.org/index.php/jesp/article/view/2598/420
-[13] https://www.sonatype.com/blog/promise-theory-and-devops
-[14] https://plato.stanford.edu/entries/promises/
-[15] http://students.aiu.edu/submissions/profiles/resources/onlineBook/t3b5W2_Thinking%20in%20Promises.pdf
-[16] https://arxiv.org/pdf/2402.00598.pdf
-[17] https://scholarship.law.georgetown.edu/cgi/viewcontent.cgi?article=3242&context=facpub
-[18] https://www.leancompliance.ca/post/should-compliance-manage-obligations-or-promises
-[19] https://en.wikipedia.org/wiki/Promise_theory
-[20] http://students.aiu.edu/submissions/profiles/resources/onlineBook/t3b5W2_Thinking%20in%20Promises.pdf
-[21] http://markburgess.org/BookOfPromises.pdf
-[22] https://ai.plainenglish.io/the-quiet-revolution-how-promise-theory-is-rewiring-the-future-of-ai-agents-b5daeff8399a
-[23] https://markburgess.org/promises.html
-[24] https://www.wifcon.com/discussion/index.php?%2Ftopic%2F15959-consideration%2F
-[25] https://www.osc.ny.gov/state-agencies/gfo/chapter-xi/xi2g-submission-and-retention-bidsproposals
-[26] https://www.durhamnc.gov/DocumentCenter/View/60360/2ND-READVERT-HPCDC-RFP-May-2025-Service-Learning-Program?bidId=
-[27] https://comptroller.texas.gov/purchasing/vendor/bid-opportunities.php
-[28] https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises
-[29] https://www.clevelandohio.gov/city-hall/departments/finance/request-qualificationsproposal
-[30] https://github.com/request/request-promise
-[31] https://scrapeops.io/nodejs-web-scraping-playbook/node-request-promise-proxy-rotation/
-[32] https://smythos.com/developers/agent-development/agent-communication-in-multi-agent-systems/
-[33] https://journals.publishing.umich.edu/ergo/article/2623/galley/1631/view/
-[34] https://matoffo.com/agent-communication-protocols-overview/
-[35] https://en.wikipedia.org/wiki/Promise_theory
-[36] https://smythos.com/ai-agents/ai-agent-development/agent-communication-protocols/
-[37] https://www.activeloop.ai/resources/glossary/communication-in-multi-agent-systems/
-[38] http://markburgess.org/BookOfPromises.pdf
-[39] https://arxiv.org/abs/2206.09864
-[40] http://markburgess.org/rosegarden.pdf
-[41] https://xmpro.com/part-5-rules-of-engagement-establishing-governance-for-multi-agent-generative-systems/
-[42] http://markburgess.org/PromiseMethod.pdf
-[43] http://markburgess.org/treatise_vol2.pdf
-[44] http://markburgess.org/trustreview.pdf
-[45] http://markburgess.org/blog_reactive.html
-[46] https://www.jd-photodata.co.uk/purchase-orders
-[47] https://tipalti.com/resources/learn/po-request/
-[48] https://www.unleashedsoftware.com/blog/what-is-a-purchase-order/
-[49] https://www.ringcentral.com/gb/en/blog/definitions/purchase-order/
-[50] https://www.bill.com/learning/purchase-order
-[51] https://www.salesforce.com/blog/purchase-order/
-[52] https://planergy.com/blog/purchase-order-vs-contract/
-[53] https://en.wikipedia.org/wiki/Promise_theory
-[54] https://blog.agcurate.com/promise-theory-and-how-we-use-our-promise-as-our-driving-force/
-[55] http://markburgess.org/BookOfPromises.pdf
-[56] https://ngi.eu/ngi-interviews/mark-burgess-promise-theory/
-[57] https://www.leancompliance.ca/post/considering-promises-as-assets
-[58] https://www.youtube.com/watch?v=qYdiPB1fGkg
-[59] https://markburgess.org/promises.html
-[60] https://dl.acm.org/doi/fullHtml/10.5555/2666018.2666021
-[61] https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2023.1097239/full
-[62] https://pmc.ncbi.nlm.nih.gov/articles/PMC8412196/
-[63] https://pmc.ncbi.nlm.nih.gov/articles/PMC10025327/
-[64] https://sustainabledevelopment.un.org/content/documents/1649iddri.pdf
-[65] https://peterwildeford.substack.com/p/the-promises-and-perils-of-voluntary
-[66] https://pearl.plymouth.ac.uk/psy-research/416/
-[67] https://pubmed.ncbi.nlm.nih.gov/36949911/
-[68] https://plato.stanford.edu/entries/promises/
+[1] https://bitcoinwiki.org/wiki/private-currency
+[2] https://ijccr.net/2015/03/08/building-trust-exploring-the-role-of-community-exchange-and-reputation/
+[3] https://wise.com/us/currency-converter/gbp-to-usd-rate
+[4] https://natcapsolutions.org/LASER/LASER_Local-Exchange-Trading-Systems.pdf
+[5] https://youmatter.world/en/categories-territories/what-are-local-currencies-examples/
+[6] https://en.wikipedia.org/wiki/Private_currency
+[7] https://en.wikipedia.org/wiki/Local_exchange_trading_system
+[8] https://www.revolut.com/en-US/currency-converter/convert-gbp-to-usd-exchange-rate/?amount=1
+[9] https://thefinanser.com/2022/10/reputation-as-a-currency
+[10] https://www.amfie.org/en/foreign-exchange
+[11] https://www.waassolutions.com/3093-2/
+[12] https://faisalkhan.com/knowledge-center/payments-wiki/f/formulas-for-automated-market-makers-amms/
+[13] https://www.motransports.co.uk/bristol-pound/
+[14] https://www.bitget.com/wiki/what-is-the-constant-product-formula-of-uniswap-v1--v2
+[15] https://en.wikipedia.org/wiki/Community_Exchange_System
+[16] https://blog.uniswap.org/what-is-an-automated-market-maker
+[17] https://royalsocietypublishing.org/doi/10.1098/rstb.2015.0100
 </references>

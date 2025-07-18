@@ -12,20 +12,22 @@ import "testing"
 // we expect the buyer (Alice) to have a liability entry for 10 ALICE and the
 // seller (Dave) to have an asset entry for 10 DAVE.
 func TestSimulationTrade(t *testing.T) {
-	alice, _, _, dave := RunSimulation()
-	// With arbitrage, the final trade executes at a confirm price of 10.
-	expectedBuyerLiability := 10.0
-	expectedSellerAsset := 10.0
+    alice, _, _, dave := RunSimulation()
+    // With arbitrage, the final trade executes at a confirm price of 10.
+    expectedBuyerLiability := 10.0
+    expectedSellerAsset := 10.0
 
-	buyerLiability := alice.Liabilities[alice.Currency]
-	sellerAsset := dave.Assets[dave.Currency]
+    // Check buyer's liability in their own currency
+    buyerLiability := alice.Liabilities[alice.Currency]
+    if buyerLiability != expectedBuyerLiability {
+        t.Errorf("Expected Alice liability in %s to be %.2f, got %.2f",
+            alice.Currency, expectedBuyerLiability, buyerLiability)
+    }
 
-	if buyerLiability != expectedBuyerLiability {
-		t.Errorf("Expected Alice liability in %s to be %.2f, got %.2f",
-			alice.Currency, expectedBuyerLiability, buyerLiability)
-	}
-	if sellerAsset != expectedSellerAsset {
-		t.Errorf("Expected Dave asset in %s to be %.2f, got %.2f",
-			dave.Currency, expectedSellerAsset, sellerAsset)
-	}
+    // Check seller's asset in their own currency
+    sellerAsset := dave.Assets[dave.Currency]
+    if sellerAsset != expectedSellerAsset {
+        t.Errorf("Expected Dave asset in %s to be %.2f, got %.2f",
+            dave.Currency, expectedSellerAsset, sellerAsset)
+    }
 }

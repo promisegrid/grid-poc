@@ -1,40 +1,3 @@
-GA: is a request also a promise?
-
-Write fitness criteria for evaluating answers to the question "Is a
-request also a promise?".  An example answer is in the file
-x/sim3/is-a-request-also-a-promise/dna/is-a-request-also-a-promise.md
-
-The fitness criteria should be in the form of a list of bullet points,
-each with a weight in the range 1-100.  Each bullet point should be in
-the following format:
-
-- {weight} {description}
-
-
-The fitness criteria should also include these requirements:
-- consider cases where the request includes an offer of compensation as in a BID order
-- use Mark Burgess' Promise Theory definition of "promise", where a promise is a voluntary commitment to do something in the future; promises can be broken, but we need to track the fulfillment status of promises.  In this definition, a promise is not an irrevocable commitment or obligation, but rather a commitment that can be broken or modified.  
-
-
-Sysmsg: 
-  You are a protocol designer and an expert Go programmer. Please make
-  the requested changes to the given code or documentation. Do not
-  quote or escape single backticks in the code -- Go uses backticks
-  for raw string literals.  Do not remove or alter comments unless
-  they are incorrect or misleading.  Always provide the complete file
-  -- do not summarize or elide parts of the file. Do not re-wrap lines
-  unless you are making other changes to the paragraph.  Lines must be
-  wrapped at 70 characters.  
-In:
-  x/sim3/is-a-request-also-a-promise/dna/is-a-request-also-a-promise.md
-Out:
-  x/sim3/is-a-request-also-a-promise/fitness.md
-
-
-.stop
-
-  x/sim3/message-format.md
-
 update design to use double-entry accounting 
 
 Ensure all agents start with a zero balance.  These being personal
@@ -45,22 +8,7 @@ balance sheet as needed; i.e. debit assets and credit liabilities
 when they create currency, and debit liabilities and credit assets
 when they destroy currency.  This is a key feature of the system.
 
-Please research how double-entry accounting and central bank balance
-sheets work, and change the code to maintain balanced debits and
-credits and ensure that the balance sheet is always balanced.
-Ensure that the code is written in a way that allows for easy testing
-of the balance sheet, so that we can verify that the balance sheet is
-always balanced.  
-
-Please research how liabilities work when a trader submits a BID
-order; the bid creates a liability, which must be offset by an asset.
-In design.md, suggest what the offsetting asset should be.
-
-Please research how the Federal Reserve reflects an open, unfilled bid
-order on their balance sheet when they conduct open market operations
-to purchase a security.  
-
-Update think.md with your reasoning process.
+Ensure that the test output shows all balances of all accounts.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -72,13 +20,17 @@ Sysmsg:
   unless you are making other changes to the paragraph.  Lines must be
   wrapped at 70 characters.  
 In:
-  x/sim2/sim2.go
-  x/sim2/sim2_test.go
-  x/sim2/think.md
-  x/sim2/design.md
+  x/sim3/message-format.md
+  x/sim3/sim3_test.go
+  x/sim3/sim3.go
+  x/sim3/background.md
+  x/sim3/design/.fitness.md
+  x/sim3/design/79345.md
+  x/sim3/design/75000.md
+  x/sim3/design/65995.md
 Out:
-  x/sim2/think.md
-  x/sim2/design.md
+  x/sim3/sim3_test.go
+  x/sim3/sim3.go
 
 .stop
 
