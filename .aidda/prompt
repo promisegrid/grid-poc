@@ -1,7 +1,16 @@
-write design.md
+update design.md
 
-Write design.md that describes the overall design of the PromiseGrid
-protocol and kernel, using the provided documents as inspiration.  
+Update design.md to reflect the fact that kernel-to-kernel
+transactions are multileg accounting transactions that are recorded on
+the distributed hypergraph.  If an agent, whether a kernel or an
+embedded agent disagrees with the transaction, it can simply not add
+any transactions after it, but can instead add one or more different
+transactions to the hypergraph.  In this way, the hypergraph acts as a
+progressive consensus formation mechanism.
+
+Please avoid lists; write in full paragraphs instead.
+
+
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -21,6 +30,7 @@ In:
   x/sim3/design/79345.md
   x/sim3/design/75000.md
   x/sim3/design/65995.md
+  x/sim3/design.md
 Out:
   x/sim3/design.md
 

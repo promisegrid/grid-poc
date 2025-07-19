@@ -1,16 +1,3 @@
-<think>
-We are updating design.md to reflect that kernel-to-kernel transactions are multileg accounting transactions recorded on a distributed hypergraph. Agents (kernels or embedded) can disagree by not adding subsequent transactions, instead adding alternative transactions to the hypergraph, enabling progressive consensus formation.
-
-The update must:
-- Avoid lists use full paragraphs instead
-- Wrap lines at 70 characters
-- Maintain existing structure where possible
-- Integrate the concept of hypergraph as consensus mechanism
-
-We'll update the "Transaction Processing" section and add a new subsection on consensus formation.
-</think>
-File: /home/stevegt/lab/grid-poc/x/sim3/design.md
-```markdown
 # PromiseGrid Protocol and Kernel Design
 
 PromiseGrid is a consensus-based computing system designed to address collaborative governance challenges in decentralized organizations. Its architecture combines cryptographic integrity with autonomous agent coordination, implementing Mark Burgess's Promise Theory at the protocol level to create trust-based economic incentives. The kernel functions as universal counterparty while content-addressable storage enables verifiable computation across heterogeneous environments.
@@ -78,10 +65,9 @@ These layers create Sybil-resistant trust metrics where new participants start w
 ### Hypergraph-Based Accounting
 Kernel-to-kernel transactions are multileg accounting events recorded as hyperedges on the distributed hypergraph. Each transaction links:
 - **Service Provider**: Committing to perform work
-- **Service Consumer**: Committing compensation
-- **Witness Kernels**: Authenticating the event
+- **Service Consumer**: Committing to provide compensation
 
-Disagreement manifests through alternative hypergraph branches where dissenting kernels record transactions that reference but do not extend disputed sequences. This enables:
+Disagreement manifests through alternative hypergraph branches where dissenting kernels record transactions that do not extend disputed sequences. This enables:
 - **Progressive Consensus**: Majority branches gain transaction density
 - **Traceable Disagreement**: Alternatives remain auditable
 - **Fork Resolution**: Market mechanisms favor dominant branches[7][19][21]
@@ -215,9 +201,4 @@ Future work includes formal verification of consensus protocols and cross-chain 
 [6] https://quantra.quantinsti.com/glossary/Order-Matching
 [7] https://www.ibm.com/docs/en/ims/15.5.0?topic=support-overview-two-phase-commit-protocol
 [8] https://lab.abilian.com/Tech/Databases%20&%20Persistence/Content%20Addressable%20Storage%20(CAS)/
-</references>
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim3/design.md
-
-<references>
 </references>
