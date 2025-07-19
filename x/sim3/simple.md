@@ -1,39 +1,3 @@
-<think>
-We are to create simple.md that satisfies the requirements in the provided documents while supporting agents like Docker containers.
-
-The key requirements from the documents are:
-- Promise theory: voluntary cooperation, autonomous agents making promises
-- Kernel as trusted third party and message broker
-- Agents only talk to the kernel (client-server model)
-- Messages are function calls to the kernel
-- ASK orders as Mach ports, BID orders as messages to those ports
-- Double-entry accounting for promises
-- Hypergraph storage of messages
-- CBOR message format
-- Matching engine algorithm
-
-The simplest thing that could work:
-
-1. Agents are processes (could be Docker containers) that communicate only with the kernel via Unix domain sockets or similar IPC.
-2. The kernel exposes a simple API: submit_bid(), submit_ask(), get_results()
-3. Agents use CBOR-encoded messages over the IPC channel.
-4. The kernel handles matching locally with a simple price-time priority algorithm.
-5. For cross-node communication, we skip distributed matching for now and assume all agents are on the same node or use a simple forwarding mechanism.
-
-We'll structure the document as:
-
-- Introduction
-- Message format (CBOR)
-- Local matching algorithm
-- Accounting model
-- Kernel API
-- Example flow
-- Limitations and future work
-
-All in paragraphs with line wrapping at 70 characters.
-</think>
-File: /home/stevegt/lab/grid-poc/x/sim3/simple.md
-```markdown
 # PromiseGrid Minimal Viable Implementation
 
 This document describes the simplest functional implementation of PromiseGrid
@@ -141,23 +105,3 @@ operation would require kernel-to-kernel synchronization protocols.
 Additionally, the reputation system and currency exchange mechanics remain
 simplified. Future versions should integrate content-addressable storage
 for enhanced security and verifiable computation[1][8].
-```
-EOF_/home/stevegt/lab/grid-poc/x/sim3/simple.md
-
-<references>
-[1] https://github.com/promisegrid/promisegrid
-[2] https://arxiv.org/html/2503.21463v1
-[3] https://www.nojitter.com/digital-workplace/why-you-need-to-know-about-promise-theory
-[4] https://arxiv.org/html/2402.15812v1
-[5] https://pmc.ncbi.nlm.nih.gov/articles/PMC6164253/
-[6] http://youngsubyoon.com/QMunitarity.htm
-[7] https://github.com/stevegt/grokker
-[8] https://arxiv.org/pdf/1405.2627.pdf
-[9] https://lab.abilian.com/Tech/Databases%20&%20Persistence/Content%20Addressable%20Storage%20(CAS)/
-[10] https://paro.ai/blog/what-is-double-entry-bookkeeping/
-[11] https://www.baeldung.com/cs/two-phase-commit-vs-saga-pattern
-[12] https://ulexec.github.io/post/2022-12-01-xnu_ipc/
-[13] https://en.wikipedia.org/wiki/No-hiding_theorem
-[14] https://en.wikipedia.org/wiki/Promise_theory
-[15] https://www.coinbase.com/learn/advanced-trading/what-is-an-automated-market-maker-amm
-</references>

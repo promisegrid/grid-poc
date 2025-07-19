@@ -1,16 +1,10 @@
-update design.md
+create simple.md
 
-Update design.md to reflect the fact that kernel-to-kernel
-transactions are multileg accounting transactions that are recorded on
-the distributed hypergraph.  If an agent, whether a kernel or an
-embedded agent disagrees with the transaction, it can simply not add
-any transactions after it, but can instead add one or more different
-transactions to the hypergraph.  In this way, the hypergraph acts as a
-progressive consensus formation mechanism.
+What's the simplest thing that could possibly work to satisfy the
+requirements in the provided documents while also supporting the
+operation of agents who are e.g. docker containers?
 
-Please avoid lists; write in full paragraphs instead.
-
-
+Write in paragraphs only -- avoid lists and bullet points.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -32,7 +26,8 @@ In:
   x/sim3/design/65995.md
   x/sim3/design.md
 Out:
-  x/sim3/design.md
+  x/sim3/simple.md
+
 
 .stop
 
