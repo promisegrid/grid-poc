@@ -1,4 +1,32 @@
-update design to use double-entry accounting 
+write design.md
+
+Write design.md that describes the overall design of the PromiseGrid
+protocol and kernel, using the provided documents as inspiration.  
+
+Sysmsg: 
+  You are a protocol designer and an expert Go programmer. Please make
+  the requested changes to the given code or documentation. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file. Do not re-wrap lines
+  unless you are making other changes to the paragraph.  Lines must be
+  wrapped at 70 characters.  
+In:
+  x/sim3/message-format.md
+  x/sim3/sim3_test.go
+  x/sim3/sim3.go
+  x/sim3/background.md
+  x/sim3/design/.fitness.md
+  x/sim3/design/79345.md
+  x/sim3/design/75000.md
+  x/sim3/design/65995.md
+Out:
+  x/sim3/design.md
+
+.stop
+
+ensure that the test output shows all balances of all accounts
 
 Ensure all agents start with a zero balance.  These being personal
 currencies, each agent is their own central bank, and can create
@@ -7,8 +35,6 @@ accounting, so that they can expand and contract their
 balance sheet as needed; i.e. debit assets and credit liabilities
 when they create currency, and debit liabilities and credit assets
 when they destroy currency.  This is a key feature of the system.
-
-Ensure that the test output shows all balances of all accounts.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
