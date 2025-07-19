@@ -76,17 +76,23 @@ enhance creditworthiness[3][8].
 2. Kernel hashes service description → service_hash
 3. ASK stored as endpoint (Mach port)
 
+### Points Exchange 
+1. Bob has no ALICE points, offers 10 BOB points to purchase 10 ALICE points
+2. Kernel XXX
+
 ### Service Request
-1. Bob creates BID targeting service_hash with 10 ALICE points
+1. Bob creates BID targeting service_hash, offering 10 ALICE points
 2. Kernel matches highest priority BID to ASK
 3. Alice performs service X, returns result to kernel
 
 ### Settlement
-1. Kernel verifies result against service description
-2. Ledger updated:
+1. Kernel updates ledger:
    - Alice: +10 ALICE points (Revenue)
    - Bob: -10 ALICE points (Liability)
-3. Result delivered to Bob
+2. Result delivered to Bob
+
+### Reputation Update
+1. If Bob is satisfied, Alice gains reputation points
 
 ## Container Integration
 
