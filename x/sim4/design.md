@@ -54,9 +54,9 @@ contains one or more tokens being transferred between agents, along
 with metadata necessary for the transaction. The hypergraph remains
 perpetually incomplete: no agent possesses the entire structure, and
 new transactions constantly extend it. Each new hyperedge includes
-cryptographic hashes of its predecessor nodes, creating an immutable
-chain of custody[5][8]. This content-addressed architecture ensures
-that any state modification would alter the hash, invalidating
+cryptographic hashes of its predecessor nodes, and each node contains
+the hash of its parent hyperedge. This content-addressed architecture
+ensures that any state modification would alter the hash, invalidating
 dependent structures. The hypergraph's ability to model parallel
 branches allows for speculative execution, where agents can create
 alternative transaction paths for the same token, effectively creating
