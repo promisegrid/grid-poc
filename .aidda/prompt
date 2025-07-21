@@ -1,17 +1,24 @@
-evaluate design.md
+evaluate and improve design.md
 
 The design.md file should describe the design of the PromiseGrid
 system. The requirements are in the file x/sim4/requirements.md.  Open
-issues are in x/sim4/issues.md.  Evaluate design.md against the
-requirements and issues, and in recommendations.md, describe actions
-to take to address any discrepancies or open issues.  Use active,
-directive language -- for example, "Add a section on the use of Merkle
-DAGs to represent worldlines."  Do not include any code in
-recommendations.md, just the actions to take.  
+issues are in x/sim4/issues.md.  References are in x/sim4/references.md.
+
+Workflow:
+- Evaluate design.md against the requirements in requirements.md.
+- Discuss discrepancies and open questions in issues.md.
+- Make recommendations in recommendations.md.
+- Make changes to design.md based on the recommendations.
+
+Use active, directive language -- for example, "Add a section on the
+use of Merkle DAGs to represent worldlines."  
 
 Write in paragraphs only -- avoid lists and bullet points.  Include
 nuance, detail, pros and cons, and open questions, but do not include
-code.  Add open questions at the end of the document.
+code.  
+
+Do not recommend code changes -- we are working on the design document
+only.
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make
@@ -28,7 +35,11 @@ In:
   x/sim4/design.md
   x/sim4/issues.md
   x/sim4/recommendations.md
+  x/sim4/references.md
 Out:
+  x/sim4/issues.md
+  x/sim4/design.md
+  x/sim4/issues.md
   x/sim4/recommendations.md
 References:
   x/sim4/references.md

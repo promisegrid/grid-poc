@@ -1,3 +1,26 @@
+
+# New issues and open questions
+
+It's not clear how hyperedges lead to nodes -- is any given node
+created by exactly one hyperedge?  If a hyperedge is just a
+multilegged accounting transaction, then what is a node?  Is a node an
+account?  If so, then does a node contain a checkpoint of the account
+balance after the transaction?  If not, then what does a node
+represent?
+
+The relationship between the hypergraph and ports is not clear.  If
+the hypergraph is the accounting record, and if ports are the
+listening endpoints for agents, then how do the two interact?  
+
+Is there any term or precedent for the concept of nodes being state
+symbols, referencing but not containing state?  For example, if a
+system starts in a known state, and then a series of transactions
+occur that describe changes to the system state but do not contain the
+resulting state itself, and all of this is done in a way that any
+agent can replay the series of transactions to arrive at the same
+state, then is there a term for this?  
+
+
 <think>
 We are given two files: `speculative-execution.md` and `design.md`. The task is to compare `design.md` with the provided requirements and describe any discrepancies.
 
