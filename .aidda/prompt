@@ -1,8 +1,9 @@
-create design.md
+evaluate design.md
 
-The design.md file will describe the design of the PromiseGrid system.
-As a first draft, we want to only include a description covering these
-concepts:
+The design.md file should describe the design of the PromiseGrid system.
+Compare design.md with the following requirements, and describe any
+discrepancies:
+
 - a security capability token is a promise that an agent will perform
   a specific action, such as sending a message or performing a
   computation
@@ -77,7 +78,6 @@ Sysmsg:
   wrapped at 70 characters.  
 In:
   x/sim4/speculative-execution.md
-Out:
   x/sim4/design.md
 
 
