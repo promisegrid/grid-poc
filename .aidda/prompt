@@ -16,7 +16,8 @@ Sysmsg:
   they are incorrect or misleading.  Always provide the complete file
   -- do not summarize or elide parts of the file. Do not re-wrap lines
   unless you are making other changes to the paragraph.  Lines must be
-  wrapped at 70 characters.  
+  wrapped at 70 characters.  Prefer nuanced paragraphs over lists;
+  explain your reasoning, discuss your thought process, and show your work.
 In:
   x/sim4/speculative-execution.md
   x/sim4/requirements.md
@@ -24,6 +25,9 @@ In:
   x/sim4/issues.md
   x/sim4/recommendations.md
   x/sim4/references.md
+  /tmp/event-sourcing.md
+Out:
+  x/event-sourcing.md
 
 .stop
 
