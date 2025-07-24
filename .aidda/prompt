@@ -1,3 +1,69 @@
+refactor the code such that all agents communicate via a kernel named Trent
+
+Sysmsg: 
+  You are a protocol designer and an expert Go programmer. Please make
+  the requested changes to the given code or documentation. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file. Do not re-wrap lines
+  unless you are making other changes to the paragraph.  Lines must be
+  wrapped at 70 characters.  Prefer nuanced paragraphs over lists;
+  explain your reasoning, discuss your thought process, and show your work.
+In:
+  x/sim3.5/speculative-execution.md
+  x/sim3.5/event-sourcing.md
+  x/sim3.5/requirements.md
+  x/sim3.5/design.md
+  x/sim3.5/issues.md
+  x/sim3.5/recommendations.md
+  x/sim3.5/references.md
+  x/sim3.5/main.go
+  x/sim3.5/main_test.go
+Out:
+  x/sim3.5/main.go
+  x/sim3.5/main_test.go
+References:
+  x/sim3.5/references.md
+
+.stop
+
+ensure that the test output shows all balances of all accounts
+
+Ensure all agents start with a zero balance.  These being personal
+currencies, each agent is their own central bank, and can create
+currency as needed.  Ensure each agent is using double-entry
+accounting, so that they can expand and contract their
+balance sheet as needed; i.e. debit assets and credit liabilities
+when they create currency, and debit liabilities and credit assets
+when they destroy currency.  This is a key feature of the system.
+
+Sysmsg: 
+  You are a protocol designer and an expert Go programmer. Please make
+  the requested changes to the given code or documentation. Do not
+  quote or escape single backticks in the code -- Go uses backticks
+  for raw string literals.  Do not remove or alter comments unless
+  they are incorrect or misleading.  Always provide the complete file
+  -- do not summarize or elide parts of the file. Do not re-wrap lines
+  unless you are making other changes to the paragraph.  Lines must be
+  wrapped at 70 characters.  
+In:
+  x/sim3/message-format.md
+  x/sim3/sim3_test.go
+  x/sim3/sim3.go
+  x/sim3/background.md
+  x/sim3/design/.fitness.md
+  x/sim3/design/79345.md
+  x/sim3/design/75000.md
+  x/sim3/design/65995.md
+Out:
+  x/sim3/sim3_test.go
+  x/sim3/sim3.go
+
+
+.stop
+
+
 evaluate and improve design.md
 
 The design.md file should describe the design of the PromiseGrid
