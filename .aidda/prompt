@@ -1,36 +1,3 @@
-investigate the concept of nodes as state symbols
-
-Is there any term or precedent for the concept of nodes being state
-symbols, referencing but not containing state?  For example, if a
-system starts in a known state, and then a series of transactions
-occur that describe changes to the system state but do not contain the
-resulting state itself, and all of this is done in a way that any
-agent can replay the series of transactions to arrive at the same
-state, then is there a term for this?  
-
-Sysmsg: 
-  You are a protocol designer and an expert Go programmer. Please make
-  the requested changes to the given code or documentation. Do not
-  quote or escape single backticks in the code -- Go uses backticks
-  for raw string literals.  Do not remove or alter comments unless
-  they are incorrect or misleading.  Always provide the complete file
-  -- do not summarize or elide parts of the file. Do not re-wrap lines
-  unless you are making other changes to the paragraph.  Lines must be
-  wrapped at 70 characters.  Prefer nuanced paragraphs over lists;
-  explain your reasoning, discuss your thought process, and show your work.
-In:
-  x/sim4/speculative-execution.md
-  x/sim4/requirements.md
-  x/sim4/design.md
-  x/sim4/issues.md
-  x/sim4/recommendations.md
-  x/sim4/references.md
-  /tmp/event-sourcing.md
-Out:
-  x/event-sourcing.md
-
-.stop
-
 evaluate and improve design.md
 
 The design.md file should describe the design of the PromiseGrid
@@ -61,9 +28,11 @@ Sysmsg:
   they are incorrect or misleading.  Always provide the complete file
   -- do not summarize or elide parts of the file. Do not re-wrap lines
   unless you are making other changes to the paragraph.  Lines must be
-  wrapped at 70 characters.  
+  wrapped at 70 characters.  Prefer nuanced paragraphs over lists;
+  explain your reasoning, discuss your thought process, and show your work.
 In:
   x/sim4/speculative-execution.md
+  x/sim4/event-sourcing.md
   x/sim4/requirements.md
   x/sim4/design.md
   x/sim4/issues.md
