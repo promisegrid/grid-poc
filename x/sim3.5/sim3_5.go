@@ -10,43 +10,55 @@ import (
 var allAgents []*Agent
 var Exchange *Kernel
 
-// Kernel represents the exchange that matches orders from buyers
-// and sellers. It maintains order books for bids and asks. In this
-// open market model, agents submit BID and ASK orders identified by
-// unique order IDs. When orders are matched, the kernel acts as the
-// exchange, executing a balanced double‐entry transaction. In each
-// trade, one party debits an asset while crediting a liability, ensuring
-// that the fundamental accounting equation Assets = Liabilities + Equity
-// is satisfied.
+// Kernel represents the exchange that matches orders from buyers and
+// sellers. It maintains order books for bids and asks. In this open market
+// model, agents submit BID and ASK orders identified by unique order IDs.
+// When orders are matched, the kernel acts as the exchange, executing a
+// balanced double‐entry transaction. In each trade, one party debits an asset
+// while crediting a liability, ensuring that the fundamental accounting
+// equation Assets = Liabilities + Equity is satisfied. In addition, each agent
+// issues its own personal currency. The kernel maintains a ledger of these
+// currencies and verifies that each agent's personal currency is unique.
 type Kernel struct {
-	agents map[string]*Agent
-	bids   []Message
-	asks   []Message
-	mu     sync.Mutex
+	agents             map[string]*Agent
+	bids               []Message
+	asks               []Message
+	personalCurrencies map[string]bool
+	mu                 sync.Mutex
 }
 
 // NewKernel creates a new Kernel (exchange) instance.
 func NewKernel() *Kernel {
 	return &Kernel{
-		agents: make(map[string]*Agent),
-		bids:   []Message{},
-		asks:   []Message{},
+		agents:             make(map[string]*Agent),
+		bids:               []Message{},
+		asks:               []Message{},
+		personalCurrencies: make(map[string]bool),
 	}
 }
 
-// RegisterAgent registers an agent with the exchange.
+// RegisterAgent registers an agent with the exchange. It enforces that each
+// agent's personal currency is unique.
 func (k *Kernel) RegisterAgent(agent *Agent) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	// Ensure the agent's personal currency is unique.
+	if _, exists := k.personalCurrencies[agent.PersonalCurrency]; exists {
+		fmt.Printf("Error: personal currency %s already registered\n",
+			agent.PersonalCurrency)
+		return
+	}
+	k.personalCurrencies[agent.PersonalCurrency] = true
 	k.agents[agent.ID] = agent
 }
 
 // SubmitOrder processes an order (BID or ASK) submitted by an agent.
 // It attempts to match the order with an opposing order in the order book.
-// When a match is found, the trade is executed at the buyer's bid price and
-// a balanced double-entry transaction is recorded. The buyer's transaction
-// debits the asset account "TOKEN" and credits the liability account "CASH".
-// Conversely, the seller's transaction debits the asset account "CASH" and
-// credits the liability account "TOKEN". A trade confirmation message is
-// then sent to both participants.
+// For a trade to match, the Message.Symbol field must indicate the target
+// personal currency. When a match is found, the trade is executed as a
+// bilateral swap: the buyer receives the seller's personal currency as an
+// asset while incurring a liability in his own currency, and vice versa for
+// the seller. A trade confirmation message is then sent to both participants.
 func (k *Kernel) SubmitOrder(order Message) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -59,21 +71,29 @@ func (k *Kernel) SubmitOrder(order Message) {
 		for _, ask := range k.asks {
 			if order.Amount >= ask.Amount &&
 				order.Symbol == ask.Symbol {
-				// A match is found; execute trade at the buyer's bid price.
+				// A match is found; execute trade.
 				tradePrice := order.Amount
 				buyer := k.agents[order.From]
 				seller := k.agents[ask.From]
-				// For double-entry accounting on the buyer:
-				// Debit asset "TOKEN" and credit liability "CASH".
-				buyer.Assets["TOKEN"] += tradePrice
-				buyer.Liabilities["CASH"] += tradePrice
-				// For the seller, debit asset "CASH" and credit liability "TOKEN".
-				seller.Assets["CASH"] += tradePrice
-				seller.Liabilities["TOKEN"] += tradePrice
-				// Create a confirmation message from the exchange.
+				// The trade is executed as a swap between the buyer's and
+				// seller's personal currencies. The buyer receives the asset
+				// of the target currency (seller's currency) and incurs a liability
+				// in his own personal currency.
+				// For the buyer:
+				//   Debit asset: seller's personal currency.
+				//   Credit liability: buyer's personal currency.
+				buyer.Assets[order.Symbol] += tradePrice
+				buyer.Liabilities[buyer.PersonalCurrency] += tradePrice
+				// For the seller:
+				//   Debit asset: buyer's personal currency.
+				//   Credit liability: seller's personal currency.
+				seller.Assets[buyer.PersonalCurrency] += tradePrice
+				seller.Liabilities[seller.PersonalCurrency] += tradePrice
+				// Create a confirmation message.
 				confirmMsg := Message{
 					Type:   "CONFIRM",
 					Amount: tradePrice,
+					// The symbol indicates the personal currency traded.
 					Symbol: order.Symbol,
 					From:   "Exchange",
 				}
@@ -95,13 +115,17 @@ func (k *Kernel) SubmitOrder(order Message) {
 				tradePrice := bid.Amount
 				buyer := k.agents[bid.From]
 				seller := k.agents[order.From]
-				// For double-entry accounting on the buyer:
-				// Debit asset "TOKEN" and credit liability "CASH".
-				buyer.Assets["TOKEN"] += tradePrice
-				buyer.Liabilities["CASH"] += tradePrice
-				// For the seller, debit asset "CASH" and credit liability "TOKEN".
-				seller.Assets["CASH"] += tradePrice
-				seller.Liabilities["TOKEN"] += tradePrice
+				// The trade uses the target personal currency (order.Symbol).
+				// For the buyer:
+				//   Debit asset: seller's personal currency.
+				//   Credit liability: buyer's personal currency.
+				buyer.Assets[order.Symbol] += tradePrice
+				buyer.Liabilities[buyer.PersonalCurrency] += tradePrice
+				// For the seller:
+				//   Debit asset: buyer's personal currency.
+				//   Credit liability: seller's personal currency.
+				seller.Assets[buyer.PersonalCurrency] += tradePrice
+				seller.Liabilities[seller.PersonalCurrency] += tradePrice
 				confirmMsg := Message{
 					Type:   "CONFIRM",
 					Amount: tradePrice,
@@ -119,8 +143,8 @@ func (k *Kernel) SubmitOrder(order Message) {
 	}
 }
 
-// removeBidOrder removes a bid order from the order book identified by
-// the given order ID.
+// removeBidOrder removes a bid order from the order book identified by the
+// given order ID.
 func (k *Kernel) removeBidOrder(orderID string) {
 	for i, bid := range k.bids {
 		if bid.OrderID == orderID {
@@ -130,8 +154,8 @@ func (k *Kernel) removeBidOrder(orderID string) {
 	}
 }
 
-// removeAskOrder removes an ask order from the order book identified by
-// the given order ID.
+// removeAskOrder removes an ask order from the order book identified by the
+// given order ID.
 func (k *Kernel) removeAskOrder(orderID string) {
 	for i, ask := range k.asks {
 		if ask.OrderID == orderID {
@@ -143,24 +167,25 @@ func (k *Kernel) removeAskOrder(orderID string) {
 
 // Message represents an order or trade confirmation in the exchange.
 // The message type can be "BID", "ASK", or "CONFIRM". Each order message is
-// identified by a unique OrderID.
+// identified by a unique OrderID. The Symbol field indicates the target
+// personal currency being traded.
 type Message struct {
 	OrderID string  // Unique identifier for the order
 	Type    string  // "BID", "ASK", or "CONFIRM"
 	Amount  float64 // Order amount or confirmed trade price
-	Symbol  string  // Order symbol (e.g., "TOKEN")
+	Symbol  string  // Target personal currency (e.g., seller's currency)
 	From    string  // Agent ID that submitted the order (or "Exchange")
 }
 
 // Agent represents a market participant. Agents hold their own balance
-// sheets which display assets and liabilities. The balance sheet follows
-// the double-entry accounting model where Assets = Liabilities + Equity.
-// Equity is computed on demand as the difference between total assets and
-// total liabilities.
+// sheets that display assets and liabilities. The balance sheet follows the
+// double-entry accounting model where Assets = Liabilities + Equity. In addition,
+// each agent issues its own personal currency used to transact on the exchange.
 type Agent struct {
-	ID          string
-	Assets      map[string]float64 // Ledger of assets by account name.
-	Liabilities map[string]float64 // Ledger of liabilities by account name.
+	ID              string
+	PersonalCurrency string
+	Assets          map[string]float64 // Ledger of assets by account name.
+	Liabilities     map[string]float64 // Ledger of liabilities by account name.
 }
 
 // PrintBalanceSheet prints the agent's current balance sheet, showing their
@@ -187,7 +212,8 @@ func (a *Agent) PrintBalanceSheet() {
 }
 
 // SubmitOrder allows an agent to submit an order (BID or ASK) to the exchange.
-// The order must include a unique OrderID.
+// The order must include a unique OrderID. The Symbol field should indicate
+// the target personal currency for the transaction.
 func (a *Agent) SubmitOrder(order Message) {
 	fmt.Printf("%s submits %s order (OrderID: %s, %.2f %s)\n",
 		a.ID, order.Type, order.OrderID, order.Amount, order.Symbol)
@@ -202,33 +228,38 @@ func (a *Agent) ReceiveConfirm(msg Message) {
 }
 
 // RunSimulation initializes four agents and simulates a basic open market trade.
-// In this simulation, the buyer (Alice) submits a BID order and the seller (Dave)
-// submits an ASK order. If the BID price is equal to or exceeds the ASK price and
-// the order symbols match, the exchange matches the orders and executes a trade.
-// The trade is executed as a balanced double-entry transaction following the rules:
-// the buyer debits asset "TOKEN" and credits liability "CASH", while the seller
-// debits asset "CASH" and credits liability "TOKEN".
+// Each agent issues its own personal currency. In this simulation, the buyer
+// (Alice) submits a BID order to acquire Dave's personal currency, and the seller
+// (Dave) submits an ASK order offering his own currency. When the BID and ASK match,
+// the exchange performs a balanced double-entry transaction: the buyer receives
+// Dave's currency (asset) and accrues a liability in his own currency, while the seller
+// receives Alice's currency (asset) and accrues a liability in his own currency.
 func RunSimulation() (alice, bob, carol, dave *Agent) {
-	// Initialize agents with empty ledger maps.
+	// Initialize agents with empty ledger maps and assign unique personal
+	// currencies. Here we set the personal currency to be the same as the ID.
 	alice = &Agent{
-		ID:          "Alice",
-		Assets:      make(map[string]float64),
-		Liabilities: make(map[string]float64),
+		ID:              "Alice",
+		PersonalCurrency: "Alice",
+		Assets:          make(map[string]float64),
+		Liabilities:     make(map[string]float64),
 	}
 	bob = &Agent{
-		ID:          "Bob",
-		Assets:      make(map[string]float64),
-		Liabilities: make(map[string]float64),
+		ID:              "Bob",
+		PersonalCurrency: "Bob",
+		Assets:          make(map[string]float64),
+		Liabilities:     make(map[string]float64),
 	}
 	carol = &Agent{
-		ID:          "Carol",
-		Assets:      make(map[string]float64),
-		Liabilities: make(map[string]float64),
+		ID:              "Carol",
+		PersonalCurrency: "Carol",
+		Assets:          make(map[string]float64),
+		Liabilities:     make(map[string]float64),
 	}
 	dave = &Agent{
-		ID:          "Dave",
-		Assets:      make(map[string]float64),
-		Liabilities: make(map[string]float64),
+		ID:              "Dave",
+		PersonalCurrency: "Dave",
+		Assets:          make(map[string]float64),
+		Liabilities:     make(map[string]float64),
 	}
 
 	// Initialize global agent list.
@@ -240,22 +271,23 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 		Exchange.RegisterAgent(agent)
 	}
 
-	// Simulation: Alice (buyer) submits a BID order.
+	// Simulation: Alice (buyer) submits a BID order. She indicates that she
+	// wishes to acquire Dave's personal currency, so the Symbol is set to "Dave".
 	bidMsg := Message{
 		OrderID: "BID1",
 		Type:    "BID",
 		Amount:  10.0,
-		Symbol:  "TOKEN",
+		Symbol:  "Dave",
 		From:    alice.ID,
 	}
 	alice.SubmitOrder(bidMsg)
 
-	// Simulation: Dave (seller) submits an ASK order.
+	// Simulation: Dave (seller) submits an ASK order offering his own currency.
 	askMsg := Message{
 		OrderID: "ASK1",
 		Type:    "ASK",
-		Amount:  8.0,
-		Symbol:  "TOKEN",
+		Amount:  10.0,
+		Symbol:  "Dave",
 		From:    dave.ID,
 	}
 	dave.SubmitOrder(askMsg)

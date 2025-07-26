@@ -3,43 +3,43 @@ package main
 import "testing"
 
 // TestSimulationTrade verifies that a trade is executed in the open market
-// simulation. In this test, Alice submits a BID order for 10 TOKEN (with
-// OrderID "BID1"), and Dave submits an ASK order for 8 TOKEN (with OrderID
-// "ASK1"). If the matching engine functions properly, the trade should execute
-// at the buyer's bid price. The buyer (Alice) should record an increase in
-// asset "TOKEN" of 10 and an increase in liability "CASH" of 10, while the
-// seller (Dave) should record an increase in asset "CASH" of 10 and an increase
-// in liability "TOKEN" of 10.
+// simulation. In this test, Alice submits a BID order for 10 units, where she
+// wishes to acquire Dave's personal currency. Dave submits an ASK order offering
+// his personal currency. When the matching engine functions properly, the trade
+// should execute at the buyer's bid price.
+// For the buyer (Alice):
+//   - Assets: the asset corresponding to "Dave" should increase by 10.
+//   - Liabilities: the liability corresponding to "Alice" should increase by 10.
+// For the seller (Dave):
+//   - Assets: the asset corresponding to "Alice" should increase by 10.
+//   - Liabilities: the liability corresponding to "Dave" should increase by 10.
 func TestSimulationTrade(t *testing.T) {
 	alice, _, _, dave := RunSimulation()
 
-	// Expected values based on double-entry transaction:
-	// For buyer (Alice): Assets["TOKEN"] and Liabilities["CASH"] should be 10.
-	// For seller (Dave): Assets["CASH"] and Liabilities["TOKEN"] should be 10.
 	expectedValue := 10.0
 
-	// Check buyer's asset "TOKEN".
-	buyerTokenAsset := alice.Assets["TOKEN"]
-	if buyerTokenAsset != expectedValue {
-		t.Errorf("Expected Alice asset TOKEN to be %.2f, got %.2f",
-			expectedValue, buyerTokenAsset)
+	// Check buyer's asset for target currency "Dave".
+	buyerAsset := alice.Assets["Dave"]
+	if buyerAsset != expectedValue {
+		t.Errorf("Expected Alice asset for Dave to be %.2f, got %.2f",
+			expectedValue, buyerAsset)
 	}
-	// Check buyer's liability "CASH".
-	buyerCashLiability := alice.Liabilities["CASH"]
-	if buyerCashLiability != expectedValue {
-		t.Errorf("Expected Alice liability CASH to be %.2f, got %.2f",
-			expectedValue, buyerCashLiability)
+	// Check buyer's liability for her own currency "Alice".
+	buyerLiability := alice.Liabilities["Alice"]
+	if buyerLiability != expectedValue {
+		t.Errorf("Expected Alice liability for Alice to be %.2f, got %.2f",
+			expectedValue, buyerLiability)
 	}
-	// Check seller's asset "CASH".
-	sellerCashAsset := dave.Assets["CASH"]
-	if sellerCashAsset != expectedValue {
-		t.Errorf("Expected Dave asset CASH to be %.2f, got %.2f",
-			expectedValue, sellerCashAsset)
+	// Check seller's asset for "Alice" currency.
+	sellerAsset := dave.Assets["Alice"]
+	if sellerAsset != expectedValue {
+		t.Errorf("Expected Dave asset for Alice to be %.2f, got %.2f",
+			expectedValue, sellerAsset)
 	}
-	// Check seller's liability "TOKEN".
-	sellerTokenLiability := dave.Liabilities["TOKEN"]
-	if sellerTokenLiability != expectedValue {
-		t.Errorf("Expected Dave liability TOKEN to be %.2f, got %.2f",
-			expectedValue, sellerTokenLiability)
+	// Check seller's liability for his own currency "Dave".
+	sellerLiability := dave.Liabilities["Dave"]
+	if sellerLiability != expectedValue {
+		t.Errorf("Expected Dave liability for Dave to be %.2f, got %.2f",
+			expectedValue, sellerLiability)
 	}
 }
