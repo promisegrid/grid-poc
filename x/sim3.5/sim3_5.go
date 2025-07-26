@@ -15,6 +15,38 @@ var tradeExecuted bool = false
 // lookup during ledger updates.
 var allAgents []*Agent
 
+// Trent is the global kernel that routes all inter-agent messages.
+var Trent *Kernel
+
+// Kernel represents the communication kernel that all agents use to
+// send messages. All routing is performed via Trent.
+type Kernel struct {
+    agents map[string]*Agent
+}
+
+// NewKernel creates and returns a new Kernel instance.
+func NewKernel() *Kernel {
+    return &Kernel{
+        agents: make(map[string]*Agent),
+    }
+}
+
+// RegisterAgent registers an agent with the kernel.
+func (k *Kernel) RegisterAgent(agent *Agent) {
+    k.agents[agent.ID] = agent
+}
+
+// RouteMessage routes a message from the sender (fromID) to the agent
+// identified by toID. If the destination agent is not registered, an
+// error message is printed.
+func (k *Kernel) RouteMessage(msg Message, fromID, toID string) {
+    if agent, ok := k.agents[toID]; ok {
+        agent.ReceiveMessage(msg, k.agents[fromID])
+    } else {
+        fmt.Printf("Kernel Trent: agent %s not found\n", toID)
+    }
+}
+
 // Message represents a bid or confirm message in the simulation.
 // Every message must be either a BID or a CONFIRM and include a personal
 // currency symbol and an amount. OrigBid carries the bid amount received
@@ -32,14 +64,14 @@ type Message struct {
 // Agent represents a simulation participant.
 type Agent struct {
     ID          string
-    Currency    string // personal currency (e.g. "ALICE")
-    Assets      map[string]float64   // assets ledger by currency
-    Liabilities map[string]float64   // liabilities ledger by currency
+    Currency    string             // personal currency (e.g. "ALICE")
+    Assets      map[string]float64 // assets ledger by currency
+    Liabilities map[string]float64 // liabilities ledger by currency
     Peers       []*Agent
-    IsSeller    bool // Only Dave is the seller.
-    IsBuyer     bool // Only Alice is the buyer.
-    NextHop     *Agent
-    PrevHop     *Agent
+    IsSeller    bool    // Only Dave is the seller.
+    IsBuyer     bool    // Only Alice is the buyer.
+    NextHop     *Agent  // Used to determine message routing via Trent.
+    PrevHop     *Agent  // Used to determine backward routing.
     upstreamBid float64 // bid amount received from upstream
 }
 
@@ -66,7 +98,8 @@ func (a *Agent) PrintBalanceSheet() {
         "Net Worth: %.2f\n", a.ID, assetsStr, liabStr, netWorth)
 }
 
-// SendBidMessage sends a BID message to the next agent in the chain.
+// SendBidMessage sends a BID message to the next agent in the chain via
+// the kernel Trent.
 func (a *Agent) SendBidMessage(msg Message) {
     if a.NextHop == nil {
         return
@@ -76,12 +109,13 @@ func (a *Agent) SendBidMessage(msg Message) {
     fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
         a.ID, msg.Type, msg.Amount, msg.Symbol, a.NextHop.ID)
     a.PrintBalanceSheet()
-    a.NextHop.ReceiveMessage(msg, a)
+    // Send the message through the kernel Trent.
+    Trent.RouteMessage(msg, a.ID, a.NextHop.ID)
 }
 
 // SendConfirmMessage sends a CONFIRM message to the previous agent in the
-// chain; if there is no previous agent (i.e. the buyer), it processes the
-// final confirmation.
+// chain via the kernel Trent; if there is no previous agent (i.e. the buyer),
+// it processes the final confirmation.
 func (a *Agent) SendConfirmMessage(msg Message) {
     if a.PrevHop == nil {
         a.ReceiveFinalConfirm(msg)
@@ -92,15 +126,16 @@ func (a *Agent) SendConfirmMessage(msg Message) {
     fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
         a.ID, msg.Type, msg.Amount, msg.Symbol, a.PrevHop.ID)
     a.PrintBalanceSheet()
-    a.PrevHop.ReceiveMessage(msg, a)
+    // Send the message through the kernel Trent.
+    Trent.RouteMessage(msg, a.ID, a.PrevHop.ID)
 }
 
-// ReceiveMessage processes an incoming message based on its type and the role of
-// the agent. For BID messages, intermediaries arbitrage by subtracting 1 from the
-// incoming bid and storing the upstream bid for later use in CONFIRM. The seller
-// responds to a BID with a CONFIRM using the exact bid amount. CONFIRM messages are
-// forwarded backward along the chain with intermediaries replacing the bid amount with
-// the upstream bid value.
+// ReceiveMessage processes an incoming message based on its type and the role
+// of the agent. For BID messages, intermediaries arbitrage by subtracting 1 from
+// the incoming bid and storing the upstream bid for later use in CONFIRM. The
+// seller responds to a BID with a CONFIRM using the exact bid amount.
+// CONFIRM messages are forwarded backward along the chain with intermediaries
+// replacing the bid amount with the upstream bid value.
 func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
     // Prevent processing the same message more than once.
     if contains(msg.History, a.ID) {
@@ -281,6 +316,12 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 
     // Initialize global agent list.
     allAgents = []*Agent{alice, bob, carol, dave}
+
+    // Initialize kernel Trent and register all agents.
+    Trent = NewKernel()
+    for _, agent := range allAgents {
+        Trent.RegisterAgent(agent)
+    }
 
     // Alice initiates the auction by sending a BID message with her currency.
     bidMsg := Message{

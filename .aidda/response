@@ -1,141 +1,393 @@
-<think>
-We have evaluated the `design.md` against the `requirements.md` and found one major discrepancy regarding the hashing in the hypergraph. The requirement states that every node and edge must include a hash of the previous node or edge, but the design only specifies that hyperedges (edges) include hashes of the predecessor nodes. It does not explicitly state that a node includes the hash of the hyperedge that created it.
+---FILE-START filename="/home/stevegt/lab/grid-poc/x/sim3.5/sim3_5.go"---
+package main
 
-Additionally, the design does not fully align with the CWT standard and lacks details on token expiration and garbage collection for speculative branches.
+import (
+    "fmt"
+    "strings"
+)
 
-Below are the updated files with recommendations implemented:
+// simulateArbitrage enables intermediaries to modify the bid.
+var simulateArbitrage = true
 
-1. **issues.md**: Added a new issue regarding the hashing discrepancy.
-2. **design.md**: Updated the hypergraph structure section to include bidirectional hashing and added details on CWT implementation, token expiration, and garbage collection.
-3. **recommendations.md**: Created a new file with specific recommendations to address the discrepancies.
-</think>
-### Recommendations for PromiseGrid System Refinement
+// tradeExecuted prevents multiple trades from executing.
+var tradeExecuted bool = false
 
-#### 1. Token Implementation Enhancements
-**Formal CWT Compliance Implementation**  
-Adopt RFC 8392 CBOR Web Token standards with mandatory claim structures:
-```
-cwt = {
-  1: "issuer_id",          // Registered agent ID
-  5: 1692576000,           // Expiration timestamp
-  7: h'FEEDBEEF...',       // EdDSA signature
-  "prm": {                 // Promise claims
-    "act": "compute:fft",
-    "res": "GPU-8GB",
-    "dl": 1692576000
-  }
-}
-```
-Implement **COSE_Key delegation chains** using nested COSE_Key structures per RFC 8152 to document token transfer history. Add **revocation registries** managed by kernel consensus to handle compromised tokens[3][7][15].
+// allAgents holds the list of all agents in the simulation for global
+// lookup during ledger updates.
+var allAgents []*Agent
 
-**Liability Enforcement Protocol**  
-Introduce **cross-kernel liability tracking** with:
-- Automatic liability-to-claim conversion after deadlines
-- On-chain dispute resolution with bonded validators
-- Reputation-based slashing (e.g., 5% stake penalty per default)
-- Third-party bond underwriters for high-risk promises[1][5][16]
+// Trent is the global kernel that routes all inter-agent messages.
+var Trent *Kernel
 
-#### 2. Hypergraph Structural Improvements
-**Bidirectional Content Addressing**  
-Enforce dual-linkage hashing:
-```
-Node_N = {
-  content: [data_fields],
-  prev_edge: SHA3-256(Hyperedge_X)  // Hash of creating hyperedge
+// Kernel represents the communication kernel that all agents use to
+// send messages. All routing is performed via Trent.
+type Kernel struct {
+    agents map[string]*Agent
 }
 
-Hyperedge_Y = {
-  inputs: [Node_A, Node_B],
-  outputs: [Node_C],
-  prev_nodes: [SHA3-256(Node_A), SHA3-256(Node_B)] 
+// NewKernel creates and returns a new Kernel instance.
+func NewKernel() *Kernel {
+    return &Kernel{
+        agents: make(map[string]*Agent),
+    }
 }
-```
-This creates **Merkle proof chains** where state derivation requires validating both node-to-edge and edge-to-node transitions[5][8][10].
 
-**Speculative Execution Safeguards**  
-Implement **branch auction mechanics**:
-1. Agents propose branches with computation-stake bonds
-2. Conflicting branches trigger BFT voting among bonded peers
-3. Winning branch absorbs 90% of losing bonds
-4. Remaining 10% distributes to voters
-Add **temporal decay function** for unattended branches:  
-```math
-W_b(t) = e^{-\lambda t} \cdot \frac{S_b}{S_{total}}
-``` 
-Where λ=0.01/sec decay rate, S=staked resources[6][9][12].
+// RegisterAgent registers an agent with the kernel.
+func (k *Kernel) RegisterAgent(agent *Agent) {
+    k.agents[agent.ID] = agent
+}
 
-#### 3. Economic Model Upgrades
-**Reputation Tokenization Protocol**  
-Create transferable reputation tokens:
-- Minted based on fulfillment rate (e.g., 1 token per 100 successful redemptions)
-- Delegatable to third-party executors
-- Burnable for priority computation access
-- Governed by quadratic voting in insurance pools[7][16]
+// RouteMessage routes a message from the sender (fromID) to the agent
+// identified by toID. If the destination agent is not registered, an
+// error message is printed.
+func (k *Kernel) RouteMessage(msg Message, fromID, toID string) {
+    if agent, ok := k.agents[toID]; ok {
+        agent.ReceiveMessage(msg, k.agents[fromID])
+    } else {
+        fmt.Printf("Kernel Trent: agent %s not found\n", toID)
+    }
+}
 
-**Automated Insurance Pools**  
-Develop **risk-mutualization engines** with:
-- Dynamic premiums based on:  
-  ```math
-  P = k \cdot \sqrt[3]{\frac{D+1}{F+1} \cdot C \cdot \frac{1}{T_{deadline}}}
-  ```
-  (P=premium, D=defaults, F=fulfillments, C=computation cost, T=time)
-- Collateralized underwriting from specialized agents
-- On-chain actuarial governance using REP tokens[1][5][16]
+// Message represents a bid or confirm message in the simulation.
+// Every message must be either a BID or a CONFIRM and include a personal
+// currency symbol and an amount. OrigBid carries the bid amount received
+// from the upstream agent and is used by intermediaries when generating
+// confirm messages.
+type Message struct {
+    Type    string   // "BID" or "CONFIRM"
+    Amount  float64  // bid or confirm amount
+    Symbol  string   // personal currency symbol (e.g. "ALICE")
+    From    string   // sender agent ID
+    History []string // list of agent IDs that have handled the message
+    OrigBid float64  // original bid amount received from upstream (if any)
+}
 
-#### 4. Execution Workflow Augmentations
-**Deterministic Computation Framework**  
-Require all promises to implement:
-- Pure functional semantics (no side effects)
-- Input/output content addressing
-- Verifiable computation receipts
-- Timeout disclosure requirements
-Enable **zero-knowledge state proofs** for partial liability discharge[13].
+// Agent represents a simulation participant.
+type Agent struct {
+    ID          string
+    Currency    string             // personal currency (e.g. "ALICE")
+    Assets      map[string]float64 // assets ledger by currency
+    Liabilities map[string]float64 // liabilities ledger by currency
+    Peers       []*Agent
+    IsSeller    bool    // Only Dave is the seller.
+    IsBuyer     bool    // Only Alice is the buyer.
+    NextHop     *Agent  // Used to determine message routing via Trent.
+    PrevHop     *Agent  // Used to determine backward routing.
+    upstreamBid float64 // bid amount received from upstream
+}
 
-**Redemption Enforcement Protocol**  
-Implement **four-phase redemption**:
-1. Holder commits redeem tx with bonded stake
-2. Issuer executes/computes within time window
-3. Result published via reply token
-4. Success releases bonds; failure triggers:
-   - Automatic claim token generation
-   - Reputation decay (e.g., 20% score reduction)
-   - Stake seizure after 24h dispute window[3][5][14]
+// PrintBalanceSheet prints the agent's current balance sheet: assets,
+// liabilities, and net worth (assets minus liabilities).
+func (a *Agent) PrintBalanceSheet() {
+    totalAssets := 0.0
+    totalLiabilities := 0.0
 
-#### Implementation Roadmap
+    assetsStr := ""
+    for curr, amt := range a.Assets {
+        assetsStr += fmt.Sprintf("%s: %.2f  ", curr, amt)
+        totalAssets += amt
+    }
 
-| Quarter | Priority Features | Optimization Targets |
-|---------|-------------------|----------------------|
-| 2025-Q1 | COSE/CWT encoding, Bidirectional hashing | Delegation depth analysis |
-| 2025-Q2 | Reputation oracles, Branch auctions | Decay simulation tuning |
-| 2025-Q3 | Insurance pools, ZK state proofs | Risk model validation |
-| 2025-Q4 | Cross-kernel revocation | Latency benchmarking |
+    liabStr := ""
+    for curr, amt := range a.Liabilities {
+        liabStr += fmt.Sprintf("%s: %.2f  ", curr, amt)
+        totalLiabilities += amt
+    }
 
-#### Critical Open Questions
-1. What **formal verification methods** prove temporal consistency across speculative branches?
-2. How do **deep delegation chains** impact liability attribution at scale?
-3. Can **threshold cryptography** enable distributed result verification?
-4. What **pruning heuristics** balance storage efficiency against auditability?
-5. Should **relativistic timestamping** replace absolute deadlines in global deployment?
+    netWorth := totalAssets - totalLiabilities
+    fmt.Printf("Balance Sheet for %s -> Assets: [%s] Liabilities: [%s] "+
+        "Net Worth: %.2f\n", a.ID, assetsStr, liabStr, netWorth)
+}
 
-These recommendations establish rigorous cryptographic accountability while preserving PromiseGrid's core innovations in capability-based distributed computation. Implementation will position the system as a leading framework for verifiable internet-scale computation economies.
+// SendBidMessage sends a BID message to the next agent in the chain via
+// the kernel Trent.
+func (a *Agent) SendBidMessage(msg Message) {
+    if a.NextHop == nil {
+        return
+    }
+    // Append own ID to history.
+    msg.History = append(msg.History, a.ID)
+    fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
+        a.ID, msg.Type, msg.Amount, msg.Symbol, a.NextHop.ID)
+    a.PrintBalanceSheet()
+    // Send the message through the kernel Trent.
+    Trent.RouteMessage(msg, a.ID, a.NextHop.ID)
+}
 
-<references>
-[1] https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing
-[2] https://questdb.com/glossary/market-replay-systems/
-[3] https://nix.dev/manual/nix/2.23/command-ref/nix-store/read-log
-[4] https://microservices.io/patterns/data/event-sourcing.html
-[5] https://immunebytes.com/blog/replay-attack-in-blockchain-networks-and-nodes/
-[6] https://causeway.apache.org/userguide/latest/commandlog/about.html
-[7] https://www.kurrent.io/event-sourcing
-[8] https://dple.github.io/posts/2023/05/replay-attacks-payments/
-[9] https://www.youtube.com/watch?v=ck7t592bvBg
-[10] https://onepointahead.com/2022/11/06/event-sourcing/
-[11] https://martinfowler.com/eaaDev/EventSourcing.html
-[12] https://www.dremio.com/wiki/event-sourcing/
-[13] https://radix.wiki/contents/tech/core-concepts/unspent-transaction-output-utxo-model
-[14] https://www.ituonline.com/tech-definitions/what-is-a-replicated-state-machine/
-[15] https://questdb.com/glossary/append-only-log/
-[16] https://docs.ipfs.tech/concepts/merkle-dag/
-[17] https://en.wikipedia.org/wiki/Write-ahead_logging
-[18] https://ibm-cloud-architecture.github.io/refarch-eda/patterns/event-sourcing/
-</references>
+// SendConfirmMessage sends a CONFIRM message to the previous agent in the
+// chain via the kernel Trent; if there is no previous agent (i.e. the buyer),
+// it processes the final confirmation.
+func (a *Agent) SendConfirmMessage(msg Message) {
+    if a.PrevHop == nil {
+        a.ReceiveFinalConfirm(msg)
+        return
+    }
+    // Append own ID to history.
+    msg.History = append(msg.History, a.ID)
+    fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
+        a.ID, msg.Type, msg.Amount, msg.Symbol, a.PrevHop.ID)
+    a.PrintBalanceSheet()
+    // Send the message through the kernel Trent.
+    Trent.RouteMessage(msg, a.ID, a.PrevHop.ID)
+}
+
+// ReceiveMessage processes an incoming message based on its type and the role
+// of the agent. For BID messages, intermediaries arbitrage by subtracting 1 from
+// the incoming bid and storing the upstream bid for later use in CONFIRM. The
+// seller responds to a BID with a CONFIRM using the exact bid amount.
+// CONFIRM messages are forwarded backward along the chain with intermediaries
+// replacing the bid amount with the upstream bid value.
+func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
+    // Prevent processing the same message more than once.
+    if contains(msg.History, a.ID) {
+        return
+    }
+    if msg.Type == "BID" {
+        // For a BID message, if this agent is the seller, respond with CONFIRM.
+        if a.IsSeller {
+            // Seller uses the bid's amount (using the bid currency).
+            confirmMsg := Message{
+                Type:    "CONFIRM",
+                Amount:  msg.Amount,
+                Symbol:  msg.Symbol, // Use the bid's currency symbol.
+                From:    a.ID,
+                History: []string{a.ID},
+            }
+            fmt.Printf("%s received BID from %s, responds with CONFIRM (%.2f %s)\n",
+                a.ID, sender.ID, confirmMsg.Amount, confirmMsg.Symbol)
+            a.PrintBalanceSheet()
+            a.SendConfirmMessage(confirmMsg)
+            return
+        } else if !a.IsBuyer && simulateArbitrage {
+            // Intermediate agent: store the upstream bid amount.
+            a.upstreamBid = msg.Amount
+            // Arbitrage: subtract 1 from the incoming bid.
+            newBidAmount := msg.Amount - 1
+            newBid := Message{
+                Type:    "BID",
+                Amount:  newBidAmount,
+                Symbol:  a.Currency, // Use own currency for new BID.
+                From:    a.ID,
+                History: append([]string{}, msg.History...),
+                OrigBid: msg.Amount, // Preserve the upstream bid.
+            }
+            fmt.Printf("%s (intermediary) received BID from %s, arbitraging to "+
+                "new BID: %.2f %s\n", a.ID, sender.ID, newBid.Amount,
+                newBid.Symbol)
+            a.PrintBalanceSheet()
+            a.SendBidMessage(newBid)
+            return
+        }
+        // If buyer or not eligible, simply forward the BID.
+        fmt.Printf("%s received BID message from %s, forwarding...\n",
+            a.ID, sender.ID)
+        a.PrintBalanceSheet()
+        a.SendBidMessage(msg)
+    } else if msg.Type == "CONFIRM" {
+        if a.IsBuyer {
+            // Buyer processes the final CONFIRM.
+            a.ReceiveFinalConfirm(msg)
+            return
+        }
+        // Intermediate agent: generate a new CONFIRM using the stored upstream
+        // bid amount and the currency of the previous hop.
+        newConfirm := Message{
+            Type:    "CONFIRM",
+            Amount:  a.upstreamBid,
+            // The confirm uses the upstream agent's currency.
+            Symbol:  a.PrevHop.Currency,
+            From:    msg.From,
+            // Start history with current agent for the backward journey.
+            History: []string{a.ID},
+        }
+        fmt.Printf("%s processed CONFIRM message from %s, generating new "+
+            "CONFIRM with price %.2f %s\n", a.ID, sender.ID, newConfirm.Amount,
+            newConfirm.Symbol)
+        a.PrintBalanceSheet()
+        a.SendConfirmMessage(newConfirm)
+    } else {
+        fmt.Printf("%s received unknown message type %s from %s\n",
+            a.ID, msg.Type, sender.ID)
+    }
+}
+
+// ReceiveFinalConfirm is called by the buyer when no previous agent exists.
+// It finalizes the trade by updating the agents' balance sheets using double-entry
+// accounting. The buyer records a liability in their own currency, while the seller
+// records an asset in their own currency.
+func (a *Agent) ReceiveFinalConfirm(msg Message) {
+    if !tradeExecuted {
+        fmt.Printf("%s (buyer) received final CONFIRM with price %.2f %s, trade "+
+            "executed!\n", a.ID, msg.Amount, msg.Symbol)
+        // Find the seller in the simulation.
+        seller := findSeller(allAgents)
+        if seller != nil {
+            // Buyer creates a liability in their own currency.
+            a.Liabilities[a.Currency] += msg.Amount
+            // Seller recognizes an asset in their own currency.
+            seller.Assets[seller.Currency] += msg.Amount
+            fmt.Printf("Trade ledger updated: %s records liability of %.2f %s, "+
+                "%s records asset of %.2f %s\n", a.ID, msg.Amount,
+                a.Currency, seller.ID, msg.Amount, seller.Currency)
+            a.PrintBalanceSheet()
+            seller.PrintBalanceSheet()
+        } else {
+            fmt.Printf("Seller not found in the simulation.\n")
+        }
+        tradeExecuted = true
+    }
+}
+
+// contains returns true if s is in the slice.
+func contains(slice []string, s string) bool {
+    for _, v := range slice {
+        if v == s {
+            return true
+        }
+    }
+    return false
+}
+
+// findSeller returns the first agent in agents who is marked as the seller.
+func findSeller(agents []*Agent) *Agent {
+    for _, agent := range agents {
+        if agent.IsSeller {
+            return agent
+        }
+    }
+    return nil
+}
+
+// RunSimulation initializes the four agents and simulates a double-auction
+// message pass using personal currencies across a multi-hop network.
+// Scenario: Alice, Bob, and Carol form a BID chain and Bob, Carol, and Dave form
+// the corresponding chain for forwarding. Alice and Dave cannot communicate
+// directly.
+// This simulation reflects the design example where Alice initiates a BID of
+// 10 ALICE, Bob arbitrages to 9 BOB, Carol arbitrages to 8 CAROL, and Dave, the
+// seller, accepts the bid.
+func RunSimulation() (alice, bob, carol, dave *Agent) {
+    tradeExecuted = false
+    alice = &Agent{
+        ID:          "Alice",
+        IsBuyer:     true,
+        Currency:    "ALICE",
+        Assets:      make(map[string]float64),
+        Liabilities: make(map[string]float64),
+    }
+    bob = &Agent{
+        ID:          "Bob",
+        Currency:    "BOB",
+        Assets:      make(map[string]float64),
+        Liabilities: make(map[string]float64),
+    }
+    carol = &Agent{
+        ID:          "Carol",
+        Currency:    "CAROL",
+        Assets:      make(map[string]float64),
+        Liabilities: make(map[string]float64),
+    }
+    dave = &Agent{
+        ID:          "Dave",
+        IsSeller:    true,
+        Currency:    "DAVE",
+        Assets:      make(map[string]float64),
+        Liabilities: make(map[string]float64),
+    }
+
+    // Set up peer connections (full mesh for potential lookups).
+    alice.Peers = []*Agent{bob, carol}
+    bob.Peers = []*Agent{alice, carol, dave}
+    carol.Peers = []*Agent{alice, bob, dave}
+    dave.Peers = []*Agent{bob, carol}
+
+    // Define the chain order using NextHop and PrevHop.
+    // Chain: Alice → Bob → Carol → Dave.
+    alice.NextHop = bob
+    alice.PrevHop = nil
+
+    bob.NextHop = carol
+    bob.PrevHop = alice
+
+    carol.NextHop = dave
+    carol.PrevHop = bob
+
+    dave.NextHop = nil
+    dave.PrevHop = carol
+
+    // Initialize global agent list.
+    allAgents = []*Agent{alice, bob, carol, dave}
+
+    // Initialize kernel Trent and register all agents.
+    Trent = NewKernel()
+    for _, agent := range allAgents {
+        Trent.RegisterAgent(agent)
+    }
+
+    // Alice initiates the auction by sending a BID message with her currency.
+    bidMsg := Message{
+        Type:    "BID",
+        Amount:  10.0,
+        Symbol:  alice.Currency,
+        From:    alice.ID,
+        History: []string{},
+    }
+    alice.SendBidMessage(bidMsg)
+    return alice, bob, carol, dave
+}
+
+// simulateAuction runs the simulation and prints final agent ledger
+// balance sheets.
+func simulateAuction() {
+    alice, bob, carol, dave := RunSimulation()
+    fmt.Println("\nFinal Ledger Balance Sheets:")
+    alice.PrintBalanceSheet()
+    bob.PrintBalanceSheet()
+    carol.PrintBalanceSheet()
+    dave.PrintBalanceSheet()
+}
+
+func main() {
+    fmt.Println(strings.Repeat("=", 70))
+    fmt.Println("Starting Auction Simulation")
+    fmt.Println(strings.Repeat("=", 70))
+    simulateAuction()
+}
+---FILE-END filename="/home/stevegt/lab/grid-poc/x/sim3.5/sim3_5.go"---
+
+
+---FILE-START filename="/home/stevegt/lab/grid-poc/x/sim3.5/sim3_5_test.go"---
+package main
+
+import "testing"
+
+// TestSimulationTrade verifies that a trade occurs during the simulation.
+// With arbitrage enabled, intermediaries modify the BID such that a BID of 10
+// becomes 9 before reaching the seller, and then 8 for the last hop.
+// The seller responds with a CONFIRM using the received bid amount (8).
+// Intermediaries then propagate confirmation using the original upstream bid:
+// Carol sends CONFIRM with 9 (from Bob's original bid) to Bob, and Bob sends
+// CONFIRM with 10 (from Alice's bid) to Alice. Therefore, after the trade,
+// we expect the buyer (Alice) to have a liability entry for 10 ALICE and the
+// seller (Dave) to have an asset entry for 10 DAVE.
+func TestSimulationTrade(t *testing.T) {
+    alice, _, _, dave := RunSimulation()
+    // With arbitrage, the final trade executes at a confirm price of 10.
+    expectedBuyerLiability := 10.0
+    expectedSellerAsset := 10.0
+
+    // Check buyer's liability in their own currency.
+    buyerLiability := alice.Liabilities[alice.Currency]
+    if buyerLiability != expectedBuyerLiability {
+        t.Errorf("Expected Alice liability in %s to be %.2f, got %.2f",
+            alice.Currency, expectedBuyerLiability, buyerLiability)
+    }
+
+    // Check seller's asset in their own currency.
+    sellerAsset := dave.Assets[dave.Currency]
+    if sellerAsset != expectedSellerAsset {
+        t.Errorf("Expected Dave asset in %s to be %.2f, got %.2f",
+            dave.Currency, expectedSellerAsset, sellerAsset)
+    }
+}
+---FILE-END filename="/home/stevegt/lab/grid-poc/x/sim3.5/sim3_5_test.go"---

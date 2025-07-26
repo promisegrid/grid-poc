@@ -17,14 +17,14 @@ func TestSimulationTrade(t *testing.T) {
     expectedBuyerLiability := 10.0
     expectedSellerAsset := 10.0
 
-    // Check buyer's liability in their own currency
+    // Check buyer's liability in their own currency.
     buyerLiability := alice.Liabilities[alice.Currency]
     if buyerLiability != expectedBuyerLiability {
         t.Errorf("Expected Alice liability in %s to be %.2f, got %.2f",
             alice.Currency, expectedBuyerLiability, buyerLiability)
     }
 
-    // Check seller's asset in their own currency
+    // Check seller's asset in their own currency.
     sellerAsset := dave.Assets[dave.Currency]
     if sellerAsset != expectedSellerAsset {
         t.Errorf("Expected Dave asset in %s to be %.2f, got %.2f",

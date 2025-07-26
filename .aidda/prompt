@@ -18,11 +18,11 @@ In:
   x/sim3.5/issues.md
   x/sim3.5/recommendations.md
   x/sim3.5/references.md
-  x/sim3.5/main.go
-  x/sim3.5/main_test.go
+  x/sim3.5/sim3_5.go
+  x/sim3.5/sim3_5_test.go
 Out:
-  x/sim3.5/main.go
-  x/sim3.5/main_test.go
+  x/sim3.5/sim3_5.go
+  x/sim3.5/sim3_5_test.go
 References:
   x/sim3.5/references.md
 
