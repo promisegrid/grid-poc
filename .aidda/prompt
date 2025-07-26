@@ -6,18 +6,14 @@ refactor to a standard open market
   The current model is a bit too rigid, and does not allow for the
   flexibility needed to support a wide range of use cases.
 - the kernel is the exchange; all agents only talk to the exchange
-- among other changes, get rid of these fields in the Agent struct:
-  
-    Peers       []*Agent
-    IsSeller    bool    // Only Dave is the seller.
-    IsBuyer     bool    // Only Alice is the buyer.
-    NextHop     *Agent  // Used to determine message routing via Trent.
-    PrevHop     *Agent  // Used to determine backward routing.
+- removeBidOrder and removeAskOrder MUST take an order ID as
+  argument, not an agent ID.  
+- balance sheets MUST show a balance of assets and liabilities, per
+  the double-entry accounting model and the fundamental
+  accounting equation: Assets = Liabilities + Equity.  
+- As such, each transaction MUST debit an asset and credit a
+  liability, or debit a liability and credit an asset.  
 
-- among other changes, get rid of these fields in the Message struct:
-
-    History []string // list of agent IDs that have handled the message
-    OrigBid float64  // original bid amount received from upstream (if any)
 
 
 Sysmsg: 
