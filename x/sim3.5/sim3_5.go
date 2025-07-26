@@ -55,10 +55,11 @@ func (k *Kernel) RegisterAgent(agent *Agent) {
 // SubmitOrder processes an order (BID or ASK) submitted by an agent.
 // It attempts to match the order with an opposing order in the order book.
 // For a trade to match, the Message.Symbol field must indicate the target
-// personal currency. When a match is found, the trade is executed as a
-// bilateral swap: the buyer receives the seller's personal currency as an
-// asset while incurring a liability in his own currency, and vice versa for
-// the seller. A trade confirmation message is then sent to both participants.
+// personal currency, and if the GoodSymbol field is provided then both orders
+// must match on GoodSymbol and GoodQty as well. When a match is found, the trade
+// is executed as a bilateral swap: the buyer receives the seller's personal
+// currency as an asset while incurring a liability in his own currency, and vice-versa
+// for the seller. A trade confirmation message is then sent to both participants.
 func (k *Kernel) SubmitOrder(order Message) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
@@ -69,6 +70,14 @@ func (k *Kernel) SubmitOrder(order Message) {
 		k.bids = append(k.bids, order)
 		// Attempt to match with an existing ask order.
 		for _, ask := range k.asks {
+			// Check if the good or service is involved; if either order specifies a
+			// GoodSymbol then both must match in GoodSymbol and GoodQty.
+			if order.GoodSymbol != "" || ask.GoodSymbol != "" {
+				if order.GoodSymbol != ask.GoodSymbol ||
+					order.GoodQty != ask.GoodQty {
+					continue
+				}
+			}
 			if order.Amount >= ask.Amount &&
 				order.Symbol == ask.Symbol {
 				// A match is found; execute trade.
@@ -91,11 +100,12 @@ func (k *Kernel) SubmitOrder(order Message) {
 				seller.Liabilities[seller.PersonalCurrency] += tradePrice
 				// Create a confirmation message.
 				confirmMsg := Message{
-					Type:   "CONFIRM",
-					Amount: tradePrice,
-					// The symbol indicates the personal currency traded.
-					Symbol: order.Symbol,
-					From:   "Exchange",
+					Type:       "CONFIRM",
+					Amount:     tradePrice,
+					Symbol:     order.Symbol,
+					From:       "Exchange",
+					GoodSymbol: order.GoodSymbol,
+					GoodQty:    order.GoodQty,
 				}
 				buyer.ReceiveConfirm(confirmMsg)
 				seller.ReceiveConfirm(confirmMsg)
@@ -110,6 +120,13 @@ func (k *Kernel) SubmitOrder(order Message) {
 		k.asks = append(k.asks, order)
 		// Attempt to match with an existing bid order.
 		for _, bid := range k.bids {
+			// Check for matching goods if specified.
+			if order.GoodSymbol != "" || bid.GoodSymbol != "" {
+				if order.GoodSymbol != bid.GoodSymbol ||
+					order.GoodQty != bid.GoodQty {
+					continue
+				}
+			}
 			if bid.Amount >= order.Amount &&
 				bid.Symbol == order.Symbol {
 				tradePrice := bid.Amount
@@ -127,10 +144,12 @@ func (k *Kernel) SubmitOrder(order Message) {
 				seller.Assets[buyer.PersonalCurrency] += tradePrice
 				seller.Liabilities[seller.PersonalCurrency] += tradePrice
 				confirmMsg := Message{
-					Type:   "CONFIRM",
-					Amount: tradePrice,
-					Symbol: order.Symbol,
-					From:   "Exchange",
+					Type:       "CONFIRM",
+					Amount:     tradePrice,
+					Symbol:     order.Symbol,
+					From:       "Exchange",
+					GoodSymbol: order.GoodSymbol,
+					GoodQty:    order.GoodQty,
 				}
 				buyer.ReceiveConfirm(confirmMsg)
 				seller.ReceiveConfirm(confirmMsg)
@@ -167,14 +186,18 @@ func (k *Kernel) removeAskOrder(orderID string) {
 
 // Message represents an order or trade confirmation in the exchange.
 // The message type can be "BID", "ASK", or "CONFIRM". Each order message is
-// identified by a unique OrderID. The Symbol field indicates the target
-// personal currency being traded.
+// identified by a unique OrderID. The Symbol field indicates the personal
+// currency being traded. In addition, the GoodSymbol field indicates the
+// good or service involved in the transaction and the GoodQty field specifies
+// the quantity of the good.
 type Message struct {
-	OrderID string  // Unique identifier for the order
-	Type    string  // "BID", "ASK", or "CONFIRM"
-	Amount  float64 // Order amount or confirmed trade price
-	Symbol  string  // Target personal currency (e.g., seller's currency)
-	From    string  // Agent ID that submitted the order (or "Exchange")
+	OrderID    string  // Unique identifier for the order
+	Type       string  // "BID", "ASK", or "CONFIRM"
+	Amount     float64 // Order amount or confirmed trade price
+	Symbol     string  // Target personal currency (e.g., seller's currency)
+	From       string  // Agent ID that submitted the order (or "Exchange")
+	GoodSymbol string  // Indicates the specific good or service being exchanged
+	GoodQty    float64 // Quantity of the good or service being exchanged
 }
 
 // Agent represents a market participant. Agents hold their own balance
@@ -182,10 +205,10 @@ type Message struct {
 // double-entry accounting model where Assets = Liabilities + Equity. In addition,
 // each agent issues its own personal currency used to transact on the exchange.
 type Agent struct {
-	ID              string
+	ID               string
 	PersonalCurrency string
-	Assets          map[string]float64 // Ledger of assets by account name.
-	Liabilities     map[string]float64 // Ledger of liabilities by account name.
+	Assets           map[string]float64 // Ledger of assets by account name.
+	Liabilities      map[string]float64 // Ledger of liabilities by account name.
 }
 
 // PrintBalanceSheet prints the agent's current balance sheet, showing their
@@ -207,13 +230,14 @@ func (a *Agent) PrintBalanceSheet() {
 	}
 
 	equity := totalAssets - totalLiabilities
-	fmt.Printf("Balance Sheet for %s -> Assets: [%s] Liabilities: [%s] "+
-		"Equity: %.2f\n", a.ID, assetsStr, liabStr, equity)
+	fmt.Printf("Balance Sheet for %s -> Assets: [%s] Liabilities: [%s] Equity: %.2f\n",
+		a.ID, assetsStr, liabStr, equity)
 }
 
 // SubmitOrder allows an agent to submit an order (BID or ASK) to the exchange.
 // The order must include a unique OrderID. The Symbol field should indicate
-// the target personal currency for the transaction.
+// the target personal currency for the transaction. Optionally, GoodSymbol and
+// GoodQty can specify the good or service being exchanged.
 func (a *Agent) SubmitOrder(order Message) {
 	fmt.Printf("%s submits %s order (OrderID: %s, %.2f %s)\n",
 		a.ID, order.Type, order.OrderID, order.Amount, order.Symbol)
@@ -222,8 +246,8 @@ func (a *Agent) SubmitOrder(order Message) {
 
 // ReceiveConfirm processes a trade confirmation message from the exchange.
 func (a *Agent) ReceiveConfirm(msg Message) {
-	fmt.Printf("%s receives CONFIRM: Trade executed at price %.2f %s "+
-		"by %s\n", a.ID, msg.Amount, msg.Symbol, msg.From)
+	fmt.Printf("%s receives CONFIRM: Trade executed at price %.2f %s by %s\n",
+		a.ID, msg.Amount, msg.Symbol, msg.From)
 	a.PrintBalanceSheet()
 }
 
@@ -238,28 +262,28 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 	// Initialize agents with empty ledger maps and assign unique personal
 	// currencies. Here we set the personal currency to be the same as the ID.
 	alice = &Agent{
-		ID:              "Alice",
+		ID:               "Alice",
 		PersonalCurrency: "Alice",
-		Assets:          make(map[string]float64),
-		Liabilities:     make(map[string]float64),
+		Assets:           make(map[string]float64),
+		Liabilities:      make(map[string]float64),
 	}
 	bob = &Agent{
-		ID:              "Bob",
+		ID:               "Bob",
 		PersonalCurrency: "Bob",
-		Assets:          make(map[string]float64),
-		Liabilities:     make(map[string]float64),
+		Assets:           make(map[string]float64),
+		Liabilities:      make(map[string]float64),
 	}
 	carol = &Agent{
-		ID:              "Carol",
+		ID:               "Carol",
 		PersonalCurrency: "Carol",
-		Assets:          make(map[string]float64),
-		Liabilities:     make(map[string]float64),
+		Assets:           make(map[string]float64),
+		Liabilities:      make(map[string]float64),
 	}
 	dave = &Agent{
-		ID:              "Dave",
+		ID:               "Dave",
 		PersonalCurrency: "Dave",
-		Assets:          make(map[string]float64),
-		Liabilities:     make(map[string]float64),
+		Assets:           make(map[string]float64),
+		Liabilities:      make(map[string]float64),
 	}
 
 	// Initialize global agent list.
@@ -273,6 +297,7 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 
 	// Simulation: Alice (buyer) submits a BID order. She indicates that she
 	// wishes to acquire Dave's personal currency, so the Symbol is set to "Dave".
+	// In this example, no specific good is traded so GoodSymbol is left empty.
 	bidMsg := Message{
 		OrderID: "BID1",
 		Type:    "BID",
