@@ -32,6 +32,9 @@ refactor to a standard open market
   of goods and services in each agent's balance sheet.  A message MAY
   include a personal currency symbol in the GoodSymbol field; this
   ability MUST be used when trading personal currencies.
+- there MUST be a Message.String method and it MUST be used when
+  printing messages.  The String method MUST return a string that
+  includes all fields of the message.
 
 
 

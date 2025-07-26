@@ -43,3 +43,4 @@ func TestSimulationTrade(t *testing.T) {
 			expectedValue, sellerLiability)
 	}
 }
+
