@@ -1,4 +1,24 @@
-refactor the code such that all agents communicate via a kernel named Trent
+refactor to a standard open market
+
+- refactor the code such that it uses a standard open market model,
+  where agents can BID and ASK.  The kernel is the matching engine and
+  sends CONFIRM messages to the agents when a bid or ask is matched.
+  The current model is a bit too rigid, and does not allow for the
+  flexibility needed to support a wide range of use cases.
+- the kernel is the exchange; all agents only talk to the exchange
+- among other changes, get rid of these fields in the Agent struct:
+  
+    Peers       []*Agent
+    IsSeller    bool    // Only Dave is the seller.
+    IsBuyer     bool    // Only Alice is the buyer.
+    NextHop     *Agent  // Used to determine message routing via Trent.
+    PrevHop     *Agent  // Used to determine backward routing.
+
+- among other changes, get rid of these fields in the Message struct:
+
+    History []string // list of agent IDs that have handled the message
+    OrigBid float64  // original bid amount received from upstream (if any)
+
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make

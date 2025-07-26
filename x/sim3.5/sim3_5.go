@@ -5,78 +5,138 @@ import (
     "strings"
 )
 
-// simulateArbitrage enables intermediaries to modify the bid.
-var simulateArbitrage = true
-
-// tradeExecuted prevents multiple trades from executing.
-var tradeExecuted bool = false
-
-// allAgents holds the list of all agents in the simulation for global
-// lookup during ledger updates.
+// Global list of agents and the exchange kernel.
 var allAgents []*Agent
-
-// Trent is the global kernel that routes all inter-agent messages.
 var Trent *Kernel
 
-// Kernel represents the communication kernel that all agents use to
-// send messages. All routing is performed via Trent.
+// Kernel represents the exchange that matches orders from buyers and sellers.
+// It maintains order books for bids and asks.
 type Kernel struct {
     agents map[string]*Agent
+    bids   []Message
+    asks   []Message
 }
 
-// NewKernel creates and returns a new Kernel instance.
+// NewKernel creates a new Kernel (exchange) instance.
 func NewKernel() *Kernel {
     return &Kernel{
         agents: make(map[string]*Agent),
+        bids:   []Message{},
+        asks:   []Message{},
     }
 }
 
-// RegisterAgent registers an agent with the kernel.
+// RegisterAgent registers an agent with the exchange.
 func (k *Kernel) RegisterAgent(agent *Agent) {
     k.agents[agent.ID] = agent
 }
 
-// RouteMessage routes a message from the sender (fromID) to the agent
-// identified by toID. If the destination agent is not registered, an
-// error message is printed.
-func (k *Kernel) RouteMessage(msg Message, fromID, toID string) {
-    if agent, ok := k.agents[toID]; ok {
-        agent.ReceiveMessage(msg, k.agents[fromID])
-    } else {
-        fmt.Printf("Kernel Trent: agent %s not found\n", toID)
+// SubmitOrder processes an order (BID or ASK) submitted by an agent and
+// attempts to match it with an opposing order in the order book. When a match
+// is found, the trade is executed at the buyer’s bid price, and both the buyer’s
+// liability and the seller’s asset are updated. A trade confirmation message is
+// sent to both participants.
+func (k *Kernel) SubmitOrder(order Message) {
+    switch order.Type {
+    case "BID":
+        // Add the bid order to the order book.
+        k.bids = append(k.bids, order)
+        // Attempt to match with an existing ask order.
+        for i, ask := range k.asks {
+            if order.Amount >= ask.Amount && order.Symbol == ask.Symbol {
+                // A match is found; the trade price is determined by the buyer's bid.
+                tradePrice := order.Amount
+                buyer := k.agents[order.From]
+                seller := k.agents[ask.From]
+                // Update the ledgers of the buyer and seller.
+                buyer.Liabilities[buyer.Currency] += tradePrice
+                seller.Assets[seller.Currency] += tradePrice
+                // Create a confirmation message from the exchange.
+                confirmMsg := Message{
+                    Type:   "CONFIRM",
+                    Amount: tradePrice,
+                    Symbol: order.Symbol,
+                    From:   "Exchange",
+                }
+                buyer.ReceiveConfirm(confirmMsg)
+                seller.ReceiveConfirm(confirmMsg)
+                // Remove the matched ask from the ask order book.
+                k.asks = append(k.asks[:i], k.asks[i+1:]...)
+                // Remove the bid order since it has been matched.
+                k.removeBidOrder(order.From)
+                return
+            }
+        }
+    case "ASK":
+        // Add the ask order to the order book.
+        k.asks = append(k.asks, order)
+        // Attempt to match with an existing bid order.
+        for i, bid := range k.bids {
+            if bid.Amount >= order.Amount && bid.Symbol == order.Symbol {
+                tradePrice := bid.Amount
+                buyer := k.agents[bid.From]
+                seller := k.agents[order.From]
+                buyer.Liabilities[buyer.Currency] += tradePrice
+                seller.Assets[seller.Currency] += tradePrice
+                confirmMsg := Message{
+                    Type:   "CONFIRM",
+                    Amount: tradePrice,
+                    Symbol: order.Symbol,
+                    From:   "Exchange",
+                }
+                buyer.ReceiveConfirm(confirmMsg)
+                seller.ReceiveConfirm(confirmMsg)
+                // Remove the matched bid from the bid order book.
+                k.bids = append(k.bids[:i], k.bids[i+1:]...)
+                // Remove the ask order from the ask order book.
+                k.removeAskOrder(order.From)
+                return
+            }
+        }
     }
 }
 
-// Message represents a bid or confirm message in the simulation.
-// Every message must be either a BID or a CONFIRM and include a personal
-// currency symbol and an amount. OrigBid carries the bid amount received
-// from the upstream agent and is used by intermediaries when generating
-// confirm messages.
-type Message struct {
-    Type    string   // "BID" or "CONFIRM"
-    Amount  float64  // bid or confirm amount
-    Symbol  string   // personal currency symbol (e.g. "ALICE")
-    From    string   // sender agent ID
-    History []string // list of agent IDs that have handled the message
-    OrigBid float64  // original bid amount received from upstream (if any)
+// removeBidOrder removes a bid order from the order book for the given agent ID.
+func (k *Kernel) removeBidOrder(agentID string) {
+    for i, bid := range k.bids {
+        if bid.From == agentID {
+            k.bids = append(k.bids[:i], k.bids[i+1:]...)
+            return
+        }
+    }
 }
 
-// Agent represents a simulation participant.
+// removeAskOrder removes an ask order from the order book for the given agent ID.
+func (k *Kernel) removeAskOrder(agentID string) {
+    for i, ask := range k.asks {
+        if ask.From == agentID {
+            k.asks = append(k.asks[:i], k.asks[i+1:]...)
+            return
+        }
+    }
+}
+
+// Message represents an order or trade confirmation in the exchange.
+// The message type can be "BID", "ASK", or "CONFIRM".
+type Message struct {
+    Type   string  // "BID", "ASK", or "CONFIRM"
+    Amount float64 // Order amount or confirmed trade price
+    Symbol string  // Order symbol (e.g., "TOKEN")
+    From   string  // Agent ID that submitted the order (or "Exchange" for CONFIRM)
+}
+
+// Agent represents a market participant. Agents hold their own currency,
+// asset balances, and liability records. In this open market model, agents
+// interact solely with the exchange kernel.
 type Agent struct {
     ID          string
-    Currency    string             // personal currency (e.g. "ALICE")
-    Assets      map[string]float64 // assets ledger by currency
-    Liabilities map[string]float64 // liabilities ledger by currency
-    Peers       []*Agent
-    IsSeller    bool    // Only Dave is the seller.
-    IsBuyer     bool    // Only Alice is the buyer.
-    NextHop     *Agent  // Used to determine message routing via Trent.
-    PrevHop     *Agent  // Used to determine backward routing.
-    upstreamBid float64 // bid amount received from upstream
+    Currency    string             // Personal currency identifier (e.g., "ALICE")
+    Assets      map[string]float64 // Ledger of assets by currency
+    Liabilities map[string]float64 // Ledger of liabilities by currency
 }
 
-// PrintBalanceSheet prints the agent's current balance sheet: assets,
-// liabilities, and net worth (assets minus liabilities).
+// PrintBalanceSheet prints the agent's current balance sheet, showing their
+// assets, liabilities, and net worth.
 func (a *Agent) PrintBalanceSheet() {
     totalAssets := 0.0
     totalLiabilities := 0.0
@@ -98,178 +158,27 @@ func (a *Agent) PrintBalanceSheet() {
         "Net Worth: %.2f\n", a.ID, assetsStr, liabStr, netWorth)
 }
 
-// SendBidMessage sends a BID message to the next agent in the chain via
-// the kernel Trent.
-func (a *Agent) SendBidMessage(msg Message) {
-    if a.NextHop == nil {
-        return
-    }
-    // Append own ID to history.
-    msg.History = append(msg.History, a.ID)
-    fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
-        a.ID, msg.Type, msg.Amount, msg.Symbol, a.NextHop.ID)
+// SubmitOrder allows an agent to submit an order (BID or ASK) to the exchange.
+func (a *Agent) SubmitOrder(order Message) {
+    fmt.Printf("%s submits %s order (%.2f %s)\n", a.ID, order.Type,
+        order.Amount, order.Symbol)
+    Trent.SubmitOrder(order)
+}
+
+// ReceiveConfirm processes a trade confirmation message from the exchange.
+func (a *Agent) ReceiveConfirm(msg Message) {
+    fmt.Printf("%s receives CONFIRM: Trade executed at price %.2f %s by %s\n",
+        a.ID, msg.Amount, msg.Symbol, msg.From)
     a.PrintBalanceSheet()
-    // Send the message through the kernel Trent.
-    Trent.RouteMessage(msg, a.ID, a.NextHop.ID)
 }
 
-// SendConfirmMessage sends a CONFIRM message to the previous agent in the
-// chain via the kernel Trent; if there is no previous agent (i.e. the buyer),
-// it processes the final confirmation.
-func (a *Agent) SendConfirmMessage(msg Message) {
-    if a.PrevHop == nil {
-        a.ReceiveFinalConfirm(msg)
-        return
-    }
-    // Append own ID to history.
-    msg.History = append(msg.History, a.ID)
-    fmt.Printf("%s sends %s message (%.2f %s) to %s\n",
-        a.ID, msg.Type, msg.Amount, msg.Symbol, a.PrevHop.ID)
-    a.PrintBalanceSheet()
-    // Send the message through the kernel Trent.
-    Trent.RouteMessage(msg, a.ID, a.PrevHop.ID)
-}
-
-// ReceiveMessage processes an incoming message based on its type and the role
-// of the agent. For BID messages, intermediaries arbitrage by subtracting 1 from
-// the incoming bid and storing the upstream bid for later use in CONFIRM. The
-// seller responds to a BID with a CONFIRM using the exact bid amount.
-// CONFIRM messages are forwarded backward along the chain with intermediaries
-// replacing the bid amount with the upstream bid value.
-func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
-    // Prevent processing the same message more than once.
-    if contains(msg.History, a.ID) {
-        return
-    }
-    if msg.Type == "BID" {
-        // For a BID message, if this agent is the seller, respond with CONFIRM.
-        if a.IsSeller {
-            // Seller uses the bid's amount (using the bid currency).
-            confirmMsg := Message{
-                Type:    "CONFIRM",
-                Amount:  msg.Amount,
-                Symbol:  msg.Symbol, // Use the bid's currency symbol.
-                From:    a.ID,
-                History: []string{a.ID},
-            }
-            fmt.Printf("%s received BID from %s, responds with CONFIRM (%.2f %s)\n",
-                a.ID, sender.ID, confirmMsg.Amount, confirmMsg.Symbol)
-            a.PrintBalanceSheet()
-            a.SendConfirmMessage(confirmMsg)
-            return
-        } else if !a.IsBuyer && simulateArbitrage {
-            // Intermediate agent: store the upstream bid amount.
-            a.upstreamBid = msg.Amount
-            // Arbitrage: subtract 1 from the incoming bid.
-            newBidAmount := msg.Amount - 1
-            newBid := Message{
-                Type:    "BID",
-                Amount:  newBidAmount,
-                Symbol:  a.Currency, // Use own currency for new BID.
-                From:    a.ID,
-                History: append([]string{}, msg.History...),
-                OrigBid: msg.Amount, // Preserve the upstream bid.
-            }
-            fmt.Printf("%s (intermediary) received BID from %s, arbitraging to "+
-                "new BID: %.2f %s\n", a.ID, sender.ID, newBid.Amount,
-                newBid.Symbol)
-            a.PrintBalanceSheet()
-            a.SendBidMessage(newBid)
-            return
-        }
-        // If buyer or not eligible, simply forward the BID.
-        fmt.Printf("%s received BID message from %s, forwarding...\n",
-            a.ID, sender.ID)
-        a.PrintBalanceSheet()
-        a.SendBidMessage(msg)
-    } else if msg.Type == "CONFIRM" {
-        if a.IsBuyer {
-            // Buyer processes the final CONFIRM.
-            a.ReceiveFinalConfirm(msg)
-            return
-        }
-        // Intermediate agent: generate a new CONFIRM using the stored upstream
-        // bid amount and the currency of the previous hop.
-        newConfirm := Message{
-            Type:    "CONFIRM",
-            Amount:  a.upstreamBid,
-            // The confirm uses the upstream agent's currency.
-            Symbol:  a.PrevHop.Currency,
-            From:    msg.From,
-            // Start history with current agent for the backward journey.
-            History: []string{a.ID},
-        }
-        fmt.Printf("%s processed CONFIRM message from %s, generating new "+
-            "CONFIRM with price %.2f %s\n", a.ID, sender.ID, newConfirm.Amount,
-            newConfirm.Symbol)
-        a.PrintBalanceSheet()
-        a.SendConfirmMessage(newConfirm)
-    } else {
-        fmt.Printf("%s received unknown message type %s from %s\n",
-            a.ID, msg.Type, sender.ID)
-    }
-}
-
-// ReceiveFinalConfirm is called by the buyer when no previous agent exists.
-// It finalizes the trade by updating the agents' balance sheets using double-entry
-// accounting. The buyer records a liability in their own currency, while the seller
-// records an asset in their own currency.
-func (a *Agent) ReceiveFinalConfirm(msg Message) {
-    if !tradeExecuted {
-        fmt.Printf("%s (buyer) received final CONFIRM with price %.2f %s, trade "+
-            "executed!\n", a.ID, msg.Amount, msg.Symbol)
-        // Find the seller in the simulation.
-        seller := findSeller(allAgents)
-        if seller != nil {
-            // Buyer creates a liability in their own currency.
-            a.Liabilities[a.Currency] += msg.Amount
-            // Seller recognizes an asset in their own currency.
-            seller.Assets[seller.Currency] += msg.Amount
-            fmt.Printf("Trade ledger updated: %s records liability of %.2f %s, "+
-                "%s records asset of %.2f %s\n", a.ID, msg.Amount,
-                a.Currency, seller.ID, msg.Amount, seller.Currency)
-            a.PrintBalanceSheet()
-            seller.PrintBalanceSheet()
-        } else {
-            fmt.Printf("Seller not found in the simulation.\n")
-        }
-        tradeExecuted = true
-    }
-}
-
-// contains returns true if s is in the slice.
-func contains(slice []string, s string) bool {
-    for _, v := range slice {
-        if v == s {
-            return true
-        }
-    }
-    return false
-}
-
-// findSeller returns the first agent in agents who is marked as the seller.
-func findSeller(agents []*Agent) *Agent {
-    for _, agent := range agents {
-        if agent.IsSeller {
-            return agent
-        }
-    }
-    return nil
-}
-
-// RunSimulation initializes the four agents and simulates a double-auction
-// message pass using personal currencies across a multi-hop network.
-// Scenario: Alice, Bob, and Carol form a BID chain and Bob, Carol, and Dave form
-// the corresponding chain for forwarding. Alice and Dave cannot communicate
-// directly.
-// This simulation reflects the design example where Alice initiates a BID of
-// 10 ALICE, Bob arbitrages to 9 BOB, Carol arbitrages to 8 CAROL, and Dave, the
-// seller, accepts the bid.
+// RunSimulation initializes four agents and simulates a basic open market trade.
+// In this simulation, the buyer (Alice) submits a BID order and the seller (Dave)
+// submits an ASK order. If the BID price is equal to or exceeds the ASK price and
+// the order symbols match, the exchange matches the orders and executes a trade.
 func RunSimulation() (alice, bob, carol, dave *Agent) {
-    tradeExecuted = false
     alice = &Agent{
         ID:          "Alice",
-        IsBuyer:     true,
         Currency:    "ALICE",
         Assets:      make(map[string]float64),
         Liabilities: make(map[string]float64),
@@ -288,67 +197,44 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
     }
     dave = &Agent{
         ID:          "Dave",
-        IsSeller:    true,
         Currency:    "DAVE",
         Assets:      make(map[string]float64),
         Liabilities: make(map[string]float64),
     }
 
-    // Set up peer connections (full mesh for potential lookups).
-    alice.Peers = []*Agent{bob, carol}
-    bob.Peers = []*Agent{alice, carol, dave}
-    carol.Peers = []*Agent{alice, bob, dave}
-    dave.Peers = []*Agent{bob, carol}
-
-    // Define the chain order using NextHop and PrevHop.
-    // Chain: Alice → Bob → Carol → Dave.
-    alice.NextHop = bob
-    alice.PrevHop = nil
-
-    bob.NextHop = carol
-    bob.PrevHop = alice
-
-    carol.NextHop = dave
-    carol.PrevHop = bob
-
-    dave.NextHop = nil
-    dave.PrevHop = carol
-
     // Initialize global agent list.
     allAgents = []*Agent{alice, bob, carol, dave}
 
-    // Initialize kernel Trent and register all agents.
+    // Initialize the exchange kernel and register all agents.
     Trent = NewKernel()
     for _, agent := range allAgents {
         Trent.RegisterAgent(agent)
     }
 
-    // Alice initiates the auction by sending a BID message with her currency.
+    // Simulation: Alice (buyer) submits a BID order.
     bidMsg := Message{
-        Type:    "BID",
-        Amount:  10.0,
-        Symbol:  alice.Currency,
-        From:    alice.ID,
-        History: []string{},
+        Type:   "BID",
+        Amount: 10.0,
+        Symbol: "TOKEN",
+        From:   alice.ID,
     }
-    alice.SendBidMessage(bidMsg)
-    return alice, bob, carol, dave
-}
+    alice.SubmitOrder(bidMsg)
 
-// simulateAuction runs the simulation and prints final agent ledger
-// balance sheets.
-func simulateAuction() {
-    alice, bob, carol, dave := RunSimulation()
-    fmt.Println("\nFinal Ledger Balance Sheets:")
-    alice.PrintBalanceSheet()
-    bob.PrintBalanceSheet()
-    carol.PrintBalanceSheet()
-    dave.PrintBalanceSheet()
+    // Simulation: Dave (seller) submits an ASK order.
+    askMsg := Message{
+        Type:   "ASK",
+        Amount: 8.0,
+        Symbol: "TOKEN",
+        From:   dave.ID,
+    }
+    dave.SubmitOrder(askMsg)
+
+    return alice, bob, carol, dave
 }
 
 func main() {
     fmt.Println(strings.Repeat("=", 70))
-    fmt.Println("Starting Auction Simulation")
+    fmt.Println("Starting Open Market Simulation")
     fmt.Println(strings.Repeat("=", 70))
-    simulateAuction()
+    RunSimulation()
 }
