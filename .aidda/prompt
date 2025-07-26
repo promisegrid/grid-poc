@@ -6,13 +6,25 @@ refactor to a standard open market
   The current model is a bit too rigid, and does not allow for the
   flexibility needed to support a wide range of use cases.
 - the kernel is the exchange; all agents only talk to the exchange
-- removeBidOrder and removeAskOrder MUST take an order ID as
-  argument, not an agent ID.  
 - balance sheets MUST show a balance of assets and liabilities, per
   the double-entry accounting model and the fundamental
   accounting equation: Assets = Liabilities + Equity.  
 - As such, each transaction MUST debit an asset and credit a
   liability, or debit a liability and credit an asset.  
+- each agent MUST issue its own personal currency, which is
+  used to pay for transactions.  The kernel MUST maintain a ledger of
+  all personal currencies, and MUST ensure that each agent's balance
+  sheet is balanced at all times.
+- agents obtain each others' personal currencies by
+  exchanging them in the open market, using the kernel as the
+  matching engine.  
+- the Message.Symbol field MUST be used to indicate the
+  personal currency being used for the transaction.  The kernel MUST
+  ensure that each agent's balance sheet is balanced at all times, and
+  MUST ensure that each agent's personal currency is unique and
+  distinct from all other agents' personal currencies.  The Message.Symbol
+  field MUST NOT be used to indicate a generic currency such as
+  "TOKEN"
 
 
 
