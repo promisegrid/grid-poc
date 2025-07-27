@@ -36,8 +36,13 @@ refactor to a standard open market
   printing messages.  The String method MUST return a string that
   includes all fields of the message.
 
+new requirements:
 
-
+- the GoodSymbol field MUST NOT be empty, and the GoodQty field MUST
+  NOT be zero.  These fields MUST be used to indicate the specific
+  good or service being exchanged, such as trading and "apple" or
+  executing "f(x)". The GoodSymbol field MUST NOT be used to indicate
+  a generic good or service such as "GOODS" or "SERVICES".
 
 Sysmsg: 
   You are a protocol designer and an expert Go programmer. Please make

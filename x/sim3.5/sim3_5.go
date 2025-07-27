@@ -58,11 +58,20 @@ func (k *Kernel) RegisterAgent(agent *Agent) {
 // personal currency, and if the GoodSymbol field is provided then both orders
 // must match on GoodSymbol and GoodQty as well. When a match is found, the trade
 // is executed as a bilateral swap: the buyer receives the seller's personal
-// currency as an asset while incurring a liability in his own currency, and vice-versa
-// for the seller. A trade confirmation message is then sent to both participants.
+// currency as an asset while incurring a liability in his own currency, and vice-
+// versa for the seller. A trade confirmation message is then sent to both
+// participants.
 func (k *Kernel) SubmitOrder(order Message) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
+
+	// Validate that the GoodSymbol field is not empty
+	// and GoodQty is non-zero.
+	if order.GoodSymbol == "" || order.GoodQty == 0 {
+		fmt.Printf("Error: Order %s must have non-empty GoodSymbol and "+
+			"non-zero GoodQty\n", order.OrderID)
+		return
+	}
 
 	switch order.Type {
 	case "BID":
@@ -70,8 +79,9 @@ func (k *Kernel) SubmitOrder(order Message) {
 		k.bids = append(k.bids, order)
 		// Attempt to match with an existing ask order.
 		for _, ask := range k.asks {
-			// Check if the good or service is involved; if either order specifies a
-			// GoodSymbol then both must match in GoodSymbol and GoodQty.
+			// Check if the good or service is involved; if either order
+			// specifies a GoodSymbol then both must match in GoodSymbol
+			// and GoodQty.
 			if order.GoodSymbol != "" || ask.GoodSymbol != "" {
 				if order.GoodSymbol != ask.GoodSymbol ||
 					order.GoodQty != ask.GoodQty {
@@ -251,14 +261,15 @@ func (a *Agent) PrintBalanceSheet() {
 	}
 
 	equity := totalAssets - totalLiabilities
-	fmt.Printf("Balance Sheet for %s -> Assets: [%s] Liabilities: [%s] Goods: [%s] Equity: %.2f\n",
-		a.ID, assetsStr, liabStr, goodsStr, equity)
+	fmt.Printf("Balance Sheet for %s -> Assets: [%s] Liabilities: [%s] "+
+		"Goods: [%s] Equity: %.2f\n", a.ID, assetsStr, liabStr,
+		goodsStr, equity)
 }
 
 // SubmitOrder allows an agent to submit an order (BID or ASK) to the exchange.
-// The order must include a unique OrderID. The Symbol field should indicate
-// the target personal currency for the transaction. Optionally, GoodSymbol and
-// GoodQty can specify the good or service being exchanged.
+// The order must include a unique OrderID. The Symbol field should indicate the
+// target personal currency for the transaction. The GoodSymbol field and GoodQty
+// must be provided and indicate the specific good or service being exchanged.
 func (a *Agent) SubmitOrder(order Message) {
 	fmt.Printf("%s submits %s order (%s)\n", a.ID, order.Type, order.String())
 	Exchange.SubmitOrder(order)
@@ -273,10 +284,12 @@ func (a *Agent) ReceiveConfirm(msg Message) {
 // RunSimulation initializes four agents and simulates a basic open market trade.
 // Each agent issues its own personal currency. In this simulation, the buyer
 // (Alice) submits a BID order to acquire Dave's personal currency, and the seller
-// (Dave) submits an ASK order offering his own currency. When the BID and ASK match,
-// the exchange performs a balanced double-entry transaction: the buyer receives
-// Dave's currency (asset) and incurs a liability in his own currency, while the seller
-// receives Alice's currency (asset) and accrues a liability in his own currency.
+// (Dave) submits an ASK order offering his own currency. Both orders specify a
+// GoodSymbol and GoodQty to indicate the specific good being exchanged.
+// When the BID and ASK match, the exchange performs a balanced double-entry
+// transaction: the buyer receives Dave's currency (asset) and incurs a liability
+// in his own currency, while the seller receives Alice's currency (asset) and
+// accrues a liability in his own currency.
 func RunSimulation() (alice, bob, carol, dave *Agent) {
 	// Initialize agents with empty ledger maps and assign unique personal
 	// currencies. Here we set the personal currency to be the same as the ID.
@@ -318,25 +331,30 @@ func RunSimulation() (alice, bob, carol, dave *Agent) {
 		Exchange.RegisterAgent(agent)
 	}
 
-	// Simulation: Alice (buyer) submits a BID order. She indicates that she
-	// wishes to acquire Dave's personal currency, so the Symbol is set to "Dave".
-	// In this example, no specific good is traded so GoodSymbol is left empty.
+	// Simulation: Alice (buyer) submits a BID order.
+	// She wishes to acquire Dave's personal currency, so the Symbol is set to "Dave".
+	// Both GoodSymbol and GoodQty are specified to indicate the specific good.
 	bidMsg := Message{
-		OrderID: "BID1",
-		Type:    "BID",
-		Amount:  10.0,
-		Symbol:  "Dave",
-		From:    alice.ID,
+		OrderID:    "BID1",
+		Type:       "BID",
+		Amount:     10.0,
+		Symbol:     "Dave",
+		From:       alice.ID,
+		GoodSymbol: "Dave",
+		GoodQty:    10.0,
 	}
 	alice.SubmitOrder(bidMsg)
 
 	// Simulation: Dave (seller) submits an ASK order offering his own currency.
+	// Both GoodSymbol and GoodQty are specified.
 	askMsg := Message{
-		OrderID: "ASK1",
-		Type:    "ASK",
-		Amount:  10.0,
-		Symbol:  "Dave",
-		From:    dave.ID,
+		OrderID:    "ASK1",
+		Type:       "ASK",
+		Amount:     10.0,
+		Symbol:     "Dave",
+		From:       dave.ID,
+		GoodSymbol: "Dave",
+		GoodQty:    10.0,
 	}
 	dave.SubmitOrder(askMsg)
 
