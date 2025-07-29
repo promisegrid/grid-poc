@@ -34,8 +34,8 @@ type Agent struct {
 	ID          string
 	Currency    string // personal currency (e.g. "ALICE")
 	Balance     float64
-	Assets      map[string]float64   // assets ledger by currency
-	Liabilities map[string]float64   // liabilities ledger by currency
+	Assets      map[string]float64 // assets ledger by currency
+	Liabilities map[string]float64 // liabilities ledger by currency
 	Peers       []*Agent
 	IsSeller    bool // Only Dave is the seller.
 	IsBuyer     bool // Only Alice is the buyer.
@@ -157,11 +157,11 @@ func (a *Agent) ReceiveMessage(msg Message, sender *Agent) {
 		// Intermediate agent: generate a new CONFIRM using the stored upstream
 		// bid amount and the currency of the previous hop.
 		newConfirm := Message{
-			Type:    "CONFIRM",
-			Amount:  a.upstreamBid,
+			Type:   "CONFIRM",
+			Amount: a.upstreamBid,
 			// The confirm uses the upstream agent's currency.
-			Symbol:  a.PrevHop.Currency,
-			From:    msg.From,
+			Symbol: a.PrevHop.Currency,
+			From:   msg.From,
 			// Start history with current agent for the backward journey.
 			History: []string{a.ID},
 		}
