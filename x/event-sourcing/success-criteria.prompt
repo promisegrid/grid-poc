@@ -1,0 +1,14 @@
+write success criteria 
+
+Analyze x/abi-stdio-event-sourcing-probabilities.md and write the
+success criteria to x/success-criteria.md.  The success criteria
+should be a list of requirements that must be met for the system to
+be considered successful.  The criteria should be specific, measurable,
+and testable.  
+
+In:
+  x/abi-stdio-event-sourcing-probabilities.md
+Out:
+  x/success-criteria.md
+
+
