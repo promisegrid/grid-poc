@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/spf13/cobra"
 )
 
 // PromiseGridMessage represents the 5-element CBOR message structure from PromiseGrid
@@ -39,7 +40,8 @@ type CWTClaims struct {
 	CWTID     []byte `cbor:"7,keyasint"` // cti
 }
 
-func main() {
+// example demonstrates CBOR encoding and decoding of PromiseGrid messages
+func example() {
 	// Example: Create a PromiseGrid message
 	msg := PromiseGridMessage{
 		ProtocolTag: "grid",
@@ -76,4 +78,31 @@ func main() {
 	fmt.Printf("  Grid CID: %s\n", decoded.GridCID)
 	fmt.Printf("  CWT Payload: %+v\n", decoded.CWTPayload)
 	fmt.Printf("  Signature: %x\n", decoded.Signature)
+}
+
+// exampleCmd is the Cobra subcommand for running the example
+var exampleCmd = &cobra.Command{
+	Use:   "example",
+	Short: "Run PromiseGrid CBOR encoding/decoding example",
+	Long:  "Demonstrates how to create, encode, and decode PromiseGrid 5-element CBOR messages",
+	Run: func(cmd *cobra.Command, args []string) {
+		example()
+	},
+}
+
+// rootCmd is the root Cobra command
+var rootCmd = &cobra.Command{
+	Use:   "promisegrid",
+	Short: "PromiseGrid CLI - Decentralized Computing System",
+	Long:  "PromiseGrid command-line interface for managing messages and grid operations",
+}
+
+func init() {
+	rootCmd.AddCommand(exampleCmd)
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
+	}
 }

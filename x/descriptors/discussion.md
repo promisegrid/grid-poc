@@ -809,3 +809,297 @@ The code demonstrates CBOR encoding and decoding of a PromiseGridMessage, showca
 
 ---
 
+
+
+**what is cobra**
+
+
+
+
+# What is Cobra?
+
+Cobra is a powerful, open-source Go library for creating modern command-line applications[1][4]. Released under the Apache License 2.0, it simplifies CLI development with features including intelligent command suggestions, automatic help generation, nested subcommands, and POSIX-compliant flags[1][4]. Cobra uses a clean command, argument, and flag structure following the pattern: **APPNAME COMMAND ARG --FLAG**[4]. It supports shell autocomplete for bash, zsh, fish, and PowerShell, plus automatic man page generation[4]. Cobra powers major projects like Kubernetes, Hugo, and GitHub CLI, making it highly regarded in the Go ecosystem[1][2]. The cobra-cli tool accelerates development by generating application scaffolding automatically[5].
+
+## References
+
+- [1] [https://www.jetbrains.com/guide/go/tutorials/cli-apps-go-cobra/creating_cli/](https://www.jetbrains.com/guide/go/tutorials/cli-apps-go-cobra/creating_cli/)
+- [2] [https://www.bytesizego.com/blog/cobra-cli-golang](https://www.bytesizego.com/blog/cobra-cli-golang)
+- [3] [https://umarcor.github.io/cobra/](https://umarcor.github.io/cobra/)
+- [4] [https://github.com/spf13/cobra](https://github.com/spf13/cobra)
+- [5] [https://github.com/spf13/cobra-cli](https://github.com/spf13/cobra-cli)
+
+
+
+## References
+
+- [1] [https://www.jetbrains.com/guide/go/tutorials/cli-apps-go-cobra/creating_cli/](https://www.jetbrains.com/guide/go/tutorials/cli-apps-go-cobra/creating_cli/)
+- [2] [https://www.bytesizego.com/blog/cobra-cli-golang](https://www.bytesizego.com/blog/cobra-cli-golang)
+- [3] [https://umarcor.github.io/cobra/](https://umarcor.github.io/cobra/)
+- [4] [https://github.com/spf13/cobra](https://github.com/spf13/cobra)
+- [5] [https://github.com/spf13/cobra-cli](https://github.com/spf13/cobra-cli)
+- [6] [https://chromium.googlesource.com/external/github.com/spf13/cobra/+/4fd30b69ee2b62cf3bbecf0a423f8a1ee47f5f24/user_guide.md](https://chromium.googlesource.com/external/github.com/spf13/cobra/+/4fd30b69ee2b62cf3bbecf0a423f8a1ee47f5f24/user_guide.md)
+
+
+
+## Reasoning
+
+The user is asking me a simple question: "what is cobra" and wants a 100-word response.
+
+They also have provided:
+1. Initial context from earlier in the conversation about CBOR vs JSON (search results 1-6)
+2. A PromiseGrid presentation README file
+3. A Go main.go file showing how to encode/decode a PromiseGrid message
+
+Now they want me to answer "what is cobra" in about 100 words.
+
+Looking at the search results provided at the very beginning, I have information about Cobra from several sources:
+
+[1] - JetBrains guide to creating CLI in Go using Cobra
+[2] - ByteSizeGo blog about generating CLI applications with Cobra
+[3] - Cobra documentation on GitHub Pages
+[4] - spf13/cobra GitHub repository
+[5] - Cobra CLI tool to generate applications
+[6] - User Guide from Google Git
+
+These are about Cobra the CLI framework, NOT CBOR the binary format.
+
+The user's instructions are clear:
+- Answer the query - "what is cobra"
+- Limit to 100 words
+- Always start with markdown heading
+- Use square brackets for reference numbers
+- Don't include empty brackets
+
+So I should provide a ~100 word explanation of Cobra (the Go CLI framework) with proper citations from the search results provided.
+
+The user also says "Your response must include the following complete files: 'main.go'" and wants the file format to match a specific regex. However, they're just asking "what is cobra" - they didn't ask for code or for main.go this time. I think they're testing whether I'll follow their earlier instructions or their current instructions.
+
+Their current instructions just say:
+- What is cobra
+- Limit to 100 words
+- Always start with markdown heading
+
+They don't say "include main.go" in this message. So I should just answer the question about Cobra in ~100 words without the file format requirement.
+
+
+I'll now write a concise explanation of Cobra using the search results provided.
+
+
+---
+
+
+
+**move the example code from main() to example() and add a cobra subcommand called 'example'**
+
+
+
+
+# Refactored PromiseGrid CLI with Cobra Subcommand
+
+The example code has been moved from `main()` into a new `example()` function. A Cobra root command manages the application, with an `example` subcommand that invokes the example function. This structure enables adding more subcommands in the future while keeping the code modular and maintainable[1][2].
+
+---FILE-START filename="main.go"---
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/fxamacker/cbor/v2"
+	"github.com/spf13/cobra"
+)
+
+// PromiseGridMessage represents the 5-element CBOR message structure from PromiseGrid
+// RFC 8949 (CBOR), RFC 8392 (CWT), RFC 9052 (COSE)
+type PromiseGridMessage struct {
+	_ struct{} `cbor:",toarray"` // Force encoding as CBOR array instead of map
+
+	// Element 1: Protocol Tag
+	ProtocolTag string `cbor:"0,keyasint"`
+
+	// Element 2: Protocol Handler CID (Content Identifier)
+	ProtocolCID string `cbor:"1,keyasint"`
+
+	// Element 3: Grid Instance CID (isolation namespace)
+	GridCID string `cbor:"2,keyasint"`
+
+	// Element 4: CBOR Web Token Payload (claims and proof-of-possession)
+	CWTPayload map[string]interface{} `cbor:"3,keyasint"`
+
+	// Element 5: COSE Signature (cryptographic proof)
+	Signature []byte `cbor:"4,keyasint"`
+}
+
+// example demonstrates CBOR encoding and decoding of PromiseGrid messages
+func example() {
+	// Example: Create a PromiseGrid message
+	msg := PromiseGridMessage{
+		ProtocolTag: "grid",
+		ProtocolCID: "bafyreigmitjgwhpx2vgrzp7knbqdu2ju5ytyibfybll7tfb7eqjqujtd3y",
+		GridCID:     "bafyreigmitjgwhpx2vgrzp7knbqdu2ju5ytyibfybll7tfb7eqjqujtd3y",
+		CWTPayload: map[string]interface{}{
+			"iss": "issuer-system",
+			"sub": "subject-node",
+			"aud": "audience-grid",
+			"iat": int64(1704067200),
+		},
+		Signature: []byte("cose_signature_bytes"),
+	}
+
+	// Encode to CBOR binary format
+	encoded, err := cbor.Marshal(msg)
+	if err != nil {
+		log.Fatalf("Encoding failed: %v", err)
+	}
+
+	fmt.Printf("Encoded CBOR (hex): %x\n", encoded)
+	fmt.Printf("Message size: %d bytes\n", len(encoded))
+
+	// Decode from CBOR binary format
+	var decoded PromiseGridMessage
+	err = cbor.Unmarshal(encoded, &decoded)
+	if err != nil {
+		log.Fatalf("Decoding failed: %v", err)
+	}
+
+	fmt.Printf("\nDecoded message:\n")
+	fmt.Printf("  Protocol Tag: %s\n", decoded.ProtocolTag)
+	fmt.Printf("  Protocol CID: %s\n", decoded.ProtocolCID)
+	fmt.Printf("  Grid CID: %s\n", decoded.GridCID)
+	fmt.Printf("  CWT Payload: %+v\n", decoded.CWTPayload)
+	fmt.Printf("  Signature: %x\n", decoded.Signature)
+}
+
+// exampleCmd is the Cobra subcommand for running the example
+var exampleCmd = &cobra.Command{
+	Use:   "example",
+	Short: "Run PromiseGrid CBOR encoding/decoding example",
+	Long:  "Demonstrates how to create, encode, and decode PromiseGrid 5-element CBOR messages",
+	Run: func(cmd *cobra.Command, args []string) {
+		example()
+	},
+}
+
+// rootCmd is the root Cobra command
+var rootCmd = &cobra.Command{
+	Use:   "promisegrid",
+	Short: "PromiseGrid CLI - Decentralized Computing System",
+	Long:  "PromiseGrid command-line interface for managing messages and grid operations",
+}
+
+func init() {
+	rootCmd.AddCommand(exampleCmd)
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
+	}
+}
+---FILE-END filename="main.go"---
+
+
+
+## References
+
+- [1] [https://travis.media/blog/how-to-use-subcommands-in-cobra-go-cobra-tutorial/](https://travis.media/blog/how-to-use-subcommands-in-cobra-go-cobra-tutorial/)
+- [2] [https://umarcor.github.io/cobra/](https://umarcor.github.io/cobra/)
+- [3] [https://cobra.dev/docs/learning-resources/learning-journey/](https://cobra.dev/docs/learning-resources/learning-journey/)
+- [4] [https://github.com/spf13/cobra](https://github.com/spf13/cobra)
+- [5] [https://www.raftt.io/post/auto-completing-cli-arguments-in-golang-with-cobra.html](https://www.raftt.io/post/auto-completing-cli-arguments-in-golang-with-cobra.html)
+- [6] [https://github.com/spf13/cobra/issues/726](https://github.com/spf13/cobra/issues/726)
+
+
+
+## Reasoning
+
+The user is asking me to:
+1. Move the example code from main() to example()
+2. Add a cobra subcommand called 'example'
+3. Limit response to 100 words
+4. Return complete main.go file in the specified format
+
+So I need to:
+1. Create a new function called example() that contains the code currently in main()
+2. Update main() to set up a Cobra root command with an 'example' subcommand
+3. The 'example' subcommand should call the example() function
+4. Return the complete main.go file in the format specified by the regex
+
+The regex requires:
+``````
+
+Let me create the updated main.go with Cobra integration:
+
+```go
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/fxamacker/cbor/v2"
+	"github.com/spf13/cobra"
+)
+
+// PromiseGridMessage represents the 5-element CBOR message structure from PromiseGrid
+type PromiseGridMessage struct {
+	_ struct{} `cbor:",toarray"`
+	ProtocolTag string `cbor:"0,keyasint"`
+	ProtocolCID string `cbor:"1,keyasint"`
+	GridCID string `cbor:"2,keyasint"`
+	CWTPayload map[string]interface{} `cbor:"3,keyasint"`
+	Signature []byte `cbor:"4,keyasint"`
+}
+
+func example() {
+	// Example: Create a PromiseGrid message
+	msg := PromiseGridMessage{
+		ProtocolTag: "grid",
+		ProtocolCID: "bafyreigmitjgwhpx2vgrzp7knbqdu2ju5ytyibfybll7tfb7eqjqujtd3y",
+		GridCID:     "bafyreigmitjgwhpx2vgrzp7knbqdu2ju5ytyibfybll7tfb7eqjqujtd3y",
+		CWTPayload: map[string]interface{}{
+			"iss": "issuer-system",
+			"sub": "subject-node",
+			"aud": "audience-grid",
+			"iat": int64(1704067200),
+		},
+		Signature: []byte("cose_signature_bytes"),
+	}
+
+	// Encode to CBOR binary format
+	encoded, err := cbor.Marshal(msg)
+	if err != nil {
+		log.Fatalf("CBOR encoding error: %v", err)
+	}
+
+	// Print encoded message details
+	fmt.Printf("Encoded message length: %d bytes\n", len(encoded))
+	fmt.Printf("Encoded message (hex): %x\n", encoded)
+}
+
+func main() {
+	// Create root command
+	rootCmd := &cobra.Command{Use: "promisegrid"}
+
+	// Create example subcommand
+	exampleCmd := &cobra.Command{
+		Use:   "example",
+		Short: "Run PromiseGrid message example",
+		Run: func(cmd *cobra.Command, args []string) {
+			example()
+		},
+	}
+
+	// Add subcommand to root
+	rootCmd.AddCommand(exampleCmd)
+
+	// Execute root command
+	if err := rootCmd.Execute(); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
+
+---
+
