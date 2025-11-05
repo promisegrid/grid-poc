@@ -52,7 +52,7 @@ type ExecutableDescriptor struct {
 }
 
 // example demonstrates CBOR encoding and decoding of PromiseGrid messages
-func example() {
+func example(outputFile string) {
 	// Example: Create a PromiseGrid message
 	msg := PromiseGridMessage{
 		ProtocolTag: "grid",
@@ -73,10 +73,19 @@ func example() {
 		log.Fatalf("Encoding failed: %v", err)
 	}
 
-	fmt.Printf("Encoded CBOR (hex): %x\n", encoded)
 	fmt.Printf("Message size: %d bytes\n", len(encoded))
 
-	// Decode from CBOR binary format
+	// Write to file if specified
+	if outputFile != "" {
+		err := ioutil.WriteFile(outputFile, encoded, 0644)
+		if err != nil {
+			log.Fatalf("Failed to write file: %v", err)
+		}
+		fmt.Printf("Written to: %s\n", outputFile)
+		return
+	}
+
+	// Decode from CBOR binary format for display
 	var decoded PromiseGridMessage
 	err = cbor.Unmarshal(encoded, &decoded)
 	if err != nil {
@@ -92,7 +101,7 @@ func example() {
 }
 
 // embed reads an executable file and embeds it in a CBOR descriptor
-func embed(executableName string) {
+func embed(executableName string, outputFile string) {
 	// Read the executable file
 	data, err := ioutil.ReadFile(executableName)
 	if err != nil {
@@ -123,7 +132,16 @@ func embed(executableName string) {
 	fmt.Printf("Executable: %s\n", executableName)
 	fmt.Printf("Size: %d bytes\n", info.Size())
 	fmt.Printf("Descriptor size: %d bytes (CBOR encoded)\n", len(encoded))
-	fmt.Printf("Descriptor (hex): %x\n", encoded)
+
+	// Write to file if specified
+	if outputFile != "" {
+		err := ioutil.WriteFile(outputFile, encoded, 0644)
+		if err != nil {
+			log.Fatalf("Failed to write file: %v", err)
+		}
+		fmt.Printf("Written to: %s\n", outputFile)
+		return
+	}
 
 	// Create a PromiseGridMessage wrapping the descriptor
 	descriptorBytes, _ := cbor.Marshal(descriptor)
@@ -145,7 +163,6 @@ func embed(executableName string) {
 	}
 
 	fmt.Printf("\nPromiseGrid Message size: %d bytes (CBOR encoded)\n", len(fullMsg))
-	fmt.Printf("PromiseGrid Message (hex): %x\n", fullMsg)
 }
 
 // exampleCmd is the Cobra subcommand for running the example
@@ -154,7 +171,8 @@ var exampleCmd = &cobra.Command{
 	Short: "Run PromiseGrid CBOR encoding/decoding example",
 	Long:  "Demonstrates how to create, encode, and decode PromiseGrid 5-element CBOR messages",
 	Run: func(cmd *cobra.Command, args []string) {
-		example()
+		outputFile, _ := cmd.Flags().GetString("output")
+		example(outputFile)
 	},
 }
 
@@ -165,7 +183,8 @@ var embedCmd = &cobra.Command{
 	Long:  "Reads an executable file and creates a CBOR-encoded descriptor containing the binary data",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		embed(args[0])
+		outputFile, _ := cmd.Flags().GetString("output")
+		embed(args[0], outputFile)
 	},
 }
 
@@ -177,6 +196,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
+	exampleCmd.Flags().StringP("output", "o", "", "Output file for CBOR-encoded message")
+	embedCmd.Flags().StringP("output", "o", "", "Output file for CBOR-encoded descriptor")
 	rootCmd.AddCommand(exampleCmd)
 	rootCmd.AddCommand(embedCmd)
 }
