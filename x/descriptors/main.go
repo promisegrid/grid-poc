@@ -8,6 +8,7 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/spf13/cobra"
+	"golang.org/x/sys/unix"
 )
 
 // PromiseGridMessage represents the 5-element CBOR message structure from PromiseGrid
@@ -142,27 +143,60 @@ func embed(executableName string, outputFile string) {
 		fmt.Printf("Written to: %s\n", outputFile)
 		return
 	}
+}
 
-	// Create a PromiseGridMessage wrapping the descriptor
-	descriptorBytes, _ := cbor.Marshal(descriptor)
-	msg := PromiseGridMessage{
-		ProtocolTag: "grid",
-		ProtocolCID: "bafyreigmitjgwhpx2vgrzp7knbqdu2ju5ytyibfybll7tfb7eqjqujtd3y",
-		GridCID:     "bafyreigmitjgwhpx2vgrzp7knbqdu2ju5ytyibfybll7tfb7eqjqujtd3y",
-		CWTPayload: map[string]interface{}{
-			"descriptor_type": "executable",
-			"executable_name": executableName,
-		},
-		Signature: descriptorBytes,
-	}
-
-	// Encode full message
-	fullMsg, err := cbor.Marshal(msg)
+// execFromMemory executes a binary from memory using memfd_create
+func execFromMemory(descriptorFile string, args []string) {
+	// Read the CBOR-encoded descriptor
+	data, err := ioutil.ReadFile(descriptorFile)
 	if err != nil {
-		log.Fatalf("Failed to encode message: %v", err)
+		log.Fatalf("Failed to read descriptor file: %v", err)
 	}
 
-	fmt.Printf("\nPromiseGrid Message size: %d bytes (CBOR encoded)\n", len(fullMsg))
+	// Decode the descriptor
+	var descriptor ExecutableDescriptor
+	err = cbor.Unmarshal(data, &descriptor)
+	if err != nil {
+		log.Fatalf("Failed to decode descriptor: %v", err)
+	}
+
+	fmt.Printf("Executing: %s (%d bytes from memory)\n", descriptor.Name, descriptor.Size)
+
+	// Create anonymous file in RAM using memfd_create without MFD_CLOEXEC
+	// fd must remain open for kernel to map the executable during exec
+	fd, err := unix.MemfdCreate(descriptor.Name, 0)
+	if err != nil {
+		log.Fatalf("memfd_create failed: %v", err)
+	}
+
+	// Write executable data to the memory file
+	n, err := unix.Write(fd, descriptor.Executable)
+	if err != nil {
+		unix.Close(fd)
+		log.Fatalf("Failed to write to memfd: %v", err)
+	}
+
+	if n != len(descriptor.Executable) {
+		unix.Close(fd)
+		log.Fatalf("Incomplete write to memfd: wrote %d of %d bytes", n, len(descriptor.Executable))
+	}
+
+	// Get the /proc/self/fd/<fd> path for execution
+	procPath := fmt.Sprintf("/proc/self/fd/%d", fd)
+
+	// Prepare arguments for exec (first arg is program name)
+	execArgs := append([]string{descriptor.Name}, args...)
+
+	// Use unix.Exec for true process replacement
+	// This preserves the fd across the exec boundary
+	// XXX we probably don't really want exec here because we might want to continue in our current process
+	err = unix.Exec(procPath, execArgs, os.Environ())
+	if err != nil {
+		unix.Close(fd)
+		log.Fatalf("Execution failed: %v", err)
+	}
+
+	// unix.Exec does not return on success (replaces current process)
 }
 
 // exampleCmd is the Cobra subcommand for running the example
@@ -188,6 +222,19 @@ var embedCmd = &cobra.Command{
 	},
 }
 
+// execCmd is the Cobra subcommand for executing in-memory binaries
+var execCmd = &cobra.Command{
+	Use:   "exec <descriptor> [arguments...]",
+	Short: "Execute a binary from a CBOR descriptor in memory",
+	Long:  "Reads a CBOR descriptor, extracts the executable, and runs it from RAM using memfd_create",
+	Args:  cobra.MinimumNArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		descriptorFile := args
+		execArgs := args[1:]
+		execFromMemory(descriptorFile[0], execArgs)
+	},
+}
+
 // rootCmd is the root Cobra command
 var rootCmd = &cobra.Command{
 	Use:   "promisegrid",
@@ -200,6 +247,7 @@ func init() {
 	embedCmd.Flags().StringP("output", "o", "", "Output file for CBOR-encoded descriptor")
 	rootCmd.AddCommand(exampleCmd)
 	rootCmd.AddCommand(embedCmd)
+	rootCmd.AddCommand(execCmd)
 }
 
 func main() {
