@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/spf13/cobra"
@@ -38,6 +40,15 @@ type CWTClaims struct {
 	NotBefore int64  `cbor:"5,keyasint"` // nbf
 	IssuedAt  int64  `cbor:"6,keyasint"` // iat
 	CWTID     []byte `cbor:"7,keyasint"` // cti
+}
+
+// ExecutableDescriptor describes an embedded executable
+type ExecutableDescriptor struct {
+	Name        string `cbor:"0,keyasint"`
+	ContentType string `cbor:"1,keyasint"`
+	Size        int64  `cbor:"2,keyasint"`
+	Executable  []byte `cbor:"3,keyasint"`
+	Checksum    []byte `cbor:"4,keyasint"`
 }
 
 // example demonstrates CBOR encoding and decoding of PromiseGrid messages
@@ -80,6 +91,63 @@ func example() {
 	fmt.Printf("  Signature: %x\n", decoded.Signature)
 }
 
+// embed reads an executable file and embeds it in a CBOR descriptor
+func embed(executableName string) {
+	// Read the executable file
+	data, err := ioutil.ReadFile(executableName)
+	if err != nil {
+		log.Fatalf("Failed to read executable: %v", err)
+	}
+
+	// Get file info
+	info, err := os.Stat(executableName)
+	if err != nil {
+		log.Fatalf("Failed to stat file: %v", err)
+	}
+
+	// Create executable descriptor
+	descriptor := ExecutableDescriptor{
+		Name:        executableName,
+		ContentType: "application/octet-stream",
+		Size:        info.Size(),
+		Executable:  data,
+		Checksum:    []byte("sha256-placeholder"),
+	}
+
+	// Encode descriptor to CBOR
+	encoded, err := cbor.Marshal(descriptor)
+	if err != nil {
+		log.Fatalf("Failed to encode descriptor: %v", err)
+	}
+
+	fmt.Printf("Executable: %s\n", executableName)
+	fmt.Printf("Size: %d bytes\n", info.Size())
+	fmt.Printf("Descriptor size: %d bytes (CBOR encoded)\n", len(encoded))
+	fmt.Printf("Descriptor (hex): %x\n", encoded)
+
+	// Create a PromiseGridMessage wrapping the descriptor
+	descriptorBytes, _ := cbor.Marshal(descriptor)
+	msg := PromiseGridMessage{
+		ProtocolTag: "grid",
+		ProtocolCID: "bafyreigmitjgwhpx2vgrzp7knbqdu2ju5ytyibfybll7tfb7eqjqujtd3y",
+		GridCID:     "bafyreigmitjgwhpx2vgrzp7knbqdu2ju5ytyibfybll7tfb7eqjqujtd3y",
+		CWTPayload: map[string]interface{}{
+			"descriptor_type": "executable",
+			"executable_name": executableName,
+		},
+		Signature: descriptorBytes,
+	}
+
+	// Encode full message
+	fullMsg, err := cbor.Marshal(msg)
+	if err != nil {
+		log.Fatalf("Failed to encode message: %v", err)
+	}
+
+	fmt.Printf("\nPromiseGrid Message size: %d bytes (CBOR encoded)\n", len(fullMsg))
+	fmt.Printf("PromiseGrid Message (hex): %x\n", fullMsg)
+}
+
 // exampleCmd is the Cobra subcommand for running the example
 var exampleCmd = &cobra.Command{
 	Use:   "example",
@@ -87,6 +155,17 @@ var exampleCmd = &cobra.Command{
 	Long:  "Demonstrates how to create, encode, and decode PromiseGrid 5-element CBOR messages",
 	Run: func(cmd *cobra.Command, args []string) {
 		example()
+	},
+}
+
+// embedCmd is the Cobra subcommand for embedding executables
+var embedCmd = &cobra.Command{
+	Use:   "embed <executable>",
+	Short: "Embed an executable in a CBOR descriptor",
+	Long:  "Reads an executable file and creates a CBOR-encoded descriptor containing the binary data",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		embed(args[0])
 	},
 }
 
@@ -99,6 +178,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(exampleCmd)
+	rootCmd.AddCommand(embedCmd)
 }
 
 func main() {
