@@ -8,4 +8,4 @@
  grid pos -m /grid/did:key:lksafksajlkdsaj/dev/servo1 123
  grid quote 287-C32-544-16x-10 7
  grid purchase 98398
-```**
+```
