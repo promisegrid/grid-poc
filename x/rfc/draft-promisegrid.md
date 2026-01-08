@@ -34,6 +34,8 @@ Table of Contents
    2.  Common Envelope (All pCIDs)
        2.1.  Minimal Envelope Rationale
        2.2.  Hypergraph Semantics
+       2.3.  Canonical Encoding (Protocol-Defined)
+       2.4.  Unknown pCID Handling
    3.  Example Protocol: DAG Edit Operations
        3.1.  Payload Fields (Example Protocol)
        3.2.  Operation Types (Example Protocol)
@@ -113,6 +115,20 @@ Table of Contents
    asserted state or event.  Protocols MAY include explicit input/output CID
    lists in the payload to make head and tail sets explicit.  The example
    protocol in Section 3 uses prevHashes as tails and target as the head.
+
+2.3.  Canonical Encoding (Protocol-Defined)
+
+   Canonical encoding rules are defined by each protocol (pCID).  The
+   envelope does not mandate DAG-CBOR or any other canonical CBOR profile.
+   Protocols that rely on stable byte encodings for signatures or content
+   addressing MUST specify their canonicalization rules.
+
+2.4.  Unknown pCID Handling
+
+   Nodes that do not recognize a pCID SHOULD treat the message as opaque.
+   They MAY route or store the message without verification.  Resource
+   limits (size caps, rate limits, and retention policies) SHOULD be
+   applied locally.
 
 3.  Example Protocol: DAG Edit Operations
 

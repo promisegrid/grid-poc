@@ -44,6 +44,17 @@ document defines an example payload and signature profile in Section 3.
 ]
 ```
 
+### 2.2 Canonical Encoding (Protocol-Defined)
+
+Canonical encoding rules are defined by each protocol (pCID). The
+envelope does not require a specific CBOR canonicalization profile.
+
+### 2.3 Unknown pCID Handling
+
+Nodes that do not recognize a pCID should treat the message as opaque
+and may route or store it without verification, subject to local
+resource limits.
+
 ## 3. Example Protocol: Scenario Tree
 
 ### 3.1 Hypergraph Semantics
