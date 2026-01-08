@@ -131,6 +131,14 @@ COSE_Sign1(
 - Nested depth ≤256 to prevent stack overflows
 - Signature covers pCID and payload (including tree and pinning references)
 
+## 7. Other Example Protocols (Informative)
+
+- DAG edit operations, which define a CWT-like payload with op/agent/target
+  fields and prevHashes, are described in `x/rfc/draft-promisegrid.md`.
+- Capability call messages, where pCID is the function address and the
+  payload is a positional argument list, are also summarized in
+  `x/rfc/draft-promisegrid.md`.
+
 
 previous version: 
 

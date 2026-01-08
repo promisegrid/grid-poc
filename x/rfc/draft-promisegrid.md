@@ -31,19 +31,23 @@ Status of This Memo
 Table of Contents
 
    1.  Introduction
-   2.  Protocol Overview
-   3.  Message Format
-       3.1.  Common Fields
-       3.2.  Operation Types
+   2.  Common Envelope (All pCIDs)
+       2.1.  Minimal Envelope Rationale
+       2.2.  Hypergraph Semantics
+   3.  Example Protocol: DAG Edit Operations
+       3.1.  Payload Fields (Example Protocol)
+       3.2.  Operation Types (Example Protocol)
            3.2.1.  Insert Operation
            3.2.2.  Delete Operation
            3.2.3.  Reorder Operation
            3.2.4.  Query Operation
            3.2.5.  Subscription Operation
-   4.  Security Considerations
-   5.  IANA Considerations
-   6.  Acknowledgments
-   7.  References
+   4.  Example Protocol: Capability Call
+   5.  Example Protocol: Scenario Tree
+   6.  Security Considerations
+   7.  IANA Considerations
+   8.  Acknowledgments
+   9.  References
 
 1.  Introduction
 
@@ -58,7 +62,7 @@ Table of Contents
    These DAG edits are interlinked via hash pointers using IPLD, enabling
    consistency checks, replayability, and audit trails over time.
 
-   In this document, the example protocol leverages:
+   Example protocols in this document may leverage:
    
    o  CBOR for binary encoding of structured messages.
    o  COSE for digital signing and optional encryption.
@@ -72,8 +76,8 @@ Table of Contents
 
    This document has two major sections: Section 2 defines the common
    envelope that applies to all protocols identified by a pCID, and
-   Section 3 defines an example protocol (DAG edit operations) that uses
-   this envelope.
+   Sections 3 through 5 define example protocols that use this
+   envelope.
 
    The PromiseGrid envelope is built on the following guiding principles:
 
@@ -172,7 +176,7 @@ Table of Contents
       This signature guarantees both authenticity of the issuing agent and the
       integrity of the promise embedded in the message for this protocol.
 
-3.2.  Operation Types
+3.2.  Operation Types (Example Protocol)
 
    PromiseGrid supports several operation types.  The following sub-sections
    describe each supported type along with an example JSON representation (for human
@@ -303,7 +307,29 @@ Table of Contents
          "signature": "BobSubsSignature456"
       }
 
-4.  Security Considerations
+4.  Example Protocol: Capability Call
+
+   This protocol treats the pCID as the content address of the function
+   to invoke.  The payload is a CBOR array of positional arguments.  The
+   signature container is defined by the pCID; a detached COSE_Sign1
+   signature over the canonical encoding of [pCID, payload] is one
+   common profile.
+
+      PromiseGridEnvelope = [
+         pCID,             ; function CID
+         [ arg1, arg2 ],
+         signature
+      ]
+
+5.  Example Protocol: Scenario Tree
+
+   The scenario-tree protocol encodes probabilistic state transitions as
+   nested lists of branches with binary CIDs, fixed-point probabilities,
+   and weights.  It uses the common envelope and defines its payload and
+   signature profile separately.  See `x/wire/wire.md` for the full
+   example protocol.
+
+6.  Security Considerations
 
    The security of the PromiseGrid wire protocol is achieved by employing COSE for
    digital signatures along with the compact token format of CWT.  Each message’s signature
@@ -319,18 +345,18 @@ Table of Contents
    Implementers are advised to use secure cryptographic hash functions (e.g., SHA-256 or
    stronger) and follow best practices for key management and certificate validation.
 
-5.  IANA Considerations
+7.  IANA Considerations
 
    This document does not specify any new registries.  However, future versions may
    define a registry for PromiseGrid operation codes and parameter names.
 
-6.  Acknowledgments
+8.  Acknowledgments
 
    The authors gratefully acknowledge contributions from the PromiseGrid research
    community, as well as insights drawn from related work in IPFS, IPLD, CBOR, COSE,
    and Promise Theory.
 
-7.  References
+9.  References
 
    [RFC 8152]   Crocker, D., "CBOR Object Signing and Encryption (COSE)", RFC 8152,
                 April 2017.
