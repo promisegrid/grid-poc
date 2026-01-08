@@ -97,6 +97,17 @@ Table of Contents
       Although the wire encoding is based on the compact binary format of CBOR,
       underlying transport layers can vary.
 
+2.1.  Minimal Envelope Rationale
+
+   PromiseGrid treats each message as a function call.  The first element
+   identifies the function or protocol using a content-addressed identifier
+   (pCID).  The remaining elements are interpreted by that protocol, typically
+   as the function's arguments.  This mirrors the capability-token-plus-payload
+   model described in the project README and language notes, and avoids fixed
+   version fields ahead of the token.  Protocol evolution is achieved by
+   introducing new pCIDs without changing the envelope, keeping parsing simple
+   for constrained nodes.
+
 3.  Message Format
 
    PromiseGrid Messages are encoded using CBOR and secured with COSE.
