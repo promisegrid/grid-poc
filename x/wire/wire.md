@@ -23,7 +23,22 @@ specifies:
 
 ## 2. Protocol Message Design
 
-### 2.1 scenario Tree Structure
+### 2.1 Envelope
+
+PromiseGrid messages are wrapped in a CBOR "grid" tag. The tagged value
+is an array whose first element is the protocol CID (pCID). This
+document defines an example payload and signature profile for an
+example pCID.
+
+```cbor
+[
+  pCID,
+  payload,
+  signature
+]
+```
+
+### 2.2 Scenario Tree Structure
 
 ```cbor
 [
@@ -52,7 +67,7 @@ specifies:
 ]
 ```
 
-### 2.2 Deterministic Encoding Rules
+### 2.3 Deterministic Encoding Rules
 
 1. **CIDs**: Always CBOR tag 42 with binary multihash
 2. **Probabilities**: uint16 where 0xFFFF = 1.0
@@ -70,6 +85,10 @@ def update_trust(prior, actual, predicted, weight):
 
 ## 4. Signature & Validation
 
+For the example protocol, the envelope's signature element is a COSE_Sign1
+value. The signed bytes bind the protocol CID (pCID) and the payload
+defined in this document.
+
 ```cbor
 COSE_Sign1(
   protected: <<{
@@ -80,7 +99,6 @@ COSE_Sign1(
     }
   }>>,
   payload: <<[
-    42(h'...'), # Protocol version CID
     42(h'...'), # Root scenario tree CID
     42(h'...')  # Pinning contract CID
   ]>>,
@@ -94,7 +112,7 @@ COSE_Sign1(
 - Probabilities ≤65535 (0xFFFF) with 0xFFFF=1.0
 - Weights ≤16384 (0x4000) with 8192=1.0x
 - Nested depth ≤256 to prevent stack overflows
-- Signature covers protocol CID + tree CID + pinning CID
+- Signature covers pCID and payload (including tree and pinning references)
 
 
 previous version: 
@@ -339,4 +357,3 @@ Several areas require further investigation and prototyping:
 - **Signature Positioning:** Does repositioning the signature (for
   example, moving it to the end of the message) provide measurable
   routing performance benefits without affecting security?
-
