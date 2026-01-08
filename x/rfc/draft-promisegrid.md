@@ -110,11 +110,21 @@ Table of Contents
 
 3.  Message Format
 
-   PromiseGrid Messages are encoded using CBOR and secured with COSE.
-   The overall structure of a message conforms to the following logical
-   model:
+   PromiseGrid messages are encoded using CBOR.  The outer envelope is a
+   CBOR tag "grid" that wraps an array whose first element is the protocol
+   CID (pCID).  The remaining elements are interpreted by the protocol
+   identified by the pCID.  This draft provides an example of an
+   edit-operations protocol with a COSE-based signature container.
 
-      PromiseGridMessage = {
+      PromiseGridEnvelope = [
+         pCID,
+         payload,
+         signature
+      ]
+
+   The payload for this protocol conforms to the following logical model:
+
+      PromiseGridPayload = {
          "op":          OperationCode,
          "agent":       AgentID,
          "timestamp":   Timestamp,
@@ -160,7 +170,7 @@ Table of Contents
    signature
       A COSE-encapsulated digital signature covering the message’s fields.
       This signature guarantees both authenticity of the issuing agent and the
-      integrity of the promise embedded in the message.
+      integrity of the promise embedded in the message for this protocol.
 
 3.2.  Operation Types
 
