@@ -108,6 +108,15 @@ Table of Contents
    introducing new pCIDs without changing the envelope, keeping parsing simple
    for constrained nodes.
 
+2.2.  Hypergraph Semantics
+
+   PromiseGrid models messages as hyperedges in a shared Merkle DAG.  Each
+   message links one or more parent nodes (prevHashes) to a new node (target)
+   representing the asserted state or event.  When prevHashes contains multiple
+   entries, the message forms a hyperedge with multiple tails.  Protocols MAY
+   include explicit input/output CID lists in the payload to make head and tail
+   sets explicit; if absent, prevHashes are the tails and target is the head.
+
 3.  Message Format
 
    PromiseGrid messages are encoded using CBOR.  The outer envelope is a

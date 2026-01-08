@@ -41,7 +41,16 @@ example pCID.
 ]
 ```
 
-### 2.2 Scenario Tree Structure
+### 2.2 Hypergraph Semantics
+
+The scenario tree can be interpreted as a hypergraph: event and state
+CIDs are nodes, and each branch defines an edge from the event CID to
+the state CID. Shared CIDs allow multiple branches to converge on the
+same node. Multi-input edges can be represented by hashing a list of
+input CIDs to produce a composite event CID while preserving the
+fixed branch shape.
+
+### 2.3 Scenario Tree Structure
 
 ```cbor
 [
@@ -70,7 +79,7 @@ example pCID.
 ]
 ```
 
-### 2.3 Deterministic Encoding Rules
+### 2.4 Deterministic Encoding Rules
 
 1. **CIDs**: Always CBOR tag 42 with binary multihash
 2. **Probabilities**: uint16 where 0xFFFF = 1.0
