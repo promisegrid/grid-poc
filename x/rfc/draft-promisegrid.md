@@ -58,7 +58,7 @@ Table of Contents
    These DAG edits are interlinked via hash pointers using IPLD, enabling
    consistency checks, replayability, and audit trails over time.
 
-   Notably, PromiseGrid leverages:
+   In this document, the example protocol leverages:
    
    o  CBOR for binary encoding of structured messages.
    o  COSE for digital signing and optional encryption.
@@ -68,30 +68,24 @@ Table of Contents
    o  Explicit semantics wherein each message represents a promised edit to the
       DAG structure.
 
-2.  Protocol Overview
+2.  Common Envelope (All pCIDs)
 
-   The PromiseGrid wire protocol is built on the following guiding
-   principles:
+   This document has two major sections: Section 2 defines the common
+   envelope that applies to all protocols identified by a pCID, and
+   Section 3 defines an example protocol (DAG edit operations) that uses
+   this envelope.
 
-   o  Each message is expressed as a set of claims encapsulated within a
-      CWT (CBOR Web Token).  These claims represent promises not only about
-      the validity of an operation but also describe a specific edit to the
-      shared DAG. These edits update the state by inserting new events, deleting
-      obsolete events, reordering events to reflect logical or temporal changes,
-      or issuing queries and subscription registrations.
+   The PromiseGrid envelope is built on the following guiding principles:
 
-   o  Every message is signed using COSE (CBOR Object Signing and Encryption)
-      to ensure authenticity and integrity.  The digital signature binds the
-      message to the issuing agent, whose identity is expressed in the claims.
+   o  Each message is encoded in CBOR and wrapped in a "grid" tag whose
+      value is an array with the protocol CID (pCID) as the first element.
+
+   o  The pCID defines the payload and signature formats.  Protocols are
+      free to define their own payload schemas and signature containers.
 
    o  Messages are transmitted over a libp2p network, which provides a
       decentralized, peer-to-peer transport layer that abstracts from
       underlying network protocols (e.g., TCP, QUIC).
-
-   o  Relationships between messages are maintained using IPLD.  Each
-      message may reference previous messages via hash pointers encoded in
-      DAG-CBOR, thereby constructing a Merkle Directed Acyclic Graph that
-      supports verifiable history and replayability.
 
    o  The protocol is transport agnostic beyond its reliance on libp2p.
       Although the wire encoding is based on the compact binary format of CBOR,
@@ -111,19 +105,16 @@ Table of Contents
 2.2.  Hypergraph Semantics
 
    PromiseGrid models messages as hyperedges in a shared Merkle DAG.  Each
-   message links one or more parent nodes (prevHashes) to a new node (target)
-   representing the asserted state or event.  When prevHashes contains multiple
-   entries, the message forms a hyperedge with multiple tails.  Protocols MAY
-   include explicit input/output CID lists in the payload to make head and tail
-   sets explicit; if absent, prevHashes are the tails and target is the head.
+   message links one or more parent nodes to a new node representing the
+   asserted state or event.  Protocols MAY include explicit input/output CID
+   lists in the payload to make head and tail sets explicit.  The example
+   protocol in Section 3 uses prevHashes as tails and target as the head.
 
-3.  Message Format
+3.  Example Protocol: DAG Edit Operations
 
-   PromiseGrid messages are encoded using CBOR.  The outer envelope is a
-   CBOR tag "grid" that wraps an array whose first element is the protocol
-   CID (pCID).  The remaining elements are interpreted by the protocol
-   identified by the pCID.  This draft provides an example of an
-   edit-operations protocol with a COSE-based signature container.
+   This section defines an edit-operations protocol identified by a pCID.
+   The protocol payload is a CBOR map with fields described below and uses
+   a COSE-based signature container for integrity.
 
       PromiseGridEnvelope = [
          pCID,
@@ -147,7 +138,7 @@ Table of Contents
    by IPLD using DAG-CBOR, to express relationships and ordering between events,
    thereby solidifying the edit history of the shared DAG.
 
-3.1.  Common Fields
+3.1.  Payload Fields (Example Protocol)
 
    op
       A string value identifying the operation type (e.g., "insert",

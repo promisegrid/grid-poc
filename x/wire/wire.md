@@ -24,14 +24,17 @@ specifies:
 For the general PromiseGrid envelope and message model, see the draft
 wire protocol in `x/rfc/draft-promisegrid.md`.
 
-## 2. Protocol Message Design
+This document is organized into two major sections: Section 2 defines
+the common envelope that applies to all pCIDs, and Sections 3 through 6
+define an example scenario-tree protocol for a specific pCID.
+
+## 2. Common Envelope (All pCIDs)
 
 ### 2.1 Envelope
 
 PromiseGrid messages are wrapped in a CBOR "grid" tag. The tagged value
 is an array whose first element is the protocol CID (pCID). This
-document defines an example payload and signature profile for an
-example pCID.
+document defines an example payload and signature profile in Section 3.
 
 ```cbor
 [
@@ -41,7 +44,9 @@ example pCID.
 ]
 ```
 
-### 2.2 Hypergraph Semantics
+## 3. Example Protocol: Scenario Tree
+
+### 3.1 Hypergraph Semantics
 
 The scenario tree can be interpreted as a hypergraph: event and state
 CIDs are nodes, and each branch defines an edge from the event CID to
@@ -50,7 +55,7 @@ same node. Multi-input edges can be represented by hashing a list of
 input CIDs to produce a composite event CID while preserving the
 fixed branch shape.
 
-### 2.3 Scenario Tree Structure
+### 3.2 Scenario Tree Structure
 
 ```cbor
 [
@@ -79,14 +84,14 @@ fixed branch shape.
 ]
 ```
 
-### 2.4 Deterministic Encoding Rules
+### 3.3 Deterministic Encoding Rules
 
 1. **CIDs**: Always CBOR tag 42 with binary multihash
 2. **Probabilities**: uint16 where 0xFFFF = 1.0
 3. **Weights**: uint16 where 8192 = 1.0x (Q12 fixed-point)
 4. **Ordering**: Branches sorted by CID byte values
 
-## 3. Trust Metric Algorithm
+## 4. Trust Metric Algorithm (Example Protocol)
 
 ```python
 def update_trust(prior, actual, predicted, weight):
@@ -95,7 +100,7 @@ def update_trust(prior, actual, predicted, weight):
     return prior * (1 - weight/8192 * loss) 
 ```
 
-## 4. Signature & Validation
+## 5. Signature & Validation (Example Protocol)
 
 For the example protocol, the envelope's signature element is a COSE_Sign1
 value. The signed bytes bind the protocol CID (pCID) and the payload
@@ -118,7 +123,7 @@ COSE_Sign1(
 )
 ```
 
-# Compliance Requirements
+## 6. Compliance Requirements (Example Protocol)
 
 - All Merkle links must use binary CID tag 42  
 - Probabilities ≤65535 (0xFFFF) with 0xFFFF=1.0
