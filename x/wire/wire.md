@@ -21,6 +21,9 @@ specifies:
 - Probabilistic branching with weight-adjusted trust propagation  
 - Merkle-DAG structure allowing partial validation and cross-worldline referencing
 
+For the general PromiseGrid envelope and message model, see the draft
+wire protocol in `x/rfc/draft-promisegrid.md`.
+
 ## 2. Protocol Message Design
 
 ### 2.1 Envelope
