@@ -24,9 +24,32 @@ specifies:
 For the general PromiseGrid envelope and message model, see the draft
 wire protocol in `x/rfc/draft-promisegrid.md`.
 
+This specification is transport agnostic: the same encoded message can
+be carried over HTTP, NATS, libp2p, WebSocket, UDP, SCTP, file transfer,
+or other byte-transport substrates. Transport bindings must provide
+message framing (e.g., one envelope per HTTP request body, NATS message,
+WebSocket frame, UDP datagram, SCTP record, or via length-prefixing on a
+stream such as TCP or QUIC).
+
+CBOR itself is designed for compactness, simple decoders, and long-term
+extensibility (self-describing types and tags), which aligns with a
+long-horizon envelope.
+
+PromiseGrid's pCID-first envelope follows the same philosophy: keep the
+outer decoding stable, and use an explicit identifier (pCID) to define
+the semantics of the payload and signature so protocols can evolve
+without changing the envelope.
+
+Unlike CBOR tags, which benefit from a centralized registry, pCIDs do
+not require prior coordination: a pCID is typically the content hash
+(CID) of the protocol's specification document (or a canonical
+representation of it), so protocols can be introduced without a shared
+numbering authority.
+
 This document is organized into two major sections: Section 2 defines
 the common envelope that applies to all pCIDs, and Sections 3 through 6
-define an example scenario-tree protocol for a specific pCID.
+define an example scenario-tree protocol for a specific pCID. Section 7
+lists additional example protocols.
 
 ## 2. Common Envelope (All pCIDs)
 
@@ -144,11 +167,48 @@ COSE_Sign1(
 
 ## 7. Other Example Protocols (Informative)
 
+### 7.1 Promise / Imposition / Assessment (Minimal)
+
+Promise Theory distinguishes promises (declared intentions about self),
+impositions (requests), and independent assessments by observers. A
+minimal single-pCID protocol can model these without introducing
+obligations at the wire level:
+
+This framing also generalizes to ownership and money, where instruments
+and prices can be treated as agent-to-agent messages about intentions and
+assessments in a network.
+
+```cbor
+[
+  pt_pCID,
+  [ 0, [ intent, terms ] ],
+  signature
+]
+[
+  pt_pCID,
+  [ 1, [ intent, args ] ],
+  signature
+]
+[
+  pt_pCID,
+  [ 2, [ about_cid, outcome ] ],
+  signature
+]
+```
+
+- Reference: Jan Bergstra and Mark Burgess, _Promise Theory: Principles and
+  Applications_ (Book of Promises, 2nd ed., 2019).
+- Reference: Jan Bergstra and Mark Burgess, _Money, Ownership, and Agency:
+  As an Application of Promise Theory_ (χtAxis press, 2019).
+
 - DAG edit operations, which define a CWT-like payload with op/agent/target
   fields and prevHashes, are described in `x/rfc/draft-promisegrid.md`.
-- Capability call messages, where pCID is the function address and the
-  payload is a positional argument list, are also summarized in
+- Capability call messages, where the pCID identifies the call protocol and
+  the payload includes a function/capability CID plus positional arguments,
+  are also summarized in
   `x/rfc/draft-promisegrid.md`.
+- Promise / imposition / assessment (Offer / Request / Receipt) is
+  described as an example protocol in `x/rfc/draft-promisegrid.md`.
 
 
 previous version: 

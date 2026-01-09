@@ -11,14 +11,15 @@ Abstract
    This document specifies the wire protocol for PromiseGrid – a
    decentralized consensus-based computing, communications, and
    governance system.  The protocol defines the format and semantics of
-   messages exchanged between PromiseGrid agents.  Messages are expressed
-   as structured claims based on CBOR Web Tokens (CWTs), digitally signed
-   using COSE, and transmitted via a libp2p overlay network.  In addition,
-   messages explicitly describe edits to a shared Merkle Directed Acyclic
-   Graph (DAG) that represents the global state.  The relationships between
-   messages are maintained using IPLD with DAG-CBOR encoding, ensuring
-   verifiable links and replayability of event sequences.  This document is
-   intended to be consistent with IETF RFC style and practices.
+   messages exchanged between PromiseGrid agents.  Messages are encoded in
+   CBOR and wrapped in a "grid" tag whose value is an array with a
+   protocol CID (pCID) as the first element.  The pCID defines the payload
+   and signature formats, enabling evolution without changing the
+   envelope.  Messages are transported over an underlying substrate
+   (e.g., HTTP, NATS, libp2p, WebSocket, UDP, SCTP, file transfer) and MAY be linked
+   using IPLD/DAG-CBOR.  This document also provides example
+   pCID protocols, including DAG edit operations and Promise Theory
+   primitives (promise, imposition, assessment).
 
 Status of This Memo
 
@@ -46,10 +47,11 @@ Table of Contents
            3.2.5.  Subscription Operation
    4.  Example Protocol: Capability Call
    5.  Example Protocol: Scenario Tree
-   6.  Security Considerations
-   7.  IANA Considerations
-   8.  Acknowledgments
-   9.  References
+   6.  Example Protocol: Promise, Imposition, Assessment
+   7.  Security Considerations
+   8.  IANA Considerations
+   9.  Acknowledgments
+   10.  References
 
 1.  Introduction
 
@@ -68,7 +70,8 @@ Table of Contents
    
    o  CBOR for binary encoding of structured messages.
    o  COSE for digital signing and optional encryption.
-   o  libp2p as the transport mechanism for robust peer-to-peer communication.
+   o  One or more transport bindings to carry encoded messages (e.g.,
+      HTTP, NATS, libp2p, WebSocket, UDP, SCTP, file transfer).
    o  IPLD and DAG-CBOR for linking messages into a verifiable Merkle
       DAG.
    o  Explicit semantics wherein each message represents a promised edit to the
@@ -78,7 +81,7 @@ Table of Contents
 
    This document has two major sections: Section 2 defines the common
    envelope that applies to all protocols identified by a pCID, and
-   Sections 3 through 5 define example protocols that use this
+   Sections 3 through 6 define example protocols that use this
    envelope.
 
    The PromiseGrid envelope is built on the following guiding principles:
@@ -89,24 +92,46 @@ Table of Contents
    o  The pCID defines the payload and signature formats.  Protocols are
       free to define their own payload schemas and signature containers.
 
-   o  Messages are transmitted over a libp2p network, which provides a
-      decentralized, peer-to-peer transport layer that abstracts from
-      underlying network protocols (e.g., TCP, QUIC).
+   o  Messages are transported over an underlying substrate.  This
+      document specifies only the message encoding; transport selection
+      and message framing (e.g., HTTP Content-Length or chunked bodies,
+      NATS messages, WebSocket frames, UDP datagrams, SCTP records, or
+      length-prefixing on stream transports such as TCP or QUIC) are
+      defined by the chosen transport binding.
 
-   o  The protocol is transport agnostic beyond its reliance on libp2p.
-      Although the wire encoding is based on the compact binary format of CBOR,
-      underlying transport layers can vary.
+   o  The envelope is transport agnostic.  Although the wire encoding is
+      based on CBOR, the underlying transport can vary.
 
 2.1.  Minimal Envelope Rationale
 
-   PromiseGrid treats each message as a function call.  The first element
-   identifies the function or protocol using a content-addressed identifier
+   PromiseGrid treats each message as a protocol-defined function call.  The
+   first element identifies the protocol using a content-addressed identifier
    (pCID).  The remaining elements are interpreted by that protocol, typically
-   as the function's arguments.  This mirrors the capability-token-plus-payload
+   as the call's arguments.  This mirrors the capability-token-plus-payload
    model described in the project README and language notes, and avoids fixed
    version fields ahead of the token.  Protocol evolution is achieved by
    introducing new pCIDs without changing the envelope, keeping parsing simple
    for constrained nodes.
+
+   This separation between a stable envelope and evolvable protocol
+   semantics is consistent with long-horizon systems design. CBOR
+   itself was designed for long-term interoperability: a compact,
+   self-describing binary format with an explicit extensibility
+   mechanism (tags) and optional deterministic encoding rules for
+   signing and hashing [CBOR].
+
+   PromiseGrid's pCID-first envelope follows a similar philosophy: the
+   envelope is fixed and easy to parse, while the pCID is an explicit
+   extension point that defines the semantics of the remaining items.
+   Like CBOR tags, new pCIDs can be introduced without changing the base
+   decoding rules, aiming for long-term viability.
+
+   Unlike CBOR tags, which benefit from a centralized registry to avoid
+   collisions, pCIDs do not require prior coordination: a pCID is
+   typically the content hash (CID) of the protocol's specification
+   document (or a canonical representation of it), so independent
+   publishers can define new protocols without a shared numbering
+   authority.
 
 2.2.  Hypergraph Semantics
 
@@ -325,15 +350,29 @@ Table of Contents
 
 4.  Example Protocol: Capability Call
 
-   This protocol treats the pCID as the content address of the function
-   to invoke.  The payload is a CBOR array of positional arguments.  The
-   signature container is defined by the pCID; a detached COSE_Sign1
-   signature over the canonical encoding of [pCID, payload] is one
-   common profile.
+   This protocol uses a single pCID (capcall_pCID) for capability-call
+   messages.  The payload is a CBOR array whose first element is a
+   message type (mtype); remaining elements are defined by the protocol.
+
+      payload = [ mtype, ... ]
+
+   One minimal call request profile is:
+
+      payload = [ 0, fCID, [ arg1, arg2 ] ]
+
+   where:
+
+      0     call request
+      fCID  function or capability CID to invoke
+
+   Additional message types (e.g., response, error) are protocol-defined.
+   The signature container and signature input are also defined by
+   capcall_pCID; a detached COSE_Sign1 signature over a canonical encoding
+   of [pCID, payload] is one common profile.
 
       PromiseGridEnvelope = [
-         pCID,             ; function CID
-         [ arg1, arg2 ],
+         capcall_pCID,     ; capability-call protocol
+         [ 0, fCID, [ arg1, arg2 ] ],
          signature
       ]
 
@@ -345,44 +384,72 @@ Table of Contents
    signature profile separately.  See `x/wire/wire.md` for the full
    example protocol.
 
-6.  Security Considerations
+6.  Example Protocol: Promise, Imposition, Assessment
 
-   The security of the PromiseGrid wire protocol is achieved by employing COSE for
-   digital signatures along with the compact token format of CWT.  Each message’s signature
-   binds the agent’s identity to the promise of the DAG edit operation, enabling recipients
-   to verify:
-   
-   o  Message integrity – any tampering is detectable via hash mismatches.
-   o  Authenticity – the origin of the message is authenticated by verifying the signature
-      against the issuing agent’s public key.
-   o  Replay protection – timestamps and ‘prevHashes’ (as IPLD links) enable detection of
-      message replays.
+   Promise Theory distinguishes promises (declared intentions about self),
+   impositions (e.g., requests), and independent assessments made by
+   observers [Promise Theory].  This example protocol uses a single pCID and distinguishes
+   message types within its payload.
+
+   Bergstra and Burgess apply this framing to ownership and money, treating
+   them as networks of promises and assessments [MoneyBook].
+
+   Payload format:
+
+      payload = [ mtype, body ]
+
+   where mtype is:
+
+      0  promise     (offer about self)
+      1  imposition  (request)
+      2  assessment  (receipt by an observer)
+
+   Example (illustrative):
+
+      PromiseGridEnvelope = [ pt_pCID, [ 0, [ intent, terms ] ], signature ]
+      PromiseGridEnvelope = [ pt_pCID, [ 1, [ intent, args  ] ], signature ]
+      PromiseGridEnvelope = [ pt_pCID, [ 2, [ about_cid, outcome ] ], signature ]
+
+7.  Security Considerations
+
+   PromiseGrid does not mandate a specific cryptographic container at the
+   envelope level; security is defined by each protocol (pCID).  Protocols
+   that require authenticity and integrity SHOULD specify how signatures
+   are represented, how signing keys are identified, and whether any
+   replay protection is required.
+
+   Nodes that route or store messages for unknown pCIDs without
+   verification SHOULD apply local resource limits (see Section 2.4).
 
    Implementers are advised to use secure cryptographic hash functions (e.g., SHA-256 or
    stronger) and follow best practices for key management and certificate validation.
 
-7.  IANA Considerations
+8.  IANA Considerations
 
    This document does not specify any new registries.  However, future versions may
    define a registry for PromiseGrid operation codes and parameter names.
 
-8.  Acknowledgments
+9.  Acknowledgments
 
    The authors gratefully acknowledge contributions from the PromiseGrid research
    community, as well as insights drawn from related work in IPFS, IPLD, CBOR, COSE,
    and Promise Theory.
 
-9.  References
+10.  References
 
    [RFC 8152]   Crocker, D., "CBOR Object Signing and Encryption (COSE)", RFC 8152,
                 April 2017.
 
    [RFC 8392]   Bormann, C., "CBOR Web Token (CWT)", RFC 8392, November 2018.
 
-   [Promise Theory]  Burgess, M., "Promise Theory: Principles and Applications",
-                2005.
+   [Promise Theory]  Bergstra, J. and Burgess, M., "Promise Theory: Principles and
+                Applications", Book of Promises, 2nd ed., 2019.
 
-   [CBOR]   Jennings, C., "Concise Binary Object Representation (CBOR)", IETF Draft.
+   [MoneyBook]  Bergstra, J. and Burgess, M., "Money, Ownership, and Agency:
+                As an Application of Promise Theory", χtAxis press, 2019.
+
+   [CBOR]   Bormann, C. and Hoffman, P., "Concise Binary Object Representation (CBOR)",
+                RFC 8949, December 2020.
 
    [IPFS]   Benet, J., "IPFS - Content Addressed, Versioned, P2P File System",
                 2014.
@@ -410,12 +477,12 @@ Disclaimer
 
 Conclusion
 
-   The PromiseGrid Wire Protocol outlined in this document enables secure,
-   verifiable, and replayable operations across a decentralized platform.
-   By leveraging CBOR for encoding, COSE for digital signatures, libp2p for
-   message transport, and IPLD with DAG-CBOR for linking messages into a unified
-   Merkle DAG, the protocol ensures that each promise—expressed as an edit to the DAG—is
-   auditable and trustworthy.  Future extensions may further elaborate on advanced merging,
-   conflict resolution mechanisms, and additional operation types.
+   The PromiseGrid envelope outlined in this document enables evolvable
+   messaging across a decentralized platform.  By using a pCID-first CBOR
+   envelope, new protocols can be introduced without changing the wire
+   format.  Protocols MAY use signatures and IPLD/DAG-CBOR links to support
+   verification and replayability where needed.  Future extensions may
+   elaborate on merge-as-consensus workflows and additional pCID
+   protocols.
 
                               End of Document
